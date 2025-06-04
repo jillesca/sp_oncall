@@ -46,11 +46,11 @@ async def mcp_node(
                 "mcp[cli],pygnmi,networkx",
                 "mcp",
                 "run",
-                "~/DevNet/cisco_live/25clus/tmp-ai-sp-tools/mcp_server.py",
+                "/home/devnet/DEVWKS-3337/gNMIBuddy/mcp_server.py",
             ],
             "transport": "stdio",
             "env": {
-                "NETWORK_INVENTORY": "/Users/jillesca/DevNet/cisco_live/25clus/tmp-ai-sp-tools/hosts.json"
+                "NETWORK_INVENTORY": "/home/devnet/DEVWKS-3337/xrd_inventory.json"
             },
         },
     }
