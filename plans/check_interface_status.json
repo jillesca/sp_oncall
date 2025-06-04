@@ -1,0 +1,11 @@
+{
+  "intent": "check_interface_status",
+  "description": "Checks the operational status, statistics, and error counters for network interfaces. Can be used for all interfaces or a specific interface if mentioned by the user.",
+  "steps": [
+    "Retrieve a summary of all interfaces, noting their administrative and operational statuses. Identify any interfaces that are administratively up but operationally down, or unexpectedly down.",
+    "For any specific interface mentioned in the user query, or for interfaces showing issues, obtain detailed statistics including traffic rates (input/output), packet counts, and error counts (e.g., CRC errors, input errors, output drops).",
+    "Analyze error counters. A small number of errors might be normal over a long period, but rapidly incrementing errors or specific types of errors (like CRCs, giants, runts) indicate physical layer or SFP issues. Output drops might indicate congestion.",
+    "Check the interface description and connected endpoint information (if available via LLDP/CDP) to understand its role and connectivity.",
+    "If an interface is down, investigate logs for messages related to that interface for clues about why it went down (e.g., link flap, SFP issue, configuration change)."
+  ]
+}

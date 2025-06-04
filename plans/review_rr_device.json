@@ -1,0 +1,14 @@
+{
+  "intent": "review_rr_device",
+  "description": "Performs a standard review of a Route Reflector (RR), focusing on BGP session health with clients and overall BGP stability.",
+  "steps": [
+    "Perform a general device health check: CPU, memory, hardware status, logs for critical errors related to BGP, and uptime. High CPU on an RR can impact BGP convergence.",
+    "List all BGP clients (PEs, other RRs) and verify their session state. All clients should be in 'Established' state. Investigate any down or flapping clients.",
+    "Check BGP session uptime for all clients. Frequent resets for any client indicate instability.",
+    "Monitor the total number of BGP prefixes (IPv4, IPv6, VPNv4, etc.) being handled by the RR. Note any sudden significant changes. Ensure it's within capacity limits.",
+    "Verify the number of prefixes received from and advertised to key clients or client groups. Ensure this is consistent with the network design and policy.",
+    "Check BGP cluster ID and other RR-specific configurations for correctness.",
+    "Review BGP memory usage and RIB/FIB table sizes. Ensure there's no excessive resource consumption.",
+    "Check for any BGP error messages, especially related to session establishment, update processing, or path selection."
+  ]
+}

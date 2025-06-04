@@ -1,0 +1,9 @@
+{
+  "graphs": {
+    "agent": "./src/sp_oncall/graph.py:orchestrator"
+  },
+  "env": "./.env",
+  "dependencies": [
+    "."
+  ]
+}

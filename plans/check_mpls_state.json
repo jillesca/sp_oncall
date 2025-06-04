@@ -1,0 +1,15 @@
+{
+  "intent": "check_mpls_state",
+  "description": "Checks the overall MPLS (LDP, RSVP-TE, or Segment Routing) operational state on a device.",
+  "steps": [
+    "Verify that the relevant MPLS protocol (LDP, RSVP-TE, SR) is enabled globally and on core-facing interfaces.",
+    "For LDP: Check LDP neighbor adjacencies. Ensure sessions are 'Operational' with all expected neighbors. Verify LDP discovery sources and transport addresses.",
+    "For LDP: Examine the LDP bindings table (LIB). Ensure local labels are generated for IGP prefixes and remote labels are received from LDP neighbors.",
+    "For Segment Routing (SR-MPLS): Check SR Global Block (SRGB) range and ensure it's consistent across the domain. Verify prefix-SIDs are being advertised by the IGP (OSPF/IS-IS) and installed in the forwarding plane.",
+    "For Segment Routing (SR-MPLS): Check adjacency-SIDs for relevant interfaces and ensure they are up.",
+    "For RSVP-TE: List configured TE tunnels. Check their operational state, path, and bandwidth allocation. Investigate any down or re-routing tunnels.",
+    "Examine the MPLS forwarding table (LFIB/FTN). For key prefixes, verify the correct labels and next-hops are installed. Look for missing or incorrect entries.",
+    "Review logs for any MPLS-related errors (e.g., LDP session flaps, label conflicts, SR programming errors, RSVP path errors).",
+    "Check interface statistics for MPLS traffic if available, ensuring packets are being labeled and forwarded."
+  ]
+}
