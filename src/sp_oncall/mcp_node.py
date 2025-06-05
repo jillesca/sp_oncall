@@ -36,28 +36,10 @@ async def mcp_node(
     Returns:
         Updated state with results from MCP tool execution or structured output if specified.
     """
-    # Default MCP client configuration
-    default_config = {
-        "gNMIBuddy": {
-            "command": "uv",
-            "args": [
-                "run",
-                "--with",
-                "mcp[cli],pygnmi,networkx",
-                "mcp",
-                "run",
-                "/Users/jillesca/DevNet/cisco_live/25clus/gNMIBuddy/mcp_server.py",
-            ],
-            "transport": "stdio",
-            "env": {
-                "NETWORK_INVENTORY": "/Users/jillesca/DevNet/cisco_live/25clus/gNMIBuddy/xrd_inventory.json"
-            },
-        },
-    }
 
-    mcp_config = client_config or default_config
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
+    mcp_config = configuration.mcp_client_config or client_config
 
     async with MultiServerMCPClient(mcp_config) as client:
         agent = create_react_agent(

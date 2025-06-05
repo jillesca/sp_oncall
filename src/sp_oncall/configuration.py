@@ -8,8 +8,6 @@ from enum import Enum
 from langchain_core.runnables import ensure_config
 from langgraph.config import get_config
 
-from sp_oncall import prompts
-
 
 class LLMModel(str, Enum):
     """Available LLM models for the agent. In the form: provider/model-name."""
@@ -42,6 +40,13 @@ class Configuration:
         default=10,
         metadata={
             "description": "The maximum number of search results to return for each search query."
+        },
+    )
+
+    mcp_client_config: dict = field(
+        default_factory=lambda: {},
+        metadata={
+            "description": "Configuration for the MCP client, including command and environment variables."
         },
     )
 

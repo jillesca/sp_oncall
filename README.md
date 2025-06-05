@@ -6,6 +6,33 @@
 make run
 ```
 
+## Add MCP tools
+
+Example with gNMIBuddy
+
+> [!NOTE]  
+> If using gNMIBuddy, use absolute paths.
+
+```json
+{
+  "gNMIBuddy": {
+    "command": "uv",
+    "args": [
+      "run",
+      "--with",
+      "mcp[cli],pygnmi,networkx",
+      "mcp",
+      "run",
+      "/Users/jillesca/DevNet/cisco_live/25clus/gNMIBuddy/mcp_server.py"
+    ],
+    "transport": "stdio",
+    "env": {
+      "NETWORK_INVENTORY": "/Users/jillesca/DevNet/cisco_live/25clus/gNMIBuddy/xrd_inventory.json"
+    }
+  }
+}
+```
+
 ## Notes
 
 - Try with:
