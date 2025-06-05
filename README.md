@@ -8,7 +8,7 @@ make run
 
 ## Add MCP tools
 
-Example with gNMIBuddy
+Example with [gNMIBuddy](https://github.com/jillesca/gNMIBuddy)
 
 > [!NOTE]  
 > If using gNMIBuddy, use absolute paths.
