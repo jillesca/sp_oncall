@@ -2,13 +2,6 @@
 
 SP Oncall is an intelligent agent-based system for automating network device diagnostics and health checks. It leverages [LangGraph](https://github.com/langchain-ai/langgraph) to orchestrate a graph of specialized agents, each responsible for planning, executing, assessing, and reporting on network troubleshooting tasks. The system uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) via the MCP protocol to extract real-time data from network devices.
 
-## ✨ Why Use SP Oncall?
-
-- **Automates complex network troubleshooting** using natural language plans and LLM-driven agents.
-- **Integrates with gNMIBuddy** to gather deep operational data from your network infrastructure.
-- **Modular and extensible**: Add new diagnostic plans or tools easily.
-- **Clear, actionable reports** for network engineers.
-
 ## 🛠️ Requirements
 
 - [uv](https://docs.astral.sh/uv/#installation)
