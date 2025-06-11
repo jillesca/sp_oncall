@@ -1,0 +1,12 @@
+{
+  "intent": "check_bgp_neighbors",
+  "description": "Verifies the status of BGP neighbors, including session state, uptime, and received/advertised prefixes.",
+  "steps": [
+    "List all configured BGP neighbors and their current session state. Focus on any neighbors not in the 'Established' state.",
+    "For each BGP neighbor, check the session uptime. Short uptimes or flapping sessions indicate instability that needs investigation.",
+    "Verify the number of prefixes received from each neighbor. Compare this with expected counts if known. Unusually low or zero received prefixes can indicate filtering issues or problems on the neighbor's side.",
+    "Check the number of prefixes advertised to each neighbor. Ensure this aligns with policy.",
+    "Examine BGP error messages or logs for any specific issues related to neighbor establishment or route exchange (e.g., authentication failures, hold timer expiry, notification messages).",
+    "If a specific neighbor is problematic, check its address family capabilities (e.g., IPv4 unicast, IPv6 unicast) and ensure they are correctly configured and active."
+  ]
+}

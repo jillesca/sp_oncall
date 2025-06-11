@@ -1,0 +1,13 @@
+{
+  "intent": "review_p_device",
+  "description": "Performs a standard review of a Provider (P) core router, focusing on high-speed transit, routing protocol stability, and MPLS.",
+  "steps": [
+    "Perform a general device health check: CPU, memory, hardware status (especially line cards and optics), logs for critical errors, and uptime.",
+    "Check the status of all core-facing interfaces. These are high-capacity links, so pay close attention to operational status, error counts (especially CRC, framing errors), and utilization. Sustained high utilization might indicate a need for capacity planning.",
+    "Verify IGP (OSPF or IS-IS) adjacencies. Ensure all adjacencies are full/up and there are no recent flaps. Check for consistent IGP database size.",
+    "Verify BGP sessions if the P router peers with RRs or other P devices (e.g., in an inter-AS scenario). Ensure sessions are established.",
+    "Examine MPLS LDP or Segment Routing (SR-MPLS) adjacencies and forwarding state. Ensure all LDP/SR adjacencies are up with neighbors, and that the LFIB/MPLS forwarding table is populated correctly. Check for stale or missing entries.",
+    "Review core-facing interface QoS counters if applicable, especially for drops in high-priority traffic classes.",
+    "Check for any hardware alarms or packet forwarding engine issues."
+  ]
+}
