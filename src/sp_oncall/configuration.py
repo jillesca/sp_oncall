@@ -29,7 +29,7 @@ class Configuration:
 
     model: Annotated[LLMModel, {"__template_metadata__": {"kind": "llm"}}] = (
         field(
-            default=LLMModel.OPENAI_GPT4O_MINI,
+            default=LLMModel.OPENAI_GPT5_NANO,
             metadata={
                 "description": "The language model to use for the agent's main interactions. "
                 "Select from the available models in the LLMModel enum."
