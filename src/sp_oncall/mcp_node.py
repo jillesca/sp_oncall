@@ -41,12 +41,15 @@ async def mcp_node(
     model = load_chat_model(configuration.model)
     mcp_config = configuration.mcp_client_config or client_config
 
-    async with MultiServerMCPClient(mcp_config) as client:
-        agent = create_react_agent(
-            model=model,
-            tools=client.get_tools(),
-            prompt=system_prompt,
-        )
+    client = MultiServerMCPClient(mcp_config)
 
-        response = await agent.ainvoke(messages)
-        return response
+    tools = await client.get_tools()
+
+    agent = create_react_agent(
+        model=model,
+        tools=tools,
+        prompt=system_prompt,
+    )
+
+    response = await agent.ainvoke(messages)
+    return response
