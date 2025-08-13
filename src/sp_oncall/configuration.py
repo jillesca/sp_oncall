@@ -16,6 +16,7 @@ class LLMModel(str, Enum):
     OLLAMA_LLAMA3_1 = "ollama/llama3.1"
     OPENAI_GPT4O_MINI = "openai/gpt-4o-mini"
     OPENAI_GPT4 = "openai/gpt-4"
+    OPENAI_GPT5_NANO = "openai/gpt-5-nano"
 
     def __str__(self) -> str:
         """Return the string value of the enum."""

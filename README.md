@@ -40,18 +40,15 @@ SP Oncall uses gNMIBuddy as its main tool for extracting data from network devic
 ```json
 {
   "gNMIBuddy": {
-    "command": "uv",
+    "command": "uvx",
     "args": [
-      "run",
-      "--with",
-      "mcp[cli],pygnmi,networkx",
-      "mcp",
-      "run",
-      "/absolute/path/to/gNMIBuddy/mcp_server.py"
+      "--from",
+      "git+https://github.com/jillesca/gNMIBuddy.git",
+      "gnmibuddy-mcp"
     ],
     "transport": "stdio",
     "env": {
-      "NETWORK_INVENTORY": "/absolute/path/to/gNMIBuddy/xrd_inventory.json"
+      "NETWORK_INVENTORY": "xrd_sandbox.json"
     }
   }
 }
