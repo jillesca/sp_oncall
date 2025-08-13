@@ -51,5 +51,4 @@ async def mcp_node(
         prompt=system_prompt,
     )
 
-    response = await agent.ainvoke(messages)
-    return response
+    return await agent.ainvoke(messages)
