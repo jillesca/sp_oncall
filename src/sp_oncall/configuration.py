@@ -16,6 +16,7 @@ class LLMModel(str, Enum):
     OLLAMA_LLAMA3_1 = "ollama/llama3.1"
     OPENAI_GPT4O_MINI = "openai/gpt-4o-mini"
     OPENAI_GPT4 = "openai/gpt-4"
+    OPENAI_GPT5_NANO = "openai/gpt-5-nano"
 
     def __str__(self) -> str:
         """Return the string value of the enum."""
@@ -28,7 +29,7 @@ class Configuration:
 
     model: Annotated[LLMModel, {"__template_metadata__": {"kind": "llm"}}] = (
         field(
-            default=LLMModel.OPENAI_GPT4O_MINI,
+            default=LLMModel.OPENAI_GPT5_NANO,
             metadata={
                 "description": "The language model to use for the agent's main interactions. "
                 "Select from the available models in the LLMModel enum."

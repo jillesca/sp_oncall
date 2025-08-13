@@ -1,0 +1,14 @@
+{
+  "gNMIBuddy": {
+    "command": "uvx",
+    "args": [
+      "--from",
+      "git+https://github.com/jillesca/gNMIBuddy.git",
+      "gnmibuddy-mcp"
+    ],
+    "transport": "stdio",
+    "env": {
+      "NETWORK_INVENTORY": "xrd_sandbox.json"
+    }
+  }
+}
