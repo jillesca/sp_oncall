@@ -1,11 +1,10 @@
 from langchain_core.messages import SystemMessage
 
-from sp_oncall.schemas import GraphState
+from sp_oncall.prompts import PLANNER_PROMPT
 from sp_oncall.util.llm import load_chat_model
 from sp_oncall.util.plans import load_plan_data
-from sp_oncall.prompts import PLANNER_PROMPT
 from sp_oncall.configuration import Configuration
-from sp_oncall.schemas import PlannerOutput
+from sp_oncall.schemas import GraphState, PlannerOutput
 
 
 def planner_node(state: GraphState) -> GraphState:

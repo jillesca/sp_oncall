@@ -2,10 +2,10 @@ import json
 from typing import Dict, Any
 from langchain_core.messages import SystemMessage
 
-from .state import GraphState
-from .util.llm import load_chat_model
-from .configuration import Configuration
-from .prompts import REPORT_GENERATOR_PROMPT_TEMPLATE
+from sp_oncall.schemas import GraphState
+from sp_oncall.util.llm import load_chat_model
+from sp_oncall.configuration import Configuration
+from sp_oncall.prompts import REPORT_GENERATOR_PROMPT_TEMPLATE
 
 
 def generate_llm_report_node(state: GraphState) -> GraphState:
