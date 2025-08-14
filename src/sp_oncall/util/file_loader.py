@@ -1,0 +1,73 @@
+"""File loading and parsing utilities for the project."""
+
+from __future__ import annotations
+
+import json
+import os
+import asyncio
+from typing import Any, Optional
+
+
+def read_text_file(path: str, encoding: str = "utf-8") -> str:
+    """Read and return the contents of a text file.
+
+    Raises the same exception the underlying open/read would raise.
+    """
+    with open(path, "r", encoding=encoding) as f:
+        return f.read()
+
+
+def load_json_file(path: str, encoding: str = "utf-8") -> Any:
+    """Load a JSON file and return the parsed object."""
+    with open(path, "r", encoding=encoding) as f:
+        return json.load(f)
+
+
+def resolve_path(filename: str, start_dir: Optional[str] = None) -> str:
+    """Resolve a filename to an absolute path.
+
+    If `filename` is absolute, return it. If it's a bare name like
+    '.mcp_config.json', search upward from `start_dir` (or this file's
+    location) to find it in the project root.
+    """
+    # Absolute path
+    if os.path.isabs(filename):
+        return filename
+
+    # If a directory was provided, start there; otherwise start at util/..
+    base = start_dir or os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    )
+
+    # Walk up until filesystem root looking for the filename in each directory
+    cur = base
+    while True:
+        candidate = os.path.join(cur, filename)
+        if os.path.isfile(candidate):
+            return candidate
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+
+    # Fallback to joining with base even if not found
+    return os.path.join(base, filename)
+
+
+def load_project_json(filename: str, start_dir: Optional[str] = None) -> Any:
+    """Resolve a JSON filename via resolve_path and load it."""
+    path = resolve_path(filename, start_dir=start_dir)
+    return load_json_file(path)
+
+
+async def load_json_file_async(path: str, encoding: str = "utf-8") -> Any:
+    """Async wrapper to load a JSON file without blocking the event loop."""
+    return await asyncio.to_thread(load_json_file, path, encoding)
+
+
+async def load_project_json_async(
+    filename: str, start_dir: Optional[str] = None
+) -> Any:
+    """Async version of load_project_json using to_thread for file IO."""
+    path = resolve_path(filename, start_dir=start_dir)
+    return await load_json_file_async(path)

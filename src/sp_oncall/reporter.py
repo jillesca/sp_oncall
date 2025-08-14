@@ -3,7 +3,7 @@ from typing import Dict, Any
 from langchain_core.messages import SystemMessage
 
 from .state import GraphState
-from .utils import load_chat_model
+from .util.llm import load_chat_model
 from .configuration import Configuration
 from .prompts import REPORT_GENERATOR_PROMPT_TEMPLATE
 

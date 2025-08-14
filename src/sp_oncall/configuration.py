@@ -5,8 +5,11 @@ from dataclasses import dataclass, field, fields
 from typing import Annotated
 from enum import Enum
 
-from langchain_core.runnables import ensure_config
 from langgraph.config import get_config
+from langchain_core.runnables import ensure_config
+
+
+DEFAULT_MCP_CONFIG_FILENAME = "mcp_config.json"
 
 
 class LLMModel(str, Enum):
@@ -45,7 +48,7 @@ class Configuration:
     )
 
     mcp_client_config: dict = field(
-        default_factory=lambda: {},
+        default_factory=dict,
         metadata={
             "description": "Configuration for the MCP client, including command and environment variables."
         },

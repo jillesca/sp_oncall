@@ -3,17 +3,16 @@ from typing import (
     List,
     Optional,
     Any,
-    Type,
     TypeVar,
-    Union,
 )
 
+from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langgraph.prebuilt import create_react_agent
 
-from sp_oncall.configuration import Configuration
-from sp_oncall.utils import load_chat_model
+from sp_oncall.util.llm import load_chat_model
+from sp_oncall.util.file_loader import load_project_json_async
+from sp_oncall.configuration import Configuration, DEFAULT_MCP_CONFIG_FILENAME
 
 T = TypeVar("T")
 
@@ -21,8 +20,8 @@ T = TypeVar("T")
 async def mcp_node(
     messages: HumanMessage,
     client_config: Optional[Dict[str, Any]] = None,
-    system_prompt: str = None,
-) -> Union[Dict[str, List[AIMessage]], T]:
+    system_prompt: str = "",
+) -> Dict[str, List[AIMessage]]:
     """
     Generic node for executing MCP tools in the LangGraph pipeline.
 
@@ -39,10 +38,9 @@ async def mcp_node(
 
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
-    mcp_config = configuration.mcp_client_config or client_config
+    mcp_config = await _load_mcp_config(client_config, configuration)
 
     client = MultiServerMCPClient(mcp_config)
-
     tools = await client.get_tools()
 
     agent = create_react_agent(
@@ -52,3 +50,19 @@ async def mcp_node(
     )
 
     return await agent.ainvoke(messages)
+
+
+async def _load_mcp_config(
+    client_config: Optional[Dict[str, Any]] = None,
+    configuration: Optional[Configuration] = None,
+) -> Dict[str, Any]:
+    """Load MCP configuration from various sources."""
+    if client_config:
+        return client_config
+
+    if configuration is not None and getattr(
+        configuration, "mcp_client_config", None
+    ):
+        return configuration.mcp_client_config
+
+    return await load_project_json_async(DEFAULT_MCP_CONFIG_FILENAME)

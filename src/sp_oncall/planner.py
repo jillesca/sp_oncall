@@ -1,7 +1,8 @@
 from langchain_core.messages import SystemMessage
 
 from sp_oncall.state import GraphState
-from sp_oncall.utils import load_chat_model, load_plan_data
+from sp_oncall.util.llm import load_chat_model
+from sp_oncall.util.plans import load_plan_data
 from sp_oncall.prompts import PLANNER_PROMPT
 from sp_oncall.configuration import Configuration
 from sp_oncall.planner_schema import PlannerOutput
