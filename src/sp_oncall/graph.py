@@ -1,6 +1,6 @@
 from langgraph.graph import StateGraph, END
 
-from sp_oncall.state import GraphState
+from sp_oncall.schemas import GraphState
 from sp_oncall.planner import planner_node
 from sp_oncall.executor import llm_network_executor
 from sp_oncall.reporter import generate_llm_report_node

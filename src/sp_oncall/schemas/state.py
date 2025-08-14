@@ -1,12 +1,20 @@
-"""
-Moved to sp_oncall.schemas.state
+"""Define the state structures for the agent."""
 
-This module remains as a thin compatibility shim. Prefer importing from:
+from __future__ import annotations
 
-    from sp_oncall.schemas import GraphState, StepExecutionResult, ExecutedToolCall
-"""
+from typing import TypedDict, List, Dict, Any, Optional
 
-from sp_oncall.schemas.state import *  # re-export for backward compatibility
+
+class ExecutedToolCall(TypedDict):
+    """Represents the details of a specific tool call made by the executor LLM"""
+
+    function: str  # Name of the tool called (e.g., "get_routing_info")
+    params: Dict[str, Any]  # Parameters used for the function call
+    result: Optional[
+        Dict[str, Any]
+    ]  # Structured result from the tool (if successful)
+    error: Optional[str]  # Error message (if failed)
+    detailed_findings: str  # Detailed findings from the step execution
 
 
 class StepExecutionResult(TypedDict):

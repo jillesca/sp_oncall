@@ -2,7 +2,7 @@ import asyncio
 from typing import TypedDict
 from langchain_core.messages import HumanMessage
 
-from sp_oncall.state import GraphState
+from sp_oncall.schemas import GraphState
 from sp_oncall.mcp_node import mcp_node
 from sp_oncall.prompts import DEVICE_EXTRACTION_PROMPT
 from sp_oncall.util.llm import load_chat_model

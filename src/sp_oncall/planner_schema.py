@@ -1,8 +1,9 @@
-from typing import TypedDict
+"""
+Moved to sp_oncall.schemas.planner_schema
 
+This module remains as a thin compatibility shim. Prefer importing from:
 
-class PlannerOutput(TypedDict):
-    """ """
+    from sp_oncall.schemas import PlannerOutput
+"""
 
-    objective: str
-    steps: str
+from sp_oncall.schemas.planner_schema import *  # re-export
