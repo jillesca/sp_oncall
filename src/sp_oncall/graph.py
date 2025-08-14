@@ -1,36 +1,12 @@
-from typing import Literal
-
-from langchain_core.messages import AIMessage
 from langgraph.graph import StateGraph, END
 
-from sp_oncall.state import State, GraphState
+from sp_oncall.state import GraphState
 from sp_oncall.planner import planner_node
 from sp_oncall.executor import llm_network_executor
 from sp_oncall.reporter import generate_llm_report_node
 from sp_oncall.assessor import objective_assessor_node
 from sp_oncall.input_validator import input_validator_node
 from sp_oncall.configuration import Configuration
-
-
-def route_model_output(state: State) -> Literal["__end__", "tools"]:
-    """Determine the next node based on the model's output.
-
-    This function checks if the model's last message contains tool calls.
-
-    Args:
-        state (State): The current state of the conversation.
-
-    Returns:
-        str: The name of the next node to call ("__end__" or "tools").
-    """
-    last_message = state.messages[-1]
-    if not isinstance(last_message, AIMessage):
-        raise ValueError(
-            f"Expected AIMessage in output edges, but got {type(last_message).__name__}"
-        )
-    if not last_message.tool_calls:
-        return "__end__"
-    return "tools"
 
 
 def decide_next_step(state: GraphState):
