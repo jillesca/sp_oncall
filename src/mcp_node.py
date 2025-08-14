@@ -10,9 +10,9 @@ from langgraph.prebuilt import create_react_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
-from sp_oncall.util.llm import load_chat_model
-from sp_oncall.util.file_loader import load_project_json_async
-from sp_oncall.configuration import Configuration, DEFAULT_MCP_CONFIG_FILENAME
+from util.llm import load_chat_model
+from util.file_loader import load_project_json_async
+from configuration import Configuration, DEFAULT_MCP_CONFIG_FILENAME
 
 T = TypeVar("T")
 

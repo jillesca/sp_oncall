@@ -2,10 +2,10 @@ import asyncio
 from typing import TypedDict
 from langchain_core.messages import HumanMessage
 
-from sp_oncall.mcp_node import mcp_node
-from sp_oncall.schemas import GraphState
-from sp_oncall.util.llm import load_chat_model
-from sp_oncall.configuration import Configuration
+from mcp_node import mcp_node
+from schemas import GraphState
+from util.llm import load_chat_model
+from configuration import Configuration
 from prompts.device_extraction import DEVICE_EXTRACTION_PROMPT
 
 

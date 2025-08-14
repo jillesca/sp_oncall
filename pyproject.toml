@@ -27,7 +27,21 @@ requires = ["setuptools>=73.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["sp_oncall", "prompts"]
-[tool.setuptools.package-dir]
-"sp_oncall" = "src/sp_oncall"
-"prompts" = "src/prompts"
+package-dir = {"" = "src"}
+# Explicitly list packages that live under src/
+packages = [
+    "prompts",
+    "schemas",
+    "util",
+]
+# Top-level modules (moved out of the previous sp_oncall/ package)
+py-modules = [
+    "assessor",
+    "configuration",
+    "executor",
+    "graph",
+    "input_validator",
+    "mcp_node",
+    "planner",
+    "reporter",
+]

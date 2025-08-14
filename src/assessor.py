@@ -3,10 +3,10 @@ from typing import Dict, Any, Optional
 
 from langchain_core.messages import SystemMessage
 
-from sp_oncall.util.llm import load_chat_model
-from sp_oncall.configuration import Configuration
+from util.llm import load_chat_model
+from configuration import Configuration
 from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
-from sp_oncall.schemas import GraphState, AssessmentOutput
+from schemas import GraphState, AssessmentOutput
 
 
 def objective_assessor_node(
