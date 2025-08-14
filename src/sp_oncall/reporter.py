@@ -5,7 +5,7 @@ from langchain_core.messages import SystemMessage
 from sp_oncall.schemas import GraphState
 from sp_oncall.util.llm import load_chat_model
 from sp_oncall.configuration import Configuration
-from sp_oncall.prompts import REPORT_GENERATOR_PROMPT_TEMPLATE
+from prompts.report_generator import REPORT_GENERATOR_PROMPT_TEMPLATE
 
 
 def generate_llm_report_node(state: GraphState) -> GraphState:

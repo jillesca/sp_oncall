@@ -5,7 +5,7 @@ from langchain_core.messages import SystemMessage
 
 from sp_oncall.util.llm import load_chat_model
 from sp_oncall.configuration import Configuration
-from sp_oncall.prompts import OBJECTIVE_ASSESSOR_PROMPT
+from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
 from sp_oncall.schemas import GraphState, AssessmentOutput
 
 
