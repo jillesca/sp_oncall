@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 import asyncio
 from typing import Any, Optional
 
@@ -23,6 +24,23 @@ def load_json_file(path: str, encoding: str = "utf-8") -> Any:
         return json.load(f)
 
 
+def _find_project_root(start: Path) -> Path:
+    """Find the project root by walking up looking for common markers.
+
+    Markers include: pyproject.toml, .git, langgraph.json, README.md
+    """
+    markers = {"pyproject.toml", ".git", "langgraph.json", "README.md"}
+    cur = start
+    while True:
+        if any((cur / m).exists() for m in markers):
+            return cur
+        parent = cur.parent
+        if parent == cur:
+            # Filesystem root
+            return start
+        cur = parent
+
+
 def resolve_path(filename: str, start_dir: Optional[str] = None) -> str:
     """Resolve a filename to an absolute path.
 
@@ -34,10 +52,12 @@ def resolve_path(filename: str, start_dir: Optional[str] = None) -> str:
     if os.path.isabs(filename):
         return filename
 
-    # If a directory was provided, start there; otherwise start at util/..
-    base = start_dir or os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..")
-    )
+    # If a directory was provided, start there; otherwise derive project root
+    if start_dir:
+        base = start_dir
+    else:
+        here = Path(__file__).resolve().parent  # .../src/util
+        base = str(_find_project_root(here))
 
     # Walk up until filesystem root looking for the filename in each directory
     cur = base
