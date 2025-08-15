@@ -20,11 +20,11 @@ def load_plan_data(plans_dir: Optional[str] = None) -> Dict[str, str]:
             )
         )
 
-    logger.debug(f"Loading plan files from directory: {plans_dir}")
+    logger.debug("Loading plan files from directory: %s", plans_dir)
 
     plans: Dict[str, str] = {}
     plan_files = glob.glob(os.path.join(plans_dir, "*.json"))
-    logger.debug(f"Found {len(plan_files)} plan files")
+    logger.debug("Found %s plan files", len(plan_files))
 
     for plan_path in plan_files:
         plan_filename = os.path.basename(plan_path)
@@ -34,10 +34,10 @@ def load_plan_data(plans_dir: Optional[str] = None) -> Dict[str, str]:
             plans[plan_filename] = (
                 f"--- plan: {plan_filename} ---\n{plan_content}\n--- end plan: {plan_filename} ---"
             )
-            logger.debug(f"Loaded plan: {plan_filename}")
+            logger.debug("Loaded plan: %s", plan_filename)
         except Exception as e:
-            logger.warning(f"Failed to load plan {plan_filename}: {e}")
+            logger.warning("Failed to load plan %s: %s", plan_filename, e)
             continue
 
-    logger.info(f"Successfully loaded {len(plans)} plan files")
+    logger.info("Successfully loaded %s plan files", len(plans))
     return plans

@@ -143,26 +143,35 @@ class LoggingConfiguration:
         Raises:
             ValueError: If any configuration value is invalid
         """
-        # Use environment as defaults, explicit params override
+        # Environment variables take precedence over explicit params when params are None
         resolved_global_level = (
-            global_level or env_config.global_level or "info"
+            env_config.global_level or global_level or "info"
         )
         resolved_enable_structured = (
-            enable_structured or env_config.enable_structured or False
+            env_config.enable_structured
+            if env_config.enable_structured is not None
+            else (enable_structured or False)
         )
-        resolved_log_file = log_file or env_config.log_file
+        resolved_log_file = env_config.log_file or log_file
         resolved_suppression_mode = (
-            external_suppression_mode
-            or env_config.external_suppression_mode
+            env_config.external_suppression_mode
+            or external_suppression_mode
             or "langgraph"
         )
-        resolved_debug_mode = debug_mode or env_config.debug_mode or False
+        resolved_debug_mode = (
+            env_config.debug_mode
+            if env_config.debug_mode is not None
+            else (debug_mode or False)
+        )
 
-        # Merge module levels: environment first, then explicit
-        env_module_levels = env_config.module_levels or {}
-        merged_module_levels = env_module_levels.copy()
+        # Merge module levels: explicit first, then environment (environment takes precedence)
+        merged_module_levels = {}
         if module_levels:
             merged_module_levels.update(module_levels)
+        env_module_levels = env_config.module_levels or {}
+        merged_module_levels.update(
+            env_module_levels
+        )  # Environment overrides explicit
 
         # Parse and validate
         try:

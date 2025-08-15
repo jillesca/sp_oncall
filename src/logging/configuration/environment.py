@@ -3,14 +3,77 @@
 Environment configuration reader for sp_oncall logging.
 
 This module handles reading and parsing logging configuration from
-environment variables, providing type-safe configuration objects.
+environment variables using pydantic-settings for automatic .env file loading
+and type-safe configuration objects.
 """
 
-import os
 from typing import Dict, Optional
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from ..core.enums import EnvironmentVariable, LogLevel
-from ..core.models import EnvironmentConfiguration
+
+class LoggingSettings(BaseSettings):
+    """
+    Pydantic-based logging configuration from environment variables.
+
+    Automatically loads from .env files and provides type-safe configuration
+    with proper validation and default values.
+    """
+
+    model_config = SettingsConfigDict(
+        # Load from .env file automatically
+        env_file=".env",
+        env_file_encoding="utf-8",
+        # Environment variables take precedence over .env file
+        env_prefix="SP_ONCALL_",
+        # Case insensitive environment variable names
+        case_sensitive=False,
+        # Don't validate assignment (for better performance)
+        validate_assignment=False,
+        # Allow extra fields to ignore other environment variables
+        extra="ignore",
+    )
+
+    # Core logging configuration
+    log_level: Optional[str] = Field(
+        default=None,
+        description="Global log level (debug, info, warning, error, critical)",
+    )
+
+    module_levels: Optional[str] = Field(
+        default=None,
+        description="Module-specific log levels as comma-separated key=value pairs",
+    )
+
+    structured_logging: Optional[bool] = Field(
+        default=None, description="Enable structured JSON logging"
+    )
+
+    log_file: Optional[str] = Field(
+        default=None, description="Custom log file path"
+    )
+
+    external_suppression_mode: Optional[str] = Field(
+        default=None,
+        description="External library suppression strategy (cli, langgraph, development)",
+    )
+
+    debug_mode: Optional[bool] = Field(
+        default=None, description="Enable debug mode for enhanced logging"
+    )
+
+    def get_parsed_module_levels(self) -> Optional[Dict[str, str]]:
+        """Parse module levels string into dictionary."""
+        if not self.module_levels:
+            return None
+
+        parsed = {}
+        pairs = self.module_levels.split(",")
+        for pair in pairs:
+            if "=" in pair:
+                module, level = pair.split("=", 1)
+                parsed[module.strip()] = level.strip()
+        return parsed
 
 
 class EnvironmentConfigReader:
@@ -18,104 +81,36 @@ class EnvironmentConfigReader:
     Reader for environment-based logging configuration.
 
     Provides centralized access to environment variables with proper
-    parsing and validation for logging configuration.
+    parsing and validation for logging configuration using pydantic-settings.
     """
 
+    _settings: Optional[LoggingSettings] = None
+
     @classmethod
-    def read_configuration(cls) -> EnvironmentConfiguration:
+    def get_settings(cls) -> LoggingSettings:
+        """Get or create the logging settings instance."""
+        if cls._settings is None:
+            cls._settings = LoggingSettings()
+        return cls._settings
+
+    @classmethod
+    def read_configuration(cls) -> "EnvironmentConfiguration":
         """
         Read logging configuration from environment variables.
 
         Returns:
             EnvironmentConfiguration with parsed values from environment
         """
+        settings = cls.get_settings()
+
+        # Import here to avoid circular imports
+        from ..core.models import EnvironmentConfiguration
+
         return EnvironmentConfiguration(
-            global_level=cls._read_global_level(),
-            module_levels=cls._parse_module_levels(cls._read_module_levels()),
-            enable_structured=cls._parse_structured_logging(
-                cls._read_structured_logging()
-            ),
-            log_file=cls._read_log_file(),
-            external_suppression_mode=cls._read_suppression_mode(),
-            debug_mode=cls._parse_debug_mode(cls._read_debug_mode()),
+            global_level=settings.log_level,
+            module_levels=settings.get_parsed_module_levels(),
+            enable_structured=settings.structured_logging,
+            log_file=settings.log_file,
+            external_suppression_mode=settings.external_suppression_mode,
+            debug_mode=settings.debug_mode,
         )
-
-    @classmethod
-    def _read_global_level(cls) -> Optional[str]:
-        """Read global log level from environment."""
-        return os.getenv(EnvironmentVariable.LOG_LEVEL.value)
-
-    @classmethod
-    def _read_module_levels(cls) -> Optional[str]:
-        """Read module-specific log levels from environment."""
-        return os.getenv(EnvironmentVariable.MODULE_LEVELS.value)
-
-    @classmethod
-    def _read_structured_logging(cls) -> Optional[str]:
-        """Read structured logging flag from environment."""
-        return os.getenv(EnvironmentVariable.STRUCTURED_LOGGING.value)
-
-    @classmethod
-    def _read_log_file(cls) -> Optional[str]:
-        """Read log file path from environment."""
-        return os.getenv(EnvironmentVariable.LOG_FILE.value)
-
-    @classmethod
-    def _read_suppression_mode(cls) -> Optional[str]:
-        """Read external suppression mode from environment."""
-        return os.getenv(EnvironmentVariable.EXTERNAL_SUPPRESSION_MODE.value)
-
-    @classmethod
-    def _read_debug_mode(cls) -> Optional[str]:
-        """Read debug mode flag from environment."""
-        return os.getenv(EnvironmentVariable.DEBUG_MODE.value)
-
-    @classmethod
-    def _parse_module_levels(
-        cls, module_levels_str: Optional[str]
-    ) -> Optional[Dict[str, str]]:
-        """Parse module-specific log levels from settings."""
-        if not module_levels_str:
-            return None
-
-        module_levels = {}
-        try:
-            for pair in module_levels_str.split(","):
-                if "=" not in pair:
-                    continue
-
-                module, level = pair.strip().split("=", 1)
-                module = module.strip()
-                level = level.strip().lower()
-
-                # Validate level
-                try:
-                    LogLevel.from_string(level)
-                    module_levels[module] = level
-                except ValueError:
-                    # Invalid level for this module, skip it
-                    continue
-
-        except Exception:
-            # Malformed module levels, return empty dict
-            return {}
-
-        return module_levels if module_levels else None
-
-    @classmethod
-    def _parse_structured_logging(
-        cls, structured_value: Optional[str]
-    ) -> Optional[bool]:
-        """Parse structured logging flag from settings."""
-        if structured_value is None:
-            return None
-
-        return structured_value.lower() in ("true", "1", "yes", "on")
-
-    @classmethod
-    def _parse_debug_mode(cls, debug_value: Optional[str]) -> Optional[bool]:
-        """Parse debug mode flag from settings."""
-        if debug_value is None:
-            return None
-
-        return debug_value.lower() in ("true", "1", "yes", "on")

@@ -19,31 +19,33 @@ def read_text_file(path: str, encoding: str = "utf-8") -> str:
 
     Raises the same exception the underlying open/read would raise.
     """
-    logger.debug(f"Reading text file: {path}")
+    logger.debug("Reading text file: %s", path)
 
     try:
         with open(path, "r", encoding=encoding) as f:
             content = f.read()
         logger.debug(
-            f"Successfully read text file {path}, length: {len(content)} characters"
+            "Successfully read text file %s, length: %s characters",
+            path,
+            len(content),
         )
         return content
     except Exception as e:
-        logger.error(f"Failed to read text file {path}: {e}")
+        logger.error("Failed to read text file %s: %s", path, e)
         raise
 
 
 def load_json_file(path: str, encoding: str = "utf-8") -> Any:
     """Load a JSON file and return the parsed object."""
-    logger.debug(f"Loading JSON file: {path}")
+    logger.debug("Loading JSON file: %s", path)
 
     try:
         with open(path, "r", encoding=encoding) as f:
             data = json.load(f)
-        logger.debug(f"Successfully loaded JSON file {path}")
+        logger.debug("Successfully loaded JSON file %s", path)
         return data
     except Exception as e:
-        logger.error(f"Failed to load JSON file {path}: {e}")
+        logger.error("Failed to load JSON file %s: %s", path, e)
         raise
 
 

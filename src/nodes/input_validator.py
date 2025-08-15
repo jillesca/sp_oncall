@@ -11,12 +11,12 @@ from configuration import Configuration
 from prompts.device_extraction import DEVICE_EXTRACTION_PROMPT
 
 # Add logging
-from src.logging import get_logger, log_operation
+from src.logging import get_logger, log_node_execution
 
 logger = get_logger(__name__)
 
 
-@log_operation("input_validation")
+@log_node_execution("Input Validator")
 def input_validator_node(state: GraphState) -> GraphState:
     """
     Input Validator & Planner node.
@@ -42,7 +42,7 @@ def input_validator_node(state: GraphState) -> GraphState:
 
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
-    logger.debug(f"Using model: {configuration.model}")
+    logger.debug("Using model: %s", configuration.model)
 
     try:
         logger.debug("Calling MCP node for device discovery")
@@ -60,7 +60,7 @@ def input_validator_node(state: GraphState) -> GraphState:
         if messages and hasattr(messages[-1], "content"):
             response_content = messages[-1].content
             logger.debug(
-                f"MCP response content length: {len(str(response_content))}"
+                "MCP response content length: %s", len(str(response_content))
             )
         else:
             raise ValueError("No valid response content found")
@@ -80,10 +80,10 @@ def input_validator_node(state: GraphState) -> GraphState:
                 f"No device_name found in extraction result: {type(extraction_result)}"
             )
 
-        logger.info(f"✅ Device name extracted successfully: {device_name}")
+        logger.info("✅ Device name extracted successfully: %s", device_name)
 
     except Exception as e:
-        logger.error(f"❌ Device extraction failed: {e}")
+        logger.error("❌ Device extraction failed: %s", e)
         device_name = ""
 
     if not device_name:

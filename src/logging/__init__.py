@@ -56,7 +56,7 @@ from .suppression import (
 )
 
 # Decorators
-from .decorators import log_operation, log_async_operation
+from .decorators import log_operation, log_async_operation, log_node_execution
 
 # Utilities
 from .utils.dynamic import get_logger, set_module_level, get_module_levels
@@ -83,6 +83,7 @@ __all__ = [
     # Operation tracking
     "log_operation",
     "log_async_operation",
+    "log_node_execution",
     # Dynamic level management
     "set_module_level",
     "get_module_levels",

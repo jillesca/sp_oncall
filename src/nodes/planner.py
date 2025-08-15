@@ -9,12 +9,12 @@ from prompts.planner import PLANNER_PROMPT
 from schemas import GraphState, PlannerOutput
 
 # Add logging
-from src.logging import get_logger, log_operation
+from src.logging import get_logger, log_node_execution
 
 logger = get_logger(__name__)
 
 
-@log_operation("plan_generation")
+@log_node_execution("Planner")
 def planner_node(state: GraphState) -> GraphState:
     """
     Planner node.
@@ -29,14 +29,14 @@ def planner_node(state: GraphState) -> GraphState:
         Updated GraphState with plan details and selected plan steps
     """
     user_query = state.user_query
-    logger.info(f"📋 Planning for user query: {user_query}")
+    logger.info("📋 Planning for user query: %s", user_query)
 
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
-    logger.debug(f"Using model: {configuration.model}")
+    logger.debug("Using model: %s", configuration.model)
 
     available_plans = load_plan_data()
-    logger.debug(f"Loaded {len(available_plans)} available plans")
+    logger.debug("Loaded %s available plans", len(available_plans))
 
     try:
         logger.debug("Generating plan selection prompt")
@@ -53,12 +53,13 @@ def planner_node(state: GraphState) -> GraphState:
 
         objective, working_plan_steps = _extract_planner_response(response)
         logger.info(
-            f"✅ Plan generation successful - Selected plan with {len(working_plan_steps)} steps"
+            "✅ Plan generation successful - Selected plan with %s steps",
+            len(working_plan_steps),
         )
-        logger.debug(f"Objective: {objective}")
+        logger.debug("Objective: %s", objective)
 
     except Exception as e:
-        logger.error(f"❌ Plan generation failed: {e}")
+        logger.error("❌ Plan generation failed: %s", e)
         objective = (
             f"Tool Error: Error extracting device name from user query: {e}"
         )

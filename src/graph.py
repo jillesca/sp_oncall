@@ -10,12 +10,8 @@ from nodes import (
 from schemas import GraphState
 from configuration import Configuration
 
-# Initialize logging system with environment variable configuration
 from src.logging import configure_logging, get_logger
 
-# Configure logging using environment variables as primary source
-# Environment variables (SP_ONCALL_*) will override any defaults
-# If no environment variables are set, sensible defaults are applied
 configure_logging()
 
 logger = get_logger(__name__)
@@ -52,6 +48,7 @@ orchestrator = StateGraph(
     state_schema=GraphState, context_schema=Configuration
 )
 
+# Use original node functions now decorated with detailed logging
 orchestrator.add_node(node="input_validator_node", action=input_validator_node)
 orchestrator.add_node(node="planner_node", action=planner_node)
 orchestrator.add_node(node="network_executor", action=llm_network_executor)

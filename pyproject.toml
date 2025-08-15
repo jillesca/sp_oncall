@@ -12,6 +12,7 @@ dependencies = [
     "langgraph>=0.4.1",
     "langgraph-prebuilt>=0.1.8",
     "ollama>=0.4.8",
+    "pydantic-settings>=2.10.1",
 ]
 
 [dependency-groups]

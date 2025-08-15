@@ -57,7 +57,7 @@ def log_operation(
                     extra["function_kwargs"] = str(
                         kwargs
                     )  # Log operation start
-            logger.debug(f"Starting {op_name}", extra=extra)
+            logger.debug("Starting %s", op_name, extra=extra)
 
             start_time = time.time()
             try:
@@ -73,7 +73,7 @@ def log_operation(
                     extra["result"] = str(result)
 
                 # Log successful completion
-                logger.debug(f"Completed {op_name}", extra=extra)
+                logger.debug("Completed %s", op_name, extra=extra)
 
                 return result
 
@@ -87,7 +87,7 @@ def log_operation(
                 extra["error_type"] = type(e).__name__
 
                 # Log operation failure
-                logger.error(f"Failed {op_name}: {e}", extra=extra)
+                logger.error("Failed %s: %s", op_name, e, extra=extra)
 
                 # Re-raise the exception
                 raise
@@ -128,7 +128,7 @@ def log_async_operation(
                     extra["function_kwargs"] = str(
                         kwargs
                     )  # Log operation start
-            logger.debug(f"Starting async {op_name}", extra=extra)
+            logger.debug("Starting async %s", op_name, extra=extra)
 
             start_time = time.time()
             try:
@@ -144,7 +144,7 @@ def log_async_operation(
                     extra["result"] = str(result)
 
                 # Log successful completion
-                logger.debug(f"Completed async {op_name}", extra=extra)
+                logger.debug("Completed async %s", op_name, extra=extra)
 
                 return result
 
@@ -158,7 +158,7 @@ def log_async_operation(
                 extra["error_type"] = type(e).__name__
 
                 # Log operation failure
-                logger.error(f"Failed async {op_name}: {e}", extra=extra)
+                logger.error("Failed async %s: %s", op_name, e, extra=extra)
 
                 # Re-raise the exception
                 raise

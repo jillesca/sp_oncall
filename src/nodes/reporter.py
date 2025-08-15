@@ -10,12 +10,12 @@ from configuration import Configuration
 from prompts.report_generator import REPORT_GENERATOR_PROMPT_TEMPLATE
 
 # Add logging
-from src.logging import get_logger, log_operation
+from src.logging import get_logger, log_node_execution
 
 logger = get_logger(__name__)
 
 
-@log_operation("report_generation")
+@log_node_execution("Report Generator")
 def generate_llm_report_node(state: GraphState) -> GraphState:
     """
     Generate a comprehensive summary report using an LLM.
@@ -62,7 +62,9 @@ def prepare_report_input(state: GraphState) -> Dict[str, str]:
         or "None",
     }
 
-    logger.debug(f"Report input prepared for device: {context['device_name']}")
+    logger.debug(
+        "Report input prepared for device: %s", context["device_name"]
+    )
     return context
 
 
@@ -78,7 +80,7 @@ def generate_llm_summary(prompt_input: Dict[str, str]) -> str:
     """
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
-    logger.debug(f"Using model for report generation: {configuration.model}")
+    logger.debug("Using model for report generation: %s", configuration.model)
 
     try:
         logger.debug("Generating report from LLM")

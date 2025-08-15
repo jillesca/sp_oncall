@@ -1206,6 +1206,7 @@ dependencies = [
     { name = "langgraph" },
     { name = "langgraph-prebuilt" },
     { name = "ollama" },
+    { name = "pydantic-settings" },
 ]
 
 [package.dev-dependencies]
@@ -1225,6 +1226,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=0.4.1" },
     { name = "langgraph-prebuilt", specifier = ">=0.1.8" },
     { name = "ollama", specifier = ">=0.4.8" },
+    { name = "pydantic-settings", specifier = ">=2.10.1" },
 ]
 
 [package.metadata.requires-dev]

@@ -25,7 +25,7 @@ def serialize_for_prompt(value: Any) -> str:
     Returns:
         A JSON string representation of the value
     """
-    logger.debug(f"Serializing value of type {type(value)} for prompt")
+    logger.debug("Serializing value of type %s for prompt", type(value))
 
     try:
         if hasattr(value, "__dataclass_fields__"):
@@ -47,12 +47,12 @@ def serialize_for_prompt(value: Any) -> str:
             result = str(value)
 
         logger.debug(
-            f"Serialization complete, result length: {len(result)} characters"
+            "Serialization complete, result length: %s characters", len(result)
         )
         return result
 
     except Exception as e:
-        logger.error(f"Serialization failed: {e}")
+        logger.error("Serialization failed: %s", e)
         return str(value)
 
 

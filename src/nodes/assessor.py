@@ -10,12 +10,12 @@ from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
 from schemas import GraphState, AssessmentOutput, StepExecutionResult
 
 # Add logging
-from src.logging import get_logger, log_operation
+from src.logging import get_logger, log_node_execution
 
 logger = get_logger(__name__)
 
 
-@log_operation("objective_assessment")
+@log_node_execution("Objective Assessor")
 def objective_assessor_node(state: GraphState) -> GraphState:
     """
     Determines whether the network execution results successfully fulfill the user's request.
@@ -26,7 +26,7 @@ def objective_assessor_node(state: GraphState) -> GraphState:
     Returns:
         Updated workflow state with the assessment results and next steps.
     """
-    logger.info(f"🔍 Assessing objective achievement for: {state.objective}")
+    logger.info("🔍 Assessing objective achievement for: %s", state.objective)
 
     assessment_teacher = NetworkObjectiveAssessmentTeacher(state)
 
@@ -51,7 +51,7 @@ class NetworkObjectiveAssessmentTeacher:
             return self._apply_assessment_decision_to_workflow(ai_assessment)
 
         except Exception as assessment_error:
-            logger.error(f"Assessment failed: {assessment_error}")
+            logger.error("Assessment failed: %s", assessment_error)
             return self._handle_assessment_error_in_workflow(assessment_error)
 
     def _get_ai_assessment_of_network_execution(self) -> AssessmentOutput:
@@ -78,7 +78,7 @@ class NetworkObjectiveAssessmentTeacher:
         # Get AI model and make the assessment request
         configuration = Configuration.from_context()
         ai_model = load_chat_model(configuration.model)
-        logger.debug(f"Using model for assessment: {configuration.model}")
+        logger.debug("Using model for assessment: %s", configuration.model)
 
         logger.debug("Invoking LLM for objective assessment")
         formatted_prompt = OBJECTIVE_ASSESSOR_PROMPT.format(

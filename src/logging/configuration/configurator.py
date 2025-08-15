@@ -79,6 +79,19 @@ class LoggingConfigurator:
         root_logger = logging.getLogger()
         root_logger.setLevel(logging.DEBUG)
 
+        # Configure warning filters for pydantic and other noisy warnings
+        import warnings
+
+        warnings.filterwarnings(
+            "ignore", category=UserWarning, module="pydantic.*"
+        )
+        warnings.filterwarnings(
+            "ignore", message=".*Default value.*not JSON serializable.*"
+        )
+        warnings.filterwarnings(
+            "ignore", message=".*PydanticJsonSchemaWarning.*"
+        )
+
         # Choose formatter based on structured logging setting
         if config.enable_structured:
             formatter = OTelFormatter()

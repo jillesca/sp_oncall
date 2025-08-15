@@ -11,13 +11,15 @@ logger = get_logger(__name__)
 
 def load_chat_model(fully_specified_name: str) -> BaseChatModel:
     """Load a chat model from a fully specified name like 'provider/model'."""
-    logger.debug(f"Loading chat model: {fully_specified_name}")
+    logger.debug("Loading chat model: %s", fully_specified_name)
 
     try:
         provider, model = fully_specified_name.split("/", maxsplit=1)
         chat_model = init_chat_model(model, model_provider=provider)
-        logger.debug(f"Successfully loaded model: {provider}/{model}")
+        logger.debug("Successfully loaded model: %s/%s", provider, model)
         return chat_model
     except Exception as e:
-        logger.error(f"Failed to load chat model {fully_specified_name}: {e}")
+        logger.error(
+            "Failed to load chat model %s: %s", fully_specified_name, e
+        )
         raise

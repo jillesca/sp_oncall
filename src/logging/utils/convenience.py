@@ -22,24 +22,27 @@ def get_logger(name: str):
 
 
 def configure_logging(
-    level: str = "info",
-    structured: bool = False,
-    debug: bool = False,
+    level: Optional[str] = None,
+    structured: Optional[bool] = None,
+    debug: Optional[bool] = None,
     module_levels: Optional[Dict[str, str]] = None,
 ) -> None:
     """
     Simple logging configuration function.
 
+    Environment variables take precedence over these parameters.
+    Only pass parameters to override environment configuration.
+
     Args:
-        level: Global log level
-        structured: Enable structured JSON logging
-        debug: Enable debug mode
-        module_levels: Module-specific log levels
+        level: Global log level (environment variable SP_ONCALL_LOG_LEVEL takes precedence)
+        structured: Enable structured JSON logging (environment variable takes precedence)
+        debug: Enable debug mode (environment variable takes precedence)
+        module_levels: Module-specific log levels (environment variable takes precedence)
     """
     LoggingConfigurator.configure(
         global_level=level,
-        enable_structured=structured,
-        debug_mode=debug,
+        enable_structured=structured or False,
+        debug_mode=debug or False,
         module_levels=module_levels,
     )
 

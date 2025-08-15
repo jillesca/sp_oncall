@@ -9,7 +9,7 @@ contexts (CLI, LangGraph, development), following the Strategy pattern.
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from ..core.enums import SuppressionMode, LogLevel
+from ..core.enums import SuppressionMode
 from ..core.models import ModuleLevelConfiguration
 from .external import ExternalLibrarySuppressor
 
@@ -52,10 +52,13 @@ class LangGraphSuppressionStrategy(SuppressionStrategy):
         """Apply aggressive suppression for LangGraph applications."""
         # Set environment variables for early suppression
         env_vars = {
-            "LANGCHAIN_TRACING_V2": "false",
-            "LANGCHAIN_CALLBACKS_MANAGER": "false",
+            "LANGCHAIN_TRACING_V2": "true",
+            "LANGCHAIN_CALLBACKS_MANAGER": "true",
         }
         ExternalLibrarySuppressor.setup_environment_suppression(env_vars)
+
+        # Configure LangSmith for quiet operation while preserving functionality
+        ExternalLibrarySuppressor.setup_langsmith_quiet_mode()
 
         # Apply library-level suppression
         suppression_config = (
