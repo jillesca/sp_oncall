@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from langchain_core.messages import HumanMessage
 
 from mcp_client import mcp_node
@@ -10,38 +11,33 @@ from prompts.network_executor import NETWORK_EXECUTOR_PROMPT
 
 def llm_network_executor(state: GraphState) -> GraphState:
     """
-    Network Executor node for the LangGraph workflow.
+    Execute network operations for a specific device using available MCP tools.
 
-    Takes the working plan steps from the state and executes them using mcp tools.
-    Records execution results and any tool limitations in the state.
+    Executes a complete investigation of a device using an LLM that can call
+    multiple MCP tools in sequence to fulfill the working plan steps.
 
     Args:
-        state: The current graph state
+        state: The current GraphState from the workflow
 
     Returns:
-        Updated graph state with execution results
+        Updated GraphState with execution results
     """
-    updated_state = state.copy()
 
+    # Determine if this is a retry and add feedback to prompt if so
     retry_context = ""
-    if updated_state.get("current_retries", 0) > 0 and updated_state.get(
-        "assessor_feedback_for_retry"
-    ):
+    if state.current_retries > 0 and state.assessor_feedback_for_retry:
         retry_context = (
-            f"\nThis is retry #{updated_state['current_retries']}. "
-            f"Previous execution feedback: {updated_state['assessor_feedback_for_retry']}"
+            f"\nThis is retry #{state.current_retries}. "
+            f"Previous execution feedback: {state.assessor_feedback_for_retry}"
         )
 
-    # Create the user message
-    user_message = (
-        f"Execute the following network operations plan for {updated_state['device_name']}\n"
-        f"Device name: {updated_state['device_name']}\n"
-        f"IMPORTANT: Focus ONLY on device {updated_state['device_name']} - do not attempt to gather information from any other devices.\n"
-        f"Objective: {updated_state['objective']}\n\n"
-    )
-
-    if retry_context:
-        user_message += f"\n{retry_context}"
+    system_prompt = (
+        f"Execute the following network operations plan for {state.device_name}\n"
+        f"Device name: {state.device_name}\n"
+        f"IMPORTANT: Focus ONLY on device {state.device_name} - do not attempt to gather information from any other devices.\n"
+        f"Objective: {state.objective}\n\n"
+        f"Your investigation plan:"
+    ) + retry_context
 
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
@@ -49,11 +45,13 @@ def llm_network_executor(state: GraphState) -> GraphState:
     try:
         mcp_response = asyncio.run(
             mcp_node(
-                messages=HumanMessage(content=user_message),
-                system_prompt=NETWORK_EXECUTOR_PROMPT.format(
-                    device_name=updated_state["device_name"],
-                    working_plan_steps=updated_state["working_plan_steps"],
+                messages=HumanMessage(
+                    content=NETWORK_EXECUTOR_PROMPT.format(
+                        device_name=state.device_name,
+                        working_plan_steps=state.working_plan_steps,
+                    )
                 ),
+                system_prompt=system_prompt,
             )
         )
 
@@ -86,21 +84,24 @@ def llm_network_executor(state: GraphState) -> GraphState:
             )
 
         # Create properly typed StepExecutionResult
-        step_result: StepExecutionResult = {
-            "investigation_report": investigation_report,
-            "executed_calls": executed_calls,
-            "tools_limitations": tools_limitations,
-        }
+        step_result = StepExecutionResult(
+            investigation_report=investigation_report,
+            executed_calls=executed_calls,
+            tools_limitations=tools_limitations,
+        )
 
-        updated_state["execution_results"].append(step_result)
+        new_execution_results = state.execution_results + [step_result]
+
+        return replace(state, execution_results=new_execution_results)
 
     except Exception as e:
         # Create properly typed error result
-        error_result: StepExecutionResult = {
-            "investigation_report": f"Error executing plan: {e}",
-            "executed_calls": [],
-            "tools_limitations": f"Execution failed with error: {e}",
-        }
-        updated_state["execution_results"].append(error_result)
+        error_result = StepExecutionResult(
+            investigation_report=f"Error executing plan: {e}",
+            executed_calls=[],
+            tools_limitations=f"Execution failed with error: {e}",
+        )
 
-    return updated_state
+        new_execution_results = state.execution_results + [error_result]
+
+        return replace(state, execution_results=new_execution_results)

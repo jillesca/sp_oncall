@@ -1,11 +1,13 @@
 import json
+from dataclasses import replace
 from typing import Dict, Any, Optional
 
 from langchain_core.messages import SystemMessage
 
 from util.llm import load_chat_model
+from util.utils import serialize_for_prompt
 from configuration import Configuration
-from schemas import GraphState, AssessmentOutput
+from schemas import GraphState, AssessmentOutput, StepExecutionResult
 from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
 
 
@@ -24,45 +26,38 @@ def objective_assessor_node(
     Returns:
         Updated GraphState with assessment results.
     """
-    updated_state = state.copy()
-
     state_values = extract_state_values(state)
 
     assessment_result = perform_assessment(state_values)
 
-    updated_state["objective_achieved_assessment"] = assessment_result[
-        "objective_achieved"
-    ]
-    updated_state["assessor_notes_for_final_report"] = assessment_result[
-        "notes_for_report"
-    ]
-    updated_state["assessor_feedback_for_retry"] = assessment_result[
-        "feedback_for_retry"
-    ]
-    updated_state["current_retries"] = assessment_result["current_retries"]
-
-    return updated_state
+    return replace(
+        state,
+        objective_achieved_assessment=assessment_result["objective_achieved"],
+        assessor_notes_for_final_report=assessment_result["notes_for_report"],
+        assessor_feedback_for_retry=assessment_result["feedback_for_retry"],
+        current_retries=assessment_result["current_retries"],
+    )
 
 
 def extract_state_values(state: GraphState) -> Dict[str, Any]:
     """Extracts and provides default values for necessary state components."""
-    execution_results = state.get("execution_results", [])
+    execution_results = state.execution_results
     if not execution_results:
         execution_results = [
-            {
-                "investigation_report": "Execution results not found",
-                "executed_calls": [],
-                "tools_limitations": "Execution results not found",
-            }
+            StepExecutionResult(
+                investigation_report="Execution results not found",
+                executed_calls=[],
+                tools_limitations="Execution results not found",
+            )
         ]
 
     return {
-        "user_query": state.get("user_query", "User query not available"),
-        "objective": state.get("objective", "Objective not available"),
-        "working_plan_steps": state.get("working_plan_steps", []),
+        "user_query": state.user_query or "User query not available",
+        "objective": state.objective or "Objective not available",
+        "working_plan_steps": state.working_plan_steps,
         "execution_results": execution_results,
-        "current_retries": state.get("current_retries", 0),
-        "max_retries": state.get("max_retries", 3),
+        "current_retries": state.current_retries,
+        "max_retries": state.max_retries,
     }
 
 
@@ -83,11 +78,11 @@ def get_llm_assessment(state_values: Dict[str, Any]) -> Any:
 
     context = {
         "user_query": state_values["user_query"],
-        "objective": _serialize_for_prompt(state_values["objective"]),
-        "working_plan_steps": _serialize_for_prompt(
+        "objective": serialize_for_prompt(state_values["objective"]),
+        "working_plan_steps": serialize_for_prompt(
             state_values["working_plan_steps"]
         ),
-        "execution_results": _serialize_for_prompt(
+        "execution_results": serialize_for_prompt(
             state_values["execution_results"]
         ),
     }
@@ -101,14 +96,6 @@ def get_llm_assessment(state_values: Dict[str, Any]) -> Any:
             SystemMessage(content=system_message),
         ]
     )
-
-
-def _serialize_for_prompt(value: Any) -> str:
-    """Serializes a value for use in a prompt."""
-
-    if isinstance(value, (list, dict)):
-        return json.dumps(value, indent=2)
-    return value
 
 
 def process_assessment_response(

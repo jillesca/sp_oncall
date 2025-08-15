@@ -1,3 +1,4 @@
+from dataclasses import replace
 from langchain_core.messages import SystemMessage
 
 from util.llm import load_chat_model
@@ -9,20 +10,18 @@ from schemas import GraphState, PlannerOutput
 
 def planner_node(state: GraphState) -> GraphState:
     """
-    Planner node that determines objective and working plan steps.
+    Planner node.
+
+    Uses LLM to dynamically select the plan based on user query. Loads the
+    selected plan and populates the GraphState.
 
     Args:
         state: The current GraphState from the workflow
 
     Returns:
-        Updated GraphState with objective and working_plan_steps populated
+        Updated GraphState with plan details and selected plan steps
     """
-    # Create a copy of the current state to modify
-    updated_state = state.copy()
-
-    user_query = state["user_query"]
-    objective = ""
-    working_plan_steps = []
+    user_query = state.user_query
 
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
@@ -60,8 +59,6 @@ def planner_node(state: GraphState) -> GraphState:
         )
         working_plan_steps = []
 
-    # Update the state with new values
-    updated_state["objective"] = objective
-    updated_state["working_plan_steps"] = working_plan_steps
-
-    return updated_state
+    return replace(
+        state, objective=objective, working_plan_steps=working_plan_steps
+    )

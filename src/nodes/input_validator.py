@@ -1,5 +1,6 @@
 import asyncio
 from typing import TypedDict
+from dataclasses import replace
 from langchain_core.messages import HumanMessage
 
 from schemas import GraphState
@@ -28,9 +29,7 @@ def input_validator_node(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with plan details and validation
     """
-    updated_state = state.copy()
-
-    user_query = state["user_query"]
+    user_query = state.user_query
     device_name = ""
     max_retries = 3
     assessor_notes_for_final_report = ""
@@ -43,7 +42,7 @@ def input_validator_node(state: GraphState) -> GraphState:
             mcp_node(
                 messages=HumanMessage(content=user_query),
                 system_prompt=DEVICE_EXTRACTION_PROMPT.format(
-                    user_query=state["user_query"]
+                    user_query=state.user_query
                 ),
             )
         )
@@ -84,18 +83,16 @@ def input_validator_node(state: GraphState) -> GraphState:
             "Device extraction failed prior to planning."
         )
 
-    # Update the state with new values
-    updated_state["device_name"] = device_name
-    updated_state["objective"] = ""
-    updated_state["working_plan_steps"] = []
-    updated_state["execution_results"] = []
-    updated_state["max_retries"] = max_retries
-    updated_state["current_retries"] = 0
-    updated_state["objective_achieved_assessment"] = None
-    updated_state["assessor_feedback_for_retry"] = None
-    updated_state["assessor_notes_for_final_report"] = (
-        assessor_notes_for_final_report
+    return replace(
+        state,
+        device_name=device_name,
+        objective="",
+        working_plan_steps=[],
+        execution_results=[],
+        max_retries=max_retries,
+        current_retries=0,
+        objective_achieved_assessment=None,
+        assessor_feedback_for_retry=None,
+        assessor_notes_for_final_report=assessor_notes_for_final_report,
+        summary=None,
     )
-    updated_state["summary"] = None
-
-    return updated_state

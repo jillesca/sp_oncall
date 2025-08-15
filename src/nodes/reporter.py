@@ -1,9 +1,11 @@
 import json
 from typing import Dict, Any
+from dataclasses import replace
 from langchain_core.messages import SystemMessage
 
 from schemas import GraphState
 from util.llm import load_chat_model
+from util.utils import serialize_for_prompt
 from configuration import Configuration
 from prompts.report_generator import REPORT_GENERATOR_PROMPT_TEMPLATE
 
@@ -21,9 +23,7 @@ def generate_llm_report_node(state: GraphState) -> GraphState:
     prompt_input = prepare_report_input(state)
     llm_summary = generate_llm_summary(prompt_input)
 
-    updated_state = state.copy()  # type: ignore
-    updated_state["summary"] = llm_summary
-    return updated_state  # type: ignore
+    return replace(state, summary=llm_summary)
 
 
 def prepare_report_input(state: GraphState) -> Dict[str, str]:
@@ -39,18 +39,13 @@ def prepare_report_input(state: GraphState) -> Dict[str, str]:
     """
     # Extract basic data with defaults
     context = {
-        "user_query": state.get("user_query", "N/A"),
-        "device_name": state.get("device_name", "N/A"),
-        "objective": state.get("objective", "N/A"),
-        "working_plan_steps": _serialize_for_prompt(
-            state.get("working_plan_steps", [])
-        ),
-        "execution_results": _serialize_for_prompt(
-            state.get("execution_results", [])
-        ),
-        "assessor_notes_for_final_report": state.get(
-            "assessor_notes_for_final_report", "None"
-        ),
+        "user_query": state.user_query or "N/A",
+        "device_name": state.device_name or "N/A",
+        "objective": state.objective or "N/A",
+        "working_plan_steps": serialize_for_prompt(state.working_plan_steps),
+        "execution_results": serialize_for_prompt(state.execution_results),
+        "assessor_notes_for_final_report": state.assessor_notes_for_final_report
+        or "None",
     }
     return context
 
@@ -91,10 +86,3 @@ def generate_llm_summary(prompt_input: Dict[str, str]) -> str:
             return str(response)
     except Exception as e:
         return f"Error generating LLM summary. Details: {e}"
-
-
-def _serialize_for_prompt(value: Any) -> str:
-    """Serializes a value for use in a prompt."""
-    if isinstance(value, (list, dict)):
-        return json.dumps(value, indent=2)
-    return value

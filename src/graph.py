@@ -13,14 +13,21 @@ from configuration import Configuration
 
 def decide_next_step(state: GraphState) -> str:
     """
-    Determines the next step after the objective assessor.
-    - If objective_achieved_assessment is True, proceed to report_generator.
-    - If False (and retries are permissible), loop back to network_executor.
-    """
-    if state.get("objective_achieved_assessment"):
-        return "report_generator"
+    Router function for the graph.
 
-    return "network_executor"
+    Uses the objective_achieved field to decide whether to continue
+    the executor/assessor loop or proceed to report generation.
+
+    Args:
+        state: The current graph state
+
+    Returns:
+        The name of the next node to execute
+    """
+    if state.objective_achieved_assessment:
+        return "report_generator"
+    else:
+        return "network_executor"
 
 
 orchestrator = StateGraph(
