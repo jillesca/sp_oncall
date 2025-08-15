@@ -1,18 +1,14 @@
 import asyncio
-from typing import TypedDict
 from dataclasses import replace
+from typing import Any, Tuple
 from langchain_core.messages import HumanMessage
 
 from schemas import GraphState
+from schemas.device_extraction_schema import DeviceNameExtractionResponse
 from mcp_client import mcp_node
 from util.llm import load_chat_model
 from configuration import Configuration
 from prompts.device_extraction import DEVICE_EXTRACTION_PROMPT
-
-
-class DeviceNameExtractionResponse(TypedDict):
-    device_name: str
-    messages: str
 
 
 def input_validator_node(state: GraphState) -> GraphState:
@@ -58,17 +54,10 @@ def input_validator_node(state: GraphState) -> GraphState:
             DeviceNameExtractionResponse
         ).invoke(response_content)
 
-        # Handle structured output properly - it could be a BaseModel or dict
-        if isinstance(extraction_result, dict):
-            device_name = extraction_result.get("device_name", "")
-            print(
-                f"Extraction message: {extraction_result.get('messages', '')}"
-            )
-        else:
-            # Assume it's a structured object with attributes
-            device_name = getattr(extraction_result, "device_name", "")
-            messages_attr = getattr(extraction_result, "messages", "")
-            print(f"Extraction message: {messages_attr}")
+        # Extract device name and messages using pure function
+        device_name, messages = _extract_device_name_response(
+            extraction_result
+        )
 
         if not device_name:
             raise ValueError(
@@ -96,3 +85,44 @@ def input_validator_node(state: GraphState) -> GraphState:
         assessor_notes_for_final_report=assessor_notes_for_final_report,
         summary=None,
     )
+
+
+def _extract_device_name_response(extraction_result: Any) -> Tuple[str, str]:
+    """
+    Extract device name and messages from various LLM response formats.
+
+    This pure function handles different response types that might be returned
+    from the LLM during device name extraction, normalizing them into a consistent format.
+
+    Args:
+        extraction_result: The response from the LLM, which can be:
+                          - DeviceNameExtractionResponse dataclass
+                          - Object with device_name and messages attributes
+                          - Dictionary with device_name and messages keys
+                          - Any other type (fallback)
+
+    Returns:
+        Tuple containing:
+        - device_name (str): The extracted device name or empty string
+        - messages (str): The extraction messages or empty string
+    """
+    if isinstance(extraction_result, DeviceNameExtractionResponse):
+        # Direct dataclass response
+        device_name = extraction_result.device_name or ""
+        messages = extraction_result.messages or ""
+    elif hasattr(extraction_result, "device_name") and hasattr(
+        extraction_result, "messages"
+    ):
+        # Structured object with attributes
+        device_name = getattr(extraction_result, "device_name", "")
+        messages = getattr(extraction_result, "messages", "")
+    elif isinstance(extraction_result, dict):
+        # Fallback for dict-style responses
+        device_name = extraction_result.get("device_name", "")
+        messages = extraction_result.get("messages", "")
+    else:
+        # Unknown response type
+        device_name = ""
+        messages = ""
+
+    return device_name, messages

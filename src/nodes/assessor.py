@@ -102,14 +102,12 @@ def process_assessment_response(
     response: AssessmentOutput, state_values: Dict[str, Any]
 ) -> Dict[str, Any]:
     """Processes the LLM assessment response and handles retry logic."""
-    objective_achieved = response.get("is_objective_achieved", False)
-    notes_for_report = response.get(
-        "notes_for_final_report",
-        "Assessment incomplete. The Assessor model did not provide a proper assessment.",
+    objective_achieved = response.is_objective_achieved
+    notes_for_report = response.notes_for_final_report or (
+        "Assessment incomplete. The Assessor model did not provide a proper assessment."
     )
-    feedback_for_retry = response.get(
-        "feedback_for_retry",
-        "No feedback for retry provided by the Assessor model. The objective was not fully met. Please review the execution results against the objective and plan steps, then try again, focusing on any identified gaps or inconsistencies.",
+    feedback_for_retry = response.feedback_for_retry or (
+        "No feedback for retry provided by the Assessor model. The objective was not fully met. Please review the execution results against the objective and plan steps, then try again, focusing on any identified gaps or inconsistencies."
     )
 
     if not objective_achieved:

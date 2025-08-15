@@ -1,4 +1,5 @@
 from dataclasses import replace
+from typing import Any, Tuple, List
 from langchain_core.messages import SystemMessage
 
 from util.llm import load_chat_model
@@ -38,20 +39,7 @@ def planner_node(state: GraphState) -> GraphState:
             ]
         )
 
-        print(response)
-
-        # Handle structured output properly - it could be a BaseModel or dict
-        if isinstance(response, dict):
-            objective = response.get(
-                "objective", "No objective defined in plan."
-            )
-            working_plan_steps = response.get("steps", [])
-        else:
-            # Assume it's a structured object with attributes
-            objective = getattr(
-                response, "objective", "No objective defined in plan."
-            )
-            working_plan_steps = getattr(response, "steps", [])
+        objective, working_plan_steps = _extract_planner_response(response)
 
     except Exception as e:
         objective = (
@@ -62,3 +50,44 @@ def planner_node(state: GraphState) -> GraphState:
     return replace(
         state, objective=objective, working_plan_steps=working_plan_steps
     )
+
+
+def _extract_planner_response(response: Any) -> Tuple[str, List[Any]]:
+    """
+    Extract objective and steps from various LLM response formats.
+
+    This pure function handles different response types that might be returned
+    from the LLM, normalizing them into a consistent format.
+
+    Args:
+        response: The response from the LLM, which can be:
+                 - PlannerOutput dataclass
+                 - Object with objective and steps attributes
+                 - Dictionary with objective and steps keys
+                 - Any other type (fallback)
+
+    Returns:
+        Tuple containing:
+        - objective (str): The extracted objective or default message
+        - working_plan_steps (List[Any]): The extracted steps or empty list
+    """
+    default_objective = "No objective defined in plan."
+
+    if isinstance(response, PlannerOutput):
+        # Direct dataclass response
+        objective = response.objective or default_objective
+        working_plan_steps = response.steps or []
+    elif hasattr(response, "objective") and hasattr(response, "steps"):
+        # Structured object with attributes
+        objective = getattr(response, "objective", default_objective)
+        working_plan_steps = getattr(response, "steps", [])
+    elif isinstance(response, dict):
+        # Fallback for dict-style responses
+        objective = response.get("objective", default_objective)
+        working_plan_steps = response.get("steps", [])
+    else:
+        # Unknown response type
+        objective = default_objective
+        working_plan_steps = []
+
+    return objective, working_plan_steps
