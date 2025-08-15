@@ -1,176 +1,201 @@
-import json
 from dataclasses import replace
-from typing import Dict, Any, Optional
+from typing import Any, List
 
 from langchain_core.messages import SystemMessage
 
 from util.llm import load_chat_model
-from util.utils import serialize_for_prompt
 from configuration import Configuration
-from schemas import GraphState, AssessmentOutput, StepExecutionResult
+from util.utils import serialize_for_prompt
 from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
+from schemas import GraphState, AssessmentOutput, StepExecutionResult
 
 
-def objective_assessor_node(
-    state: GraphState,
-) -> GraphState:
+def objective_assessor_node(state: GraphState) -> GraphState:
     """
-    Assesses if the execution results meet the objective, handles retries, and provides feedback.
-
-    This function evaluates whether the execution results from the network executor
-    successfully satisfy the user's query.
+    Determines whether the network execution results successfully fulfill the user's request.
 
     Args:
-        state: The current GraphState.
+        state: The current workflow state containing user query, execution results, etc.
 
     Returns:
-        Updated GraphState with assessment results.
+        Updated workflow state with the assessment results and next steps.
     """
-    state_values = extract_state_values(state)
+    assessment_teacher = NetworkObjectiveAssessmentTeacher(state)
 
-    assessment_result = perform_assessment(state_values)
-
-    return replace(
-        state,
-        objective_achieved_assessment=assessment_result["objective_achieved"],
-        assessor_notes_for_final_report=assessment_result["notes_for_report"],
-        assessor_feedback_for_retry=assessment_result["feedback_for_retry"],
-        current_retries=assessment_result["current_retries"],
-    )
+    return assessment_teacher.evaluate_and_update_workflow()
 
 
-def extract_state_values(state: GraphState) -> Dict[str, Any]:
-    """Extracts and provides default values for necessary state components."""
-    execution_results = state.execution_results
-    if not execution_results:
-        execution_results = [
+class NetworkObjectiveAssessmentTeacher:
+    """
+    Evaluates whether network investigation results meet user objectives.
+    """
+
+    def __init__(self, workflow_state: GraphState):
+        self.workflow_state = workflow_state
+
+    def evaluate_and_update_workflow(self) -> GraphState:
+        """
+        Evaluates the network execution results and returns an updated workflow state.
+        """
+        try:
+            ai_assessment = self._get_ai_assessment_of_network_execution()
+            return self._apply_assessment_decision_to_workflow(ai_assessment)
+
+        except Exception as assessment_error:
+            return self._handle_assessment_error_in_workflow(assessment_error)
+
+    def _get_ai_assessment_of_network_execution(self) -> AssessmentOutput:
+        """
+        Asks the AI model to assess whether the network execution met the objectives.
+        """
+        # Prepare information for the AI prompt using the workflow state directly
+        prompt_information = {
+            "user_query": self.workflow_state.user_query
+            or "User question not available",
+            "objective": serialize_for_prompt(
+                self.workflow_state.objective or "Objective not available"
+            ),
+            "working_plan_steps": serialize_for_prompt(
+                self.workflow_state.working_plan_steps or []
+            ),
+            "execution_results": serialize_for_prompt(
+                self._get_execution_results_with_fallback()
+            ),
+        }
+
+        # Get AI model and make the assessment request
+        configuration = Configuration.from_context()
+        ai_model = load_chat_model(configuration.model)
+
+        formatted_prompt = OBJECTIVE_ASSESSOR_PROMPT.format(
+            **prompt_information
+        )
+        ai_response = ai_model.with_structured_output(AssessmentOutput).invoke(
+            [SystemMessage(content=formatted_prompt)]
+        )
+
+        # Ensure we have a proper AssessmentOutput object
+        return self._ensure_proper_assessment_format(ai_response)
+
+    def _get_execution_results_with_fallback(
+        self,
+    ) -> List[StepExecutionResult]:
+        """Provides execution results with a sensible fallback if none exist."""
+        if self.workflow_state.execution_results:
+            return self.workflow_state.execution_results
+
+        return [
             StepExecutionResult(
-                investigation_report="Execution results not found",
+                investigation_report="No network execution results were found",
                 executed_calls=[],
-                tools_limitations="Execution results not found",
+                tools_limitations="Network execution results are missing",
             )
         ]
 
-    return {
-        "user_query": state.user_query or "User query not available",
-        "objective": state.objective or "Objective not available",
-        "working_plan_steps": state.working_plan_steps,
-        "execution_results": execution_results,
-        "current_retries": state.current_retries,
-        "max_retries": state.max_retries,
-    }
+    def _ensure_proper_assessment_format(
+        self, ai_response: Any
+    ) -> AssessmentOutput:
+        """
+        Ensures the AI's response is in a reliable format we can work with.
+        """
+        if isinstance(ai_response, AssessmentOutput):
+            return ai_response
 
+        if isinstance(ai_response, dict):
+            # Convert dictionary response to proper object
+            return AssessmentOutput(
+                is_objective_achieved=ai_response.get(
+                    "is_objective_achieved", False
+                ),
+                notes_for_final_report=ai_response.get(
+                    "notes_for_final_report",
+                    "Assessment incomplete. AI response could not be properly interpreted.",
+                ),
+                feedback_for_retry=ai_response.get("feedback_for_retry"),
+            )
 
-def perform_assessment(state_values: Dict[str, Any]) -> Dict[str, Any]:
-    """Performs the assessment using the LLM and handles retry logic."""
-
-    try:
-        response = get_llm_assessment(state_values)
-        return process_assessment_response(response, state_values)
-    except (
-        Exception
-    ) as e:  # Broad exception is intentional for fallback handling
-        return handle_assessment_error(e, state_values)
-
-
-def get_llm_assessment(state_values: Dict[str, Any]) -> Any:
-    """Gets the assessment from the LLM."""
-
-    context = {
-        "user_query": state_values["user_query"],
-        "objective": serialize_for_prompt(state_values["objective"]),
-        "working_plan_steps": serialize_for_prompt(
-            state_values["working_plan_steps"]
-        ),
-        "execution_results": serialize_for_prompt(
-            state_values["execution_results"]
-        ),
-    }
-
-    configuration = Configuration.from_context()
-    model = load_chat_model(configuration.model)
-
-    system_message = OBJECTIVE_ASSESSOR_PROMPT.format(**context)
-    return model.with_structured_output(AssessmentOutput).invoke(
-        [
-            SystemMessage(content=system_message),
-        ]
-    )
-
-
-def process_assessment_response(
-    response: AssessmentOutput, state_values: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Processes the LLM assessment response and handles retry logic."""
-    objective_achieved = response.is_objective_achieved
-    notes_for_report = response.notes_for_final_report or (
-        "Assessment incomplete. The Assessor model did not provide a proper assessment."
-    )
-    feedback_for_retry = response.feedback_for_retry or (
-        "No feedback for retry provided by the Assessor model. The objective was not fully met. Please review the execution results against the objective and plan steps, then try again, focusing on any identified gaps or inconsistencies."
-    )
-
-    if not objective_achieved:
-        return handle_unmet_objective(
-            state_values["current_retries"],
-            state_values["max_retries"],
-            notes_for_report,
-            feedback_for_retry,
+        # Handle completely unexpected response types
+        return AssessmentOutput(
+            is_objective_achieved=False,
+            notes_for_final_report=f"Assessment failed. AI returned unexpected response type: {type(ai_response)}",
+            feedback_for_retry="Unable to assess due to unexpected AI response format. Please try again.",
         )
 
-    return {
-        "objective_achieved": True,
-        "notes_for_report": notes_for_report,
-        "feedback_for_retry": None,
-        "current_retries": state_values["current_retries"],
-    }
+    def _apply_assessment_decision_to_workflow(
+        self, ai_assessment: AssessmentOutput
+    ) -> GraphState:
+        """
+        Applies the assessment decision directly to the workflow state.
+        """
+        if ai_assessment.is_objective_achieved:
+            # Success! Update workflow to reflect completion
+            return replace(
+                self.workflow_state,
+                objective_achieved_assessment=True,
+                assessor_notes_for_final_report=ai_assessment.notes_for_final_report,
+                assessor_feedback_for_retry=None,
+                # Keep current retries as-is for successful completion
+            )
 
+        # Objective not achieved - decide whether to retry or stop
+        if (
+            self.workflow_state.current_retries
+            < self.workflow_state.max_retries
+        ):
+            # We can try again - encourage another attempt
+            return replace(
+                self.workflow_state,
+                objective_achieved_assessment=False,
+                assessor_notes_for_final_report=ai_assessment.notes_for_final_report,
+                assessor_feedback_for_retry=ai_assessment.feedback_for_retry
+                or self._get_encouraging_retry_guidance(),
+                current_retries=self.workflow_state.current_retries + 1,
+            )
 
-def handle_unmet_objective(
-    current_retries: int,
-    max_retries: int,
-    notes_for_report: str,
-    feedback_for_retry: Optional[str],
-) -> Dict[str, Any]:
-    """Handles the case when the objective is not met."""
-    if current_retries < max_retries:
-        current_retries += 1
+        # Maximum attempts reached - force completion
+        return replace(
+            self.workflow_state,
+            objective_achieved_assessment=True,  # Stop the retry loop
+            assessor_notes_for_final_report=(
+                f"Objective not achieved after {self.workflow_state.max_retries} attempts. "
+                f"{ai_assessment.notes_for_final_report}"
+            ),
+            assessor_feedback_for_retry=None,
+            # Keep current retries as-is since we're stopping
+        )
 
-        return {
-            "objective_achieved": False,
-            "notes_for_report": notes_for_report,
-            "feedback_for_retry": feedback_for_retry,
-            "current_retries": current_retries,
-        }
+    def _get_encouraging_retry_guidance(self) -> str:
+        """Provides helpful guidance when AI doesn't give specific retry feedback."""
+        return (
+            "The AI assessment didn't provide specific guidance for improvement. "
+            "Please carefully review what was accomplished against the original request, "
+            "then try a different approach, focusing on any gaps or areas that seem incomplete."
+        )
 
-    return {
-        "objective_achieved": True,
-        "notes_for_report": (
-            f"Objective not met after {max_retries} retries. {notes_for_report or 'No specific additional notes from assessor for max retries.'}"
-        ),
-        "feedback_for_retry": None,
-        "current_retries": current_retries,
-    }
+    def _handle_assessment_error_in_workflow(
+        self, assessment_error: Exception
+    ) -> GraphState:
+        """
+        Gracefully handles assessment errors by updating the workflow appropriately.
+        """
+        if (
+            self.workflow_state.current_retries
+            < self.workflow_state.max_retries
+        ):
+            # We can retry after an error
+            return replace(
+                self.workflow_state,
+                objective_achieved_assessment=False,
+                assessor_notes_for_final_report=f"Assessment encountered an error: {assessment_error}. Will attempt retry.",
+                assessor_feedback_for_retry="An unexpected error occurred during assessment. Please try a different approach.",
+                current_retries=self.workflow_state.current_retries + 1,
+            )
 
-
-def handle_assessment_error(
-    error: Exception, state_values: Dict[str, Any]
-) -> Dict[str, Any]:
-    """Handles errors during assessment."""
-    if state_values["current_retries"] < state_values["max_retries"]:
-        state_values["current_retries"] += 1
-
-        return {
-            "objective_achieved": False,
-            "notes_for_report": f"Error in assessment: {error}. Attempting retry.",
-            "feedback_for_retry": "An error occurred during assessment. Please re-evaluate the objective.",
-            "current_retries": state_values["current_retries"],
-        }
-
-    # Max retries reached, force completion
-    return {
-        "objective_achieved": True,  # Stop retrying
-        "notes_for_report": f"Error in assessment: {error}. Max retries reached.",
-        "feedback_for_retry": None,
-        "current_retries": state_values["current_retries"],
-    }
+        # No more retries available - conclude with error
+        return replace(
+            self.workflow_state,
+            objective_achieved_assessment=True,  # Force completion
+            assessor_notes_for_final_report=f"Assessment error after maximum attempts: {assessment_error}. Process concluded.",
+            assessor_feedback_for_retry=None,
+            # Keep current retries as-is
+        )
