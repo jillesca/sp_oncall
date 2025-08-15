@@ -2,8 +2,8 @@ import asyncio
 from typing import TypedDict
 from langchain_core.messages import HumanMessage
 
-from mcp_client import mcp_node
 from schemas import GraphState
+from mcp_client import mcp_node
 from util.llm import load_chat_model
 from configuration import Configuration
 from prompts.device_extraction import DEVICE_EXTRACTION_PROMPT

@@ -10,38 +10,6 @@ from __future__ import annotations
 from typing import TypedDict, List, Dict, Any, Optional
 
 
-class ExecutedToolCall(TypedDict):
-    """Details of a single tool invocation made by the executor LLM.
-
-    Keys:
-        function: Name of the tool invoked (e.g., "get_routing_info").
-        params: Parameters passed to the tool.
-        result: Structured result returned by the tool, if successful.
-        error: Error message if the tool invocation failed.
-        detailed_findings: Free-form details gathered during this call.
-    """
-
-    function: str
-    params: Dict[str, Any]
-    result: Optional[Dict[str, Any]]
-    error: Optional[str]
-    detailed_findings: str
-
-
-class StepExecutionResult(TypedDict):
-    """Outcome of executing a single natural-language plan step.
-
-    Keys:
-        investigation_report: Narrative report produced by the LLM for this step.
-        tools_limitations: Any limitations or constraints encountered.
-        executed_calls: Sequence of concrete tool calls performed for this step.
-    """
-
-    investigation_report: str
-    tools_limitations: str
-    executed_calls: List[ExecutedToolCall]
-
-
 class GraphState(TypedDict):
     """Shared workflow state passed between LangGraph nodes.
 
@@ -78,3 +46,35 @@ class GraphState(TypedDict):
     assessor_notes_for_final_report: Optional[str]
 
     summary: Optional[str]
+
+
+class StepExecutionResult(TypedDict):
+    """Outcome of executing a single natural-language plan step.
+
+    Keys:
+        investigation_report: Narrative report produced by the LLM for this step.
+        tools_limitations: Any limitations or constraints encountered.
+        executed_calls: Sequence of concrete tool calls performed for this step.
+    """
+
+    investigation_report: str
+    tools_limitations: str
+    executed_calls: List[ExecutedToolCall]
+
+
+class ExecutedToolCall(TypedDict):
+    """Details of a single tool invocation made by the executor LLM.
+
+    Keys:
+        function: Name of the tool invoked (e.g., "get_routing_info").
+        params: Parameters passed to the tool.
+        result: Structured result returned by the tool, if successful.
+        error: Error message if the tool invocation failed.
+        detailed_findings: Free-form details gathered during this call.
+    """
+
+    function: str
+    params: Dict[str, Any]
+    result: Optional[Dict[str, Any]]
+    error: Optional[str]
+    detailed_findings: str

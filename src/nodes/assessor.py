@@ -5,8 +5,8 @@ from langchain_core.messages import SystemMessage
 
 from util.llm import load_chat_model
 from configuration import Configuration
-from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
 from schemas import GraphState, AssessmentOutput
+from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
 
 
 def objective_assessor_node(

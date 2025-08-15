@@ -4,8 +4,8 @@ from langchain_core.messages import HumanMessage
 from mcp_client import mcp_node
 from util.llm import load_chat_model
 from configuration import Configuration
-from prompts.network_executor import NETWORK_EXECUTOR_PROMPT
 from schemas import GraphState, StepExecutionResult
+from prompts.network_executor import NETWORK_EXECUTOR_PROMPT
 
 
 def llm_network_executor(state: GraphState) -> GraphState:
