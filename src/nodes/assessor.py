@@ -22,18 +22,26 @@ def objective_assessor_node(
         state: The current GraphState.
 
     Returns:
-        GraphState with updated values.
+        Updated GraphState with assessment results.
     """
+    updated_state = state.copy()
+
     state_values = extract_state_values(state)
 
     assessment_result = perform_assessment(state_values)
 
-    return build_state_updates(
-        assessment_result["objective_achieved"],
-        assessment_result["notes_for_report"],
-        assessment_result["feedback_for_retry"],
-        assessment_result["current_retries"],
-    )
+    updated_state["objective_achieved_assessment"] = assessment_result[
+        "objective_achieved"
+    ]
+    updated_state["assessor_notes_for_final_report"] = assessment_result[
+        "notes_for_report"
+    ]
+    updated_state["assessor_feedback_for_retry"] = assessment_result[
+        "feedback_for_retry"
+    ]
+    updated_state["current_retries"] = assessment_result["current_retries"]
+
+    return updated_state
 
 
 def extract_state_values(state: GraphState) -> Dict[str, Any]:
@@ -180,19 +188,4 @@ def handle_assessment_error(
         "notes_for_report": f"Error in assessment: {error}. Max retries reached.",
         "feedback_for_retry": None,
         "current_retries": state_values["current_retries"],
-    }
-
-
-def build_state_updates(
-    objective_achieved: bool,
-    notes_for_report: str,
-    feedback_for_retry: Optional[str],
-    current_retries: int,
-) -> Dict[str, Any]:
-    """Builds updates for the graph state."""
-    return {
-        "objective_achieved_assessment": objective_achieved,
-        "assessor_notes_for_final_report": notes_for_report,
-        "assessor_feedback_for_retry": feedback_for_retry,
-        "current_retries": current_retries,
     }

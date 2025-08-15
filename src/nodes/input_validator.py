@@ -28,10 +28,11 @@ def input_validator_node(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with plan details and validation
     """
+    updated_state = state.copy()
+
     user_query = state["user_query"]
     device_name = ""
     max_retries = 3
-    tool_limitations_report = []
     assessor_notes_for_final_report = ""
 
     configuration = Configuration.from_context()
@@ -47,44 +48,54 @@ def input_validator_node(state: GraphState) -> GraphState:
             )
         )
 
-        response_content = mcp_response.get("messages", "failed")[-1].content
+        # Handle the response properly - messages should be a list
+        messages = mcp_response.get("messages", [])
+        if messages and hasattr(messages[-1], "content"):
+            response_content = messages[-1].content
+        else:
+            raise ValueError("No valid response content found")
 
         extraction_result = model.with_structured_output(
             DeviceNameExtractionResponse
         ).invoke(response_content)
 
-        if (
-            isinstance(extraction_result, dict)
-            and "device_name" in extraction_result
-        ):
-            device_name = extraction_result["device_name"]
-            print(f"Extraction message: {extraction_result["messages"]}")
+        # Handle structured output properly - it could be a BaseModel or dict
+        if isinstance(extraction_result, dict):
+            device_name = extraction_result.get("device_name", "")
+            print(
+                f"Extraction message: {extraction_result.get('messages', '')}"
+            )
         else:
+            # Assume it's a structured object with attributes
+            device_name = getattr(extraction_result, "device_name", "")
+            messages_attr = getattr(extraction_result, "messages", "")
+            print(f"Extraction message: {messages_attr}")
+
+        if not device_name:
             raise ValueError(
-                f"Expected DeviceNameExtractionResponse but got {type(extraction_result)}"
+                f"No device_name found in extraction result: {type(extraction_result)}"
             )
     except Exception:
-        device_name = None
+        device_name = ""
 
     if not device_name:
         max_retries = 0
-        tool_limitations_report = ["Device extraction failed."]
         assessor_notes_for_final_report = (
             "Device extraction failed prior to planning."
         )
 
-    result_state = {
-        "user_query": user_query,
-        "device_name": device_name or "",
-        "objective": "",
-        "working_plan_steps": [],
-        "execution_results": [],
-        "tool_limitations_report": tool_limitations_report,
-        "max_retries": max_retries,
-        "current_retries": 0,
-        "objective_achieved_assessment": None,
-        "assessor_notes_for_final_report": assessor_notes_for_final_report,
-        "summary": None,
-    }
+    # Update the state with new values
+    updated_state["device_name"] = device_name
+    updated_state["objective"] = ""
+    updated_state["working_plan_steps"] = []
+    updated_state["execution_results"] = []
+    updated_state["max_retries"] = max_retries
+    updated_state["current_retries"] = 0
+    updated_state["objective_achieved_assessment"] = None
+    updated_state["assessor_feedback_for_retry"] = None
+    updated_state["assessor_notes_for_final_report"] = (
+        assessor_notes_for_final_report
+    )
+    updated_state["summary"] = None
 
-    return result_state
+    return updated_state

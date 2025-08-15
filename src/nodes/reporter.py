@@ -77,9 +77,18 @@ def generate_llm_summary(prompt_input: Dict[str, str]) -> str:
             ]
         )
 
-        return (
-            response.content if hasattr(response, "content") else str(response)
-        )
+        if hasattr(response, "content"):
+            content = response.content
+            # Content might be a string or list, ensure we return a string
+            if isinstance(content, str):
+                return content
+            elif isinstance(content, list):
+                # Join list elements if it's a list
+                return " ".join(str(item) for item in content)
+            else:
+                return str(content)
+        else:
+            return str(response)
     except Exception as e:
         return f"Error generating LLM summary. Details: {e}"
 
