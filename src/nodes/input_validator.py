@@ -2,7 +2,7 @@ import asyncio
 from typing import TypedDict
 from langchain_core.messages import HumanMessage
 
-from mcp_node import mcp_node
+from mcp_client import mcp_node
 from schemas import GraphState
 from util.llm import load_chat_model
 from configuration import Configuration
