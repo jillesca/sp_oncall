@@ -10,7 +10,13 @@ from util.llm import load_chat_model
 from configuration import Configuration
 from prompts.device_extraction import DEVICE_EXTRACTION_PROMPT
 
+# Add logging
+from src.logging import get_logger, log_operation
 
+logger = get_logger(__name__)
+
+
+@log_operation("input_validation")
 def input_validator_node(state: GraphState) -> GraphState:
     """
     Input Validator & Planner node.
@@ -26,14 +32,20 @@ def input_validator_node(state: GraphState) -> GraphState:
         Updated GraphState with plan details and validation
     """
     user_query = state.user_query
+    logger.info(
+        f"🔍 Validating input and extracting device name from: {user_query}"
+    )
+
     device_name = ""
     max_retries = 3
     assessor_notes_for_final_report = ""
 
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
+    logger.debug(f"Using model: {configuration.model}")
 
     try:
+        logger.debug("Calling MCP node for device discovery")
         mcp_response = asyncio.run(
             mcp_node(
                 messages=HumanMessage(content=user_query),
@@ -47,9 +59,13 @@ def input_validator_node(state: GraphState) -> GraphState:
         messages = mcp_response.get("messages", [])
         if messages and hasattr(messages[-1], "content"):
             response_content = messages[-1].content
+            logger.debug(
+                f"MCP response content length: {len(str(response_content))}"
+            )
         else:
             raise ValueError("No valid response content found")
 
+        logger.debug("Extracting device name from LLM response")
         extraction_result = model.with_structured_output(
             DeviceNameExtractionResponse
         ).invoke(response_content)
@@ -63,10 +79,15 @@ def input_validator_node(state: GraphState) -> GraphState:
             raise ValueError(
                 f"No device_name found in extraction result: {type(extraction_result)}"
             )
-    except Exception:
+
+        logger.info(f"✅ Device name extracted successfully: {device_name}")
+
+    except Exception as e:
+        logger.error(f"❌ Device extraction failed: {e}")
         device_name = ""
 
     if not device_name:
+        logger.warning("🚨 No device name found, workflow will be limited")
         max_retries = 0
         assessor_notes_for_final_report = (
             "Device extraction failed prior to planning."

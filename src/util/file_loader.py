@@ -8,20 +8,43 @@ from pathlib import Path
 import asyncio
 from typing import Any, Optional
 
+# Add logging
+from src.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 def read_text_file(path: str, encoding: str = "utf-8") -> str:
     """Read and return the contents of a text file.
 
     Raises the same exception the underlying open/read would raise.
     """
-    with open(path, "r", encoding=encoding) as f:
-        return f.read()
+    logger.debug(f"Reading text file: {path}")
+
+    try:
+        with open(path, "r", encoding=encoding) as f:
+            content = f.read()
+        logger.debug(
+            f"Successfully read text file {path}, length: {len(content)} characters"
+        )
+        return content
+    except Exception as e:
+        logger.error(f"Failed to read text file {path}: {e}")
+        raise
 
 
 def load_json_file(path: str, encoding: str = "utf-8") -> Any:
     """Load a JSON file and return the parsed object."""
-    with open(path, "r", encoding=encoding) as f:
-        return json.load(f)
+    logger.debug(f"Loading JSON file: {path}")
+
+    try:
+        with open(path, "r", encoding=encoding) as f:
+            data = json.load(f)
+        logger.debug(f"Successfully loaded JSON file {path}")
+        return data
+    except Exception as e:
+        logger.error(f"Failed to load JSON file {path}: {e}")
+        raise
 
 
 def _find_project_root(start: Path) -> Path:

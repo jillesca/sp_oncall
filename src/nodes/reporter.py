@@ -9,7 +9,13 @@ from util.utils import serialize_for_prompt
 from configuration import Configuration
 from prompts.report_generator import REPORT_GENERATOR_PROMPT_TEMPLATE
 
+# Add logging
+from src.logging import get_logger, log_operation
 
+logger = get_logger(__name__)
+
+
+@log_operation("report_generation")
 def generate_llm_report_node(state: GraphState) -> GraphState:
     """
     Generate a comprehensive summary report using an LLM.
@@ -20,8 +26,14 @@ def generate_llm_report_node(state: GraphState) -> GraphState:
     Returns:
         An updated GraphState with the 'summary' field populated by the LLM.
     """
+    logger.info("📄 Generating final summary report")
+
     prompt_input = prepare_report_input(state)
     llm_summary = generate_llm_summary(prompt_input)
+
+    logger.info(
+        f"✅ Report generation complete, length: {len(llm_summary)} characters"
+    )
 
     return replace(state, summary=llm_summary)
 
@@ -37,6 +49,8 @@ def prepare_report_input(state: GraphState) -> Dict[str, str]:
     Returns:
         Dictionary with formatted input for the prompt template
     """
+    logger.debug("Preparing report input data")
+
     # Extract basic data with defaults
     context = {
         "user_query": state.user_query or "N/A",
@@ -47,6 +61,8 @@ def prepare_report_input(state: GraphState) -> Dict[str, str]:
         "assessor_notes_for_final_report": state.assessor_notes_for_final_report
         or "None",
     }
+
+    logger.debug(f"Report input prepared for device: {context['device_name']}")
     return context
 
 
@@ -62,7 +78,10 @@ def generate_llm_summary(prompt_input: Dict[str, str]) -> str:
     """
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
+    logger.debug(f"Using model for report generation: {configuration.model}")
+
     try:
+        logger.debug("Generating report from LLM")
         system_message = REPORT_GENERATOR_PROMPT_TEMPLATE.format(
             **prompt_input
         )
@@ -76,12 +95,23 @@ def generate_llm_summary(prompt_input: Dict[str, str]) -> str:
             content = response.content
             # Content might be a string or list, ensure we return a string
             if isinstance(content, str):
+                logger.debug(
+                    f"Generated report length: {len(content)} characters"
+                )
                 return content
             elif isinstance(content, list):
                 # Join list elements if it's a list
-                return " ".join(str(item) for item in content)
+                joined_content = " ".join(str(item) for item in content)
+                logger.debug(
+                    f"Generated report length: {len(joined_content)} characters"
+                )
+                return joined_content
             else:
-                return str(content)
+                str_content = str(content)
+                logger.debug(
+                    f"Generated report length: {len(str_content)} characters"
+                )
+                return str_content
         else:
             return str(response)
     except Exception as e:

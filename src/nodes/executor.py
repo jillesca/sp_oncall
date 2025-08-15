@@ -8,7 +8,13 @@ from configuration import Configuration
 from schemas import GraphState, StepExecutionResult
 from prompts.network_executor import NETWORK_EXECUTOR_PROMPT
 
+# Add logging
+from src.logging import get_logger, log_operation
 
+logger = get_logger(__name__)
+
+
+@log_operation("network_command_execution")
 def llm_network_executor(state: GraphState) -> GraphState:
     """
     Execute network operations for a specific device using available MCP tools.
@@ -22,6 +28,13 @@ def llm_network_executor(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with execution results
     """
+    device_name = state.device_name
+    logger.info(f"🔧 Executing network commands on device: {device_name}")
+
+    if state.current_retries > 0:
+        logger.warning(
+            f"🔄 Retry execution #{state.current_retries} for device {device_name}"
+        )
 
     # Determine if this is a retry and add feedback to prompt if so
     retry_context = ""
@@ -30,7 +43,9 @@ def llm_network_executor(state: GraphState) -> GraphState:
             f"\nThis is retry #{state.current_retries}. "
             f"Previous execution feedback: {state.assessor_feedback_for_retry}"
         )
+        logger.debug(f"Retry context: {state.assessor_feedback_for_retry}")
 
+    logger.debug(f"Building system prompt for device: {device_name}")
     system_prompt = (
         f"Execute the following network operations plan for {state.device_name}\n"
         f"Device name: {state.device_name}\n"
@@ -41,8 +56,10 @@ def llm_network_executor(state: GraphState) -> GraphState:
 
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
+    logger.debug(f"Using model: {configuration.model}")
 
     try:
+        logger.debug("Executing MCP node with network commands")
         mcp_response = asyncio.run(
             mcp_node(
                 messages=HumanMessage(
@@ -54,14 +71,19 @@ def llm_network_executor(state: GraphState) -> GraphState:
                 system_prompt=system_prompt,
             )
         )
+        logger.debug("MCP node execution completed")
 
         # Handle the response properly - messages should be a list
         messages = mcp_response.get("messages", [])
         if messages and hasattr(messages[-1], "content"):
             response_content = messages[-1].content
+            logger.debug(
+                f"Received response content length: {len(str(response_content))}"
+            )
         else:
             raise ValueError("No valid response content found")
 
+        logger.debug("Extracting structured output from response")
         extraction_result = model.with_structured_output(
             StepExecutionResult
         ).invoke(response_content)
@@ -92,9 +114,16 @@ def llm_network_executor(state: GraphState) -> GraphState:
 
         new_execution_results = state.execution_results + [step_result]
 
+        logger.info(f"✅ Command execution successful on {device_name}")
+        logger.debug(
+            f"Executed {len(executed_calls)} commands, report length: {len(investigation_report)}"
+        )
+
         return replace(state, execution_results=new_execution_results)
 
     except Exception as e:
+        logger.error(f"❌ Command execution failed on {device_name}: {e}")
+
         # Create properly typed error result
         error_result = StepExecutionResult(
             investigation_report=f"Error executing plan: {e}",

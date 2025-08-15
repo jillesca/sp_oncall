@@ -9,7 +9,13 @@ from util.utils import serialize_for_prompt
 from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
 from schemas import GraphState, AssessmentOutput, StepExecutionResult
 
+# Add logging
+from src.logging import get_logger, log_operation
 
+logger = get_logger(__name__)
+
+
+@log_operation("objective_assessment")
 def objective_assessor_node(state: GraphState) -> GraphState:
     """
     Determines whether the network execution results successfully fulfill the user's request.
@@ -20,6 +26,8 @@ def objective_assessor_node(state: GraphState) -> GraphState:
     Returns:
         Updated workflow state with the assessment results and next steps.
     """
+    logger.info(f"🔍 Assessing objective achievement for: {state.objective}")
+
     assessment_teacher = NetworkObjectiveAssessmentTeacher(state)
 
     return assessment_teacher.evaluate_and_update_workflow()
@@ -38,16 +46,20 @@ class NetworkObjectiveAssessmentTeacher:
         Evaluates the network execution results and returns an updated workflow state.
         """
         try:
+            logger.debug("Starting AI assessment of network execution")
             ai_assessment = self._get_ai_assessment_of_network_execution()
             return self._apply_assessment_decision_to_workflow(ai_assessment)
 
         except Exception as assessment_error:
+            logger.error(f"Assessment failed: {assessment_error}")
             return self._handle_assessment_error_in_workflow(assessment_error)
 
     def _get_ai_assessment_of_network_execution(self) -> AssessmentOutput:
         """
         Asks the AI model to assess whether the network execution met the objectives.
         """
+        logger.debug("Preparing prompt information for AI assessment")
+
         # Prepare information for the AI prompt using the workflow state directly
         prompt_information = {
             "user_query": self.workflow_state.user_query
@@ -66,7 +78,9 @@ class NetworkObjectiveAssessmentTeacher:
         # Get AI model and make the assessment request
         configuration = Configuration.from_context()
         ai_model = load_chat_model(configuration.model)
+        logger.debug(f"Using model for assessment: {configuration.model}")
 
+        logger.debug("Invoking LLM for objective assessment")
         formatted_prompt = OBJECTIVE_ASSESSOR_PROMPT.format(
             **prompt_information
         )
@@ -75,7 +89,11 @@ class NetworkObjectiveAssessmentTeacher:
         )
 
         # Ensure we have a proper AssessmentOutput object
-        return self._ensure_proper_assessment_format(ai_response)
+        assessment = self._ensure_proper_assessment_format(ai_response)
+        logger.debug(
+            f"Assessment completed: is_objective_achieved={assessment.is_objective_achieved}"
+        )
+        return assessment
 
     def _get_execution_results_with_fallback(
         self,
@@ -128,6 +146,7 @@ class NetworkObjectiveAssessmentTeacher:
         Applies the assessment decision directly to the workflow state.
         """
         if ai_assessment.is_objective_achieved:
+            logger.info("✅ Objective has been achieved")
             # Success! Update workflow to reflect completion
             return replace(
                 self.workflow_state,
@@ -137,6 +156,7 @@ class NetworkObjectiveAssessmentTeacher:
                 # Keep current retries as-is for successful completion
             )
 
+        logger.warning("❌ Objective not yet achieved")
         # Objective not achieved - decide whether to retry or stop
         if (
             self.workflow_state.current_retries

@@ -10,6 +10,16 @@ from nodes import (
 from schemas import GraphState
 from configuration import Configuration
 
+# Initialize logging system with environment variable configuration
+from src.logging import configure_logging, get_logger
+
+# Configure logging using environment variables as primary source
+# Environment variables (SP_ONCALL_*) will override any defaults
+# If no environment variables are set, sensible defaults are applied
+configure_logging()
+
+logger = get_logger(__name__)
+
 
 def decide_next_step(state: GraphState) -> str:
     """
@@ -24,11 +34,19 @@ def decide_next_step(state: GraphState) -> str:
     Returns:
         The name of the next node to execute
     """
+    logger.debug(
+        f"Routing decision: objective_achieved={state.objective_achieved_assessment}"
+    )
+
     if state.objective_achieved_assessment:
+        logger.info("✅ Objective achieved, proceeding to report generation")
         return "report_generator"
     else:
+        logger.info("🔄 Objective not achieved, continuing execution loop")
         return "network_executor"
 
+
+logger.info("🏗️ Constructing LangGraph orchestrator")
 
 orchestrator = StateGraph(
     state_schema=GraphState, context_schema=Configuration
@@ -62,4 +80,6 @@ orchestrator.add_edge(start_key="report_generator", end_key=END)
 
 app = orchestrator.compile()
 
-print("LangGraph workflow compiled successfully with 4 nodes and retry loop.")
+logger.info(
+    "✅ LangGraph workflow compiled successfully with 5 nodes and conditional routing"
+)

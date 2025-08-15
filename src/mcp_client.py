@@ -14,9 +14,15 @@ from util.llm import load_chat_model
 from util.file_loader import load_project_json_async
 from configuration import Configuration, DEFAULT_MCP_CONFIG_FILENAME
 
+# Add logging
+from src.logging import get_logger, log_operation
+
+logger = get_logger(__name__)
+
 T = TypeVar("T")
 
 
+@log_operation("mcp_tool_execution")
 async def mcp_node(
     messages: HumanMessage,
     client_config: Optional[Dict[str, Any]] = None,
@@ -35,13 +41,18 @@ async def mcp_node(
     Returns:
         Updated state with results from MCP tool execution or structured output if specified.
     """
+    logger.debug("Starting MCP node execution")
 
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
+    logger.debug(f"Using model: {configuration.model}")
+
     mcp_config = await _load_mcp_config(client_config, configuration)
+    logger.debug("MCP configuration loaded")
 
     client = MultiServerMCPClient(mcp_config)
     tools = await client.get_tools()
+    logger.debug(f"Retrieved {len(tools)} MCP tools")
 
     agent = create_react_agent(
         model=model,
@@ -49,7 +60,11 @@ async def mcp_node(
         prompt=system_prompt,
     )
 
-    return await agent.ainvoke(messages)
+    logger.debug("Executing MCP agent")
+    result = await agent.ainvoke(messages)
+    logger.debug("MCP agent execution completed")
+
+    return result
 
 
 async def _load_mcp_config(

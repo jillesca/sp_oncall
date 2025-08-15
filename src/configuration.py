@@ -8,6 +8,10 @@ from dataclasses import dataclass, field, fields
 from langgraph.config import get_config
 from langchain_core.runnables import ensure_config
 
+# Add logging
+from src.logging import get_logger
+
+logger = get_logger(__name__)
 
 DEFAULT_MCP_CONFIG_FILENAME = "mcp_config.json"
 
@@ -57,10 +61,15 @@ class Configuration:
     @classmethod
     def from_context(cls) -> Configuration:
         """Create a Configuration instance from a RunnableConfig object."""
+        logger.debug("Creating Configuration from context")
+
         try:
             config = get_config()
+            logger.debug("Retrieved config from context")
         except RuntimeError:
+            logger.debug("No config context available, using defaults")
             config = None
+
         config = ensure_config(config)
         configurable = config.get("configurable") or {}
         _fields = {f.name for f in fields(cls) if f.init}

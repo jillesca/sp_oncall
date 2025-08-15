@@ -6,6 +6,11 @@ from dataclasses import asdict
 
 from langchain_core.messages import BaseMessage
 
+# Add logging
+from src.logging import get_logger
+
+logger = get_logger(__name__)
+
 
 def serialize_for_prompt(value: Any) -> str:
     """
@@ -20,22 +25,34 @@ def serialize_for_prompt(value: Any) -> str:
     Returns:
         A JSON string representation of the value
     """
-    if hasattr(value, "__dataclass_fields__"):
-        # It's a dataclass, convert to dict first
-        return json.dumps(asdict(value), indent=2, default=str)
-    elif isinstance(value, (list, dict)):
-        # Handle lists and dicts, including lists of dataclasses
-        return json.dumps(
-            value,
-            indent=2,
-            default=lambda obj: (
-                asdict(obj)
-                if hasattr(obj, "__dataclass_fields__")
-                else str(obj)
-            ),
+    logger.debug(f"Serializing value of type {type(value)} for prompt")
+
+    try:
+        if hasattr(value, "__dataclass_fields__"):
+            # It's a dataclass, convert to dict first
+            result = json.dumps(asdict(value), indent=2, default=str)
+        elif isinstance(value, (list, dict)):
+            # Handle lists and dicts, including lists of dataclasses
+            result = json.dumps(
+                value,
+                indent=2,
+                default=lambda obj: (
+                    asdict(obj)
+                    if hasattr(obj, "__dataclass_fields__")
+                    else str(obj)
+                ),
+            )
+        else:
+            # Handle strings and other basic types
+            result = str(value)
+
+        logger.debug(
+            f"Serialization complete, result length: {len(result)} characters"
         )
-    else:
-        # Handle strings and other basic types
+        return result
+
+    except Exception as e:
+        logger.error(f"Serialization failed: {e}")
         return str(value)
 
 
