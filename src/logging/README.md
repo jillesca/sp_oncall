@@ -84,6 +84,40 @@ def execute_plan(device_name: str, plan_steps: list):
 # 2025-08-15 10:30:01 | DEBUG | sp_oncall.nodes.planner | Completed plan_execution | operation=plan_execution duration_ms=850.23
 ```
 
+## 🔗 LangChain Integration
+
+Automatic LangChain debug mode configuration using the unified Pydantic settings system:
+
+```python
+from src.logging import configure_langchain
+
+# Enable LangChain debug mode
+configure_langchain()  # Uses the same Pydantic settings as logging configuration
+```
+
+**Environment Control:**
+
+```bash
+# Enable debug mode for detailed LangChain tracing
+export SP_ONCALL_LANGCHAIN_DEBUG=true
+
+# Disable debug mode (default)
+export SP_ONCALL_LANGCHAIN_DEBUG=false
+```
+
+**Supported Values**: Standard boolean values handled by Pydantic (case-insensitive):
+
+- **Enable**: `true`, `1`, `yes`, `on`, `enabled`
+- **Disable**: `false`, `0`, `no`, `off`, `disabled`
+
+**Unified Configuration:**
+
+LangChain configuration uses the same Pydantic settings infrastructure as the logging system, ensuring consistency and following the DRY principle. All environment variables are loaded from `.env` files automatically.
+
+**Automatic Integration:**
+
+The LangChain configuration is automatically applied when importing `src.graph`, ensuring consistent debug settings across your entire LangGraph application.
+
 ## 🌐 External Library Suppression
 
 Three strategies for different contexts:
@@ -254,6 +288,7 @@ python3 demo_logging.py
 | `SP_ONCALL_STRUCTURED_LOGGING`        | Enable JSON logging    | `false`     | `true`, `false`                         |
 | `SP_ONCALL_LOG_FILE`                  | Custom log file path   | Sequential  | `/var/log/sp_oncall.log`                |
 | `SP_ONCALL_EXTERNAL_SUPPRESSION_MODE` | Library suppression    | `langgraph` | `cli`, `langgraph`, `development`       |
+| `SP_ONCALL_LANGCHAIN_DEBUG`           | LangChain debug mode   | `false`     | `true`, `false`, `yes`, `no`, `1`, `0`  |
 
 ## 🔗 Architecture
 
@@ -267,6 +302,7 @@ src/logging/
 ├── configuration/          # Configuration components
 │   ├── environment.py      # Environment variable reading
 │   ├── configurator.py     # Main logging configuration
+│   ├── langchain.py        # LangChain debug mode configuration
 │   └── file_utils.py       # Log file path management
 ├── suppression/            # External library noise reduction
 │   ├── external.py         # Core suppression functionality

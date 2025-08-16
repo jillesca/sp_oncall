@@ -45,6 +45,8 @@ from .configuration import (
     LoggingConfigurator,
     EnvironmentConfigReader,
     LogFilePathGenerator,
+    configure_langchain,
+    LangChainConfigurator,
 )
 
 # Suppression components
@@ -77,6 +79,8 @@ __all__ = [
     "LoggingConfigurator",
     "EnvironmentConfigReader",
     "LogFilePathGenerator",
+    "configure_langchain",
+    "LangChainConfigurator",
     # Main API functions
     "get_logger",
     "configure_logging",

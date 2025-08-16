@@ -10,9 +10,10 @@ from nodes import (
 from schemas import GraphState
 from configuration import Configuration
 
-from src.logging import configure_logging, get_logger
+from src.logging import configure_logging, configure_langchain, get_logger
 
 configure_logging()
+configure_langchain()
 
 logger = get_logger(__name__)
 

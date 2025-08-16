@@ -28,6 +28,7 @@ class EnvironmentConfiguration:
     enable_structured: Optional[bool] = None
     log_file: Optional[str] = None
     external_suppression_mode: Optional[str] = None
+    langchain_debug: Optional[bool] = None
 
 
 @dataclass(frozen=True)

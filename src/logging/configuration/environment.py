@@ -7,9 +7,13 @@ environment variables using pydantic-settings for automatic .env file loading
 and type-safe configuration objects.
 """
 
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    # Imported only for static type checking to avoid runtime circular imports
+    from ..core.models import EnvironmentConfiguration
 
 
 class LoggingSettings(BaseSettings):
@@ -56,6 +60,11 @@ class LoggingSettings(BaseSettings):
     external_suppression_mode: Optional[str] = Field(
         default=None,
         description="External library suppression strategy (cli, langgraph, development)",
+    )
+
+    langchain_debug: Optional[bool] = Field(
+        default=None,
+        description="Enable LangChain debug mode for detailed tracing",
     )
 
     def get_parsed_module_levels(self) -> Optional[Dict[str, str]]:
@@ -108,4 +117,5 @@ class EnvironmentConfigReader:
             enable_structured=settings.structured_logging,
             log_file=settings.log_file,
             external_suppression_mode=settings.external_suppression_mode,
+            langchain_debug=settings.langchain_debug,
         )
