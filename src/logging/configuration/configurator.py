@@ -31,7 +31,6 @@ class LoggingConfigurator:
         log_file: Optional[str] = None,
         enable_external_suppression: bool = True,
         external_suppression_mode: str = "langgraph",
-        debug_mode: bool = False,
     ) -> logging.Logger:
         """Configure the logging system with the specified parameters."""
         # Read environment configuration
@@ -47,7 +46,6 @@ class LoggingConfigurator:
                 log_file=log_file,
                 enable_external_suppression=enable_external_suppression,
                 external_suppression_mode=external_suppression_mode,
-                debug_mode=debug_mode,
             )
         except ValueError as e:
             raise ValueError(f"Invalid logging configuration: {e}") from e

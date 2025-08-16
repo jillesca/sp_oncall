@@ -58,10 +58,6 @@ class LoggingSettings(BaseSettings):
         description="External library suppression strategy (cli, langgraph, development)",
     )
 
-    debug_mode: Optional[bool] = Field(
-        default=None, description="Enable debug mode for enhanced logging"
-    )
-
     def get_parsed_module_levels(self) -> Optional[Dict[str, str]]:
         """Parse module levels string into dictionary."""
         if not self.module_levels:
@@ -112,5 +108,4 @@ class EnvironmentConfigReader:
             enable_structured=settings.structured_logging,
             log_file=settings.log_file,
             external_suppression_mode=settings.external_suppression_mode,
-            debug_mode=settings.debug_mode,
         )

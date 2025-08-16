@@ -95,8 +95,5 @@ class EnvironmentVariable(Enum):
     # External library suppression
     EXTERNAL_SUPPRESSION_MODE = "SP_ONCALL_EXTERNAL_SUPPRESSION_MODE"
 
-    # Debug settings
-    DEBUG_MODE = "SP_ONCALL_DEBUG_MODE"
-
     def __str__(self) -> str:
         return self.value

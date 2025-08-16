@@ -28,7 +28,6 @@ class EnvironmentConfiguration:
     enable_structured: Optional[bool] = None
     log_file: Optional[str] = None
     external_suppression_mode: Optional[str] = None
-    debug_mode: Optional[bool] = None
 
 
 @dataclass(frozen=True)
@@ -100,9 +99,6 @@ class LoggingConfiguration:
     enable_external_suppression: bool = True
     external_suppression_mode: SuppressionMode = SuppressionMode.LANGGRAPH
 
-    # Debug settings
-    debug_mode: bool = False
-
     def __post_init__(self):
         """Validate configuration after initialization."""
         if self.log_file is not None:
@@ -119,7 +115,6 @@ class LoggingConfiguration:
         log_file: Optional[str] = None,
         enable_external_suppression: bool = True,
         external_suppression_mode: str = "langgraph",
-        debug_mode: bool = False,
     ) -> "LoggingConfiguration":
         """
         Create configuration from environment and explicit parameters.
@@ -135,7 +130,6 @@ class LoggingConfiguration:
             log_file: Custom log file path
             enable_external_suppression: Enable external library suppression
             external_suppression_mode: Suppression strategy to use
-            debug_mode: Enable debug mode
 
         Returns:
             Validated LoggingConfiguration instance
@@ -157,11 +151,6 @@ class LoggingConfiguration:
             env_config.external_suppression_mode
             or external_suppression_mode
             or "langgraph"
-        )
-        resolved_debug_mode = (
-            env_config.debug_mode
-            if env_config.debug_mode is not None
-            else (debug_mode or False)
         )
 
         # Merge module levels: explicit first, then environment (environment takes precedence)
@@ -193,11 +182,10 @@ class LoggingConfiguration:
             log_file=Path(resolved_log_file) if resolved_log_file else None,
             enable_external_suppression=enable_external_suppression,
             external_suppression_mode=parsed_suppression_mode,
-            debug_mode=resolved_debug_mode,
         )
 
     def equals_for_caching(self, other: "LoggingConfiguration") -> bool:
-        """Check equality for caching purposes (excludes debug_mode)."""
+        """Check equality for caching purposes."""
         if not isinstance(other, LoggingConfiguration):
             return False
 

@@ -124,9 +124,6 @@ export SP_ONCALL_MODULE_LEVELS="sp_oncall.nodes=debug,langgraph=error"
 # Suppression mode
 export SP_ONCALL_EXTERNAL_SUPPRESSION_MODE=langgraph
 
-# Debug mode
-export SP_ONCALL_DEBUG_MODE=true
-
 # Custom log file
 export SP_ONCALL_LOG_FILE=/var/log/sp_oncall.log
 ```
@@ -257,7 +254,6 @@ python3 demo_logging.py
 | `SP_ONCALL_STRUCTURED_LOGGING`        | Enable JSON logging    | `false`     | `true`, `false`                         |
 | `SP_ONCALL_LOG_FILE`                  | Custom log file path   | Sequential  | `/var/log/sp_oncall.log`                |
 | `SP_ONCALL_EXTERNAL_SUPPRESSION_MODE` | Library suppression    | `langgraph` | `cli`, `langgraph`, `development`       |
-| `SP_ONCALL_DEBUG_MODE`                | Enable debug mode      | `false`     | `true`, `false`                         |
 
 ## 🔗 Architecture
 

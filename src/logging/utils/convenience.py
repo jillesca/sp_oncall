@@ -24,7 +24,6 @@ def get_logger(name: str):
 def configure_logging(
     level: Optional[str] = None,
     structured: Optional[bool] = None,
-    debug: Optional[bool] = None,
     module_levels: Optional[Dict[str, str]] = None,
 ) -> None:
     """
@@ -36,13 +35,11 @@ def configure_logging(
     Args:
         level: Global log level (environment variable SP_ONCALL_LOG_LEVEL takes precedence)
         structured: Enable structured JSON logging (environment variable takes precedence)
-        debug: Enable debug mode (environment variable takes precedence)
         module_levels: Module-specific log levels (environment variable takes precedence)
     """
     LoggingConfigurator.configure(
         global_level=level,
         enable_structured=structured or False,
-        debug_mode=debug or False,
         module_levels=module_levels,
     )
 
