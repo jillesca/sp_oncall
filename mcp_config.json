@@ -8,7 +8,14 @@
     ],
     "transport": "stdio",
     "env": {
-      "NETWORK_INVENTORY": "xrd_sandbox.json"
+      "NETWORK_INVENTORY": "xrd_sandbox.json",
+      "PYTHONUNBUFFERED": "1",
+      "LOGGING_LEVEL": "ERROR",
+      "LOG_LEVEL": "ERROR",
+      "GNMIBUDDY_LOG_LEVEL": "ERROR",
+      "MCP_LOG_LEVEL": "ERROR",
+      "PYTHON_LOG_LEVEL": "ERROR",
+      "PYTHONWARNINGS": "ignore"
     }
   }
 }
