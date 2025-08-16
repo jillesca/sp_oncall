@@ -15,6 +15,9 @@ dependencies = [
     "pydantic-settings>=2.10.1",
 ]
 
+[project.scripts]
+show-logger-names = "scripts.show_logger_names:main"
+
 [dependency-groups]
 dev = [
     "debugpy>=1.8.14",
