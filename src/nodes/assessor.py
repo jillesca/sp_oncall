@@ -84,9 +84,9 @@ class NetworkObjectiveAssessmentTeacher:
         formatted_prompt = OBJECTIVE_ASSESSOR_PROMPT.format(
             **prompt_information
         )
-        ai_response = ai_model.with_structured_output(AssessmentOutput).invoke(
-            [SystemMessage(content=formatted_prompt)]
-        )
+        ai_response = ai_model.with_structured_output(
+            schema=AssessmentOutput
+        ).invoke(input=[SystemMessage(content=formatted_prompt)])
 
         # Ensure we have a proper AssessmentOutput object
         assessment = self._ensure_proper_assessment_format(ai_response)

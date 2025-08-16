@@ -67,8 +67,8 @@ def input_validator_node(state: GraphState) -> GraphState:
 
         logger.debug("Extracting device name from LLM response")
         extraction_result = model.with_structured_output(
-            DeviceNameExtractionResponse
-        ).invoke(response_content)
+            schema=DeviceNameExtractionResponse
+        ).invoke(input=response_content)
 
         # Extract device name and messages using pure function
         device_name, messages = _extract_device_name_response(

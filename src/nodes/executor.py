@@ -131,8 +131,8 @@ def llm_network_executor(state: GraphState) -> GraphState:
 
         logger.debug("🔍 Extracting structured output from response")
         extraction_result = model.with_structured_output(
-            StepExecutionResult
-        ).invoke(response_content)
+            schema=StepExecutionResult
+        ).invoke(input=response_content)
 
         logger.debug("🔍 Extraction result type: %s", type(extraction_result))
 

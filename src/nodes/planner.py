@@ -45,8 +45,8 @@ def planner_node(state: GraphState) -> GraphState:
         )
 
         logger.debug("Invoking LLM for plan selection")
-        response = model.with_structured_output(PlannerOutput).invoke(
-            [
+        response = model.with_structured_output(schema=PlannerOutput).invoke(
+            input=[
                 SystemMessage(content=system_message),
             ]
         )
