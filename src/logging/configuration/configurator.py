@@ -8,7 +8,7 @@ import sys
 from typing import Dict, Optional
 
 from ..core.models import LoggingConfiguration
-from ..core.enums import SuppressionMode
+from ..core.enums import SuppressionMode, LogLevel
 from ..core.logger_names import LoggerNames
 from ..core.formatter import OTelFormatter, HumanReadableFormatter
 from .environment import EnvironmentConfigReader
@@ -96,10 +96,13 @@ class LoggingConfigurator:
         else:
             formatter = HumanReadableFormatter()
 
+        # Determine the minimum handler level needed to accommodate module-specific levels
+        handler_level = cls._determine_handler_level(config)
+
         # Configure console handler
         console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setFormatter(formatter)
-        console_handler.setLevel(config.global_level.name)
+        console_handler.setLevel(handler_level.name)
         root_logger.addHandler(console_handler)
 
         # Configure file handler if enabled
@@ -114,15 +117,41 @@ class LoggingConfigurator:
 
             file_handler = logging.FileHandler(file_path)
             file_handler.setFormatter(formatter)
-            file_handler.setLevel(config.global_level.name)
+            file_handler.setLevel(handler_level.name)
             root_logger.addHandler(file_handler)
 
         # Apply module-specific levels
         cls._apply_module_levels(config)
 
+        # Set the app root logger to the global level to ensure proper inheritance
+        # for loggers without specific configuration
+        app_root_logger = logging.getLogger(LoggerNames.APP_ROOT)
+        app_root_logger.setLevel(config.global_level.name)
+
         # Apply external library suppression
         if config.enable_external_suppression:
             cls._apply_external_suppression(config.external_suppression_mode)
+
+    @classmethod
+    def _determine_handler_level(
+        cls, config: LoggingConfiguration
+    ) -> LogLevel:
+        """
+        Determine the minimum handler level needed to accommodate all configured loggers.
+
+        If module-specific levels include levels lower than the global level,
+        the handlers need to be set to the lowest level to allow those messages through.
+        The individual loggers will still filter based on their specific levels.
+        """
+        levels_to_consider = [config.global_level]
+
+        # Add all module-specific levels
+        for level in config.module_levels.levels.values():
+            levels_to_consider.append(level)
+
+        # Return the lowest (most permissive) level
+        # LogLevel enum values are ordered from most to least permissive
+        return min(levels_to_consider, key=lambda x: x.value)
 
     @classmethod
     def _apply_module_levels(cls, config: LoggingConfiguration) -> None:
