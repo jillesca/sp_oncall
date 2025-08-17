@@ -12,7 +12,11 @@ dependencies = [
     "langgraph>=0.4.1",
     "langgraph-prebuilt>=0.1.8",
     "ollama>=0.4.8",
+    "pydantic-settings>=2.10.1",
 ]
+
+[project.scripts]
+show-logger-names = "scripts.show_logger_names:main"
 
 [dependency-groups]
 dev = [
@@ -20,13 +24,17 @@ dev = [
     "langchain-openai>=0.3.15",
     "langchain-tavily>=0.1.6",
     "langgraph-cli[inmem]>=0.2.8",
+    "pytest>=8.4.1",
 ]
 
 [build-system]
 requires = ["setuptools>=73.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+
 [tool.setuptools]
-packages = ["sp_oncall"]
-[tool.setuptools.package-dir]
-"sp_oncall" = "src/sp_oncall"
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["*"]

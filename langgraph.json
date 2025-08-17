@@ -1,6 +1,6 @@
 {
   "graphs": {
-    "agent": "./src/sp_oncall/graph.py:orchestrator"
+    "agent": "./src/graph.py:orchestrator"
   },
   "env": "./.env",
   "dependencies": [
