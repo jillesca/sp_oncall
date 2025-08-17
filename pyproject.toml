@@ -24,6 +24,7 @@ dev = [
     "langchain-openai>=0.3.15",
     "langchain-tavily>=0.1.6",
     "langgraph-cli[inmem]>=0.2.8",
+    "pytest>=8.4.1",
 ]
 
 [build-system]

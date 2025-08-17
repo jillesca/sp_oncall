@@ -70,12 +70,10 @@ class StepExecutionResult:
 
     Attributes:
         investigation_report: Narrative report produced by the LLM for this step.
-        tools_limitations: Any limitations or constraints encountered.
         executed_calls: Sequence of concrete tool calls performed for this step.
     """
 
     investigation_report: str
-    tools_limitations: str
     executed_calls: List[ExecutedToolCall] = field(default_factory=list)
 
     def __str__(self) -> str:

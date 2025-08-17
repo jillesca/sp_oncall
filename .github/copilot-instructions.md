@@ -44,6 +44,7 @@ These are rules you must always follow:
 - You must never push any commits to any remote branches. I use commits to review changes before they are merged.
 - You must never merge a PR. I use PRs to review changes before they are merged.
 - To test the cli, use the uv run ... capture the output to a log file and inspect the log file to verify the output. The terminal output sometimes is cutoff.
+- The terminal has been disconnecting, so when running cli commands, always capture the output to a log file and examine the log file to verify the output.
 - If you need to run tests, use the pytest cli rather than the integrated test terminal, from time to time the integrated test terminal hangs and does not show the output of the tests, so it is better to run pytest from the cli.
 - If you find areas of opportunity to improve the codebase for this task or other tasks, ask them to add them as notes on the issue.
 - If you encounter obstacles or challenges during your work, you should document these issues in the issue thread and seek assistance from the team.
