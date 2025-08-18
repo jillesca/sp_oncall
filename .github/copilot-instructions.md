@@ -48,3 +48,5 @@ These are rules you must always follow:
 - If you need to run tests, use the pytest cli rather than the integrated test terminal, from time to time the integrated test terminal hangs and does not show the output of the tests, so it is better to run pytest from the cli.
 - If you find areas of opportunity to improve the codebase for this task or other tasks, ask them to add them as notes on the issue.
 - If you encounter obstacles or challenges during your work, you should document these issues in the issue thread and seek assistance from the team.
+- If logging variables, log entries must use lazy loading. f-strings are prohibited.
+- import statements should be grouped logically (e.g., standard library imports, third-party imports, local application imports) and separated by blank lines. They must also be at the top of the module so is easy to know what modules are being used.

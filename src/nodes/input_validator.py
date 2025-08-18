@@ -3,22 +3,20 @@ from dataclasses import replace
 from typing import Any, List, Optional
 from langchain_core.messages import HumanMessage, AIMessage
 
-
 from schemas import GraphState
 from schemas.state import (
     Investigation,
     InvestigationStatus,
     InvestigationPriority,
 )
-from mcp_client import mcp_node
-from util.llm import load_chat_model
-from configuration import Configuration
-from prompts.investigation_planning import INVESTIGATION_PLANNING_PROMPT
-
 from src.logging import (
     get_logger,
     log_node_execution,
 )
+from util.llm import load_chat_model
+from configuration import Configuration
+from mcp_client import mcp_node
+from prompts.investigation_planning import INVESTIGATION_PLANNING_PROMPT
 
 logger = get_logger(__name__)
 
@@ -66,7 +64,7 @@ def input_validator_node(state: GraphState) -> GraphState:
             return _build_failed_state(state)
 
     except Exception as e:
-        logger.error(f"❌ Investigation planning failed with error: {e}")
+        logger.error("❌ Investigation planning failed with error: %s", e)
         return _build_failed_state(state)
 
 
@@ -87,19 +85,17 @@ def _execute_investigation_planning(user_query: str) -> dict:
     Returns:
         MCP response containing investigation planning results
     """
-    logger.debug("🔗 Executing investigation planning via MCP agent")
-
-    # Create the message for the MCP agent
-    message = HumanMessage(
-        content=f"Plan investigation for this query: {user_query}"
+    logger.debug(
+        "🔗 Executing investigation planning via MCP agent. User query: %s",
+        user_query,
     )
+
+    message = HumanMessage(content=f"User query: {user_query}")
 
     return asyncio.run(
         mcp_node(
-            messages=message,
-            system_prompt=INVESTIGATION_PLANNING_PROMPT.format(
-                user_query=user_query
-            ),
+            message=message,
+            system_prompt=INVESTIGATION_PLANNING_PROMPT,
         )
     )
 
@@ -122,7 +118,12 @@ def _extract_mcp_response_content(mcp_response: Any) -> Any:
     """
     logger.debug("📋 Extracting content from MCP response")
     logger.debug(
-        f"🔍 MCP response keys: {list(mcp_response.keys()) if isinstance(mcp_response, dict) else 'Not a dict'}"
+        "🔍 MCP response keys: %s",
+        (
+            list(mcp_response.keys())
+            if isinstance(mcp_response, dict)
+            else "Not a dict"
+        ),
     )
 
     # Check if the response has the expected structure
@@ -152,7 +153,7 @@ def _extract_mcp_response_content(mcp_response: Any) -> Any:
         raise ValueError("No AIMessage found in MCP response messages")
 
     content = last_ai_message.content
-    logger.debug(f"🎯 Content: {content}")
+    logger.debug("🎯 Content: %s", content)
 
     return content
 
@@ -174,20 +175,19 @@ def _process_investigation_planning_response(
 
     try:
         # Use the model to process the response and extract device names
-        prompt = f"""Extract all device names from this response. Return only the device names, one per line.
-        Response to process: {response_content}"""
+        prompt = f"""Extract all device names from this response. Return only the device names, one per line.\n        Response to process: {response_content}"""
         response = model.invoke([HumanMessage(content=prompt)])
 
         # Handle different response types and extract device names
         device_names = _extract_device_names_from_response(response)
 
         logger.debug(
-            f"🎯 Extracted {len(device_names)} device names: {device_names}"
+            "🎯 Extracted %d device names: %s", len(device_names), device_names
         )
         return device_names
 
     except Exception as e:
-        logger.error(f"❌ LLM processing failed: {e}")
+        logger.error("❌ LLM processing failed: %s", e)
         return []
 
 
@@ -251,7 +251,7 @@ def _create_investigations_from_devices(
     Returns:
         List of Investigation objects with appropriate priorities and dependencies
     """
-    logger.debug(f"🏗️ Creating investigations for {len(device_names)} devices")
+    logger.debug("🏗️ Creating investigations for %d devices", len(device_names))
 
     investigations = []
 
@@ -280,9 +280,11 @@ def _create_investigations_from_devices(
         )
 
         investigations.append(investigation)
-        logger.debug(
-            f"📋 Created investigation for {device_name} with priority {priority}"
-        )
+    logger.debug(
+        "📋 Created investigation for %s with priority %s",
+        device_name,
+        priority,
+    )
 
     return investigations
 
@@ -416,11 +418,15 @@ def _log_successful_investigation_planning(
 ) -> None:
     """Log successful investigation planning details."""
     logger.info(
-        f"✅ Investigation planning successful: {len(investigations)} investigations created"
+        "✅ Investigation planning successful: %d investigations created",
+        len(investigations),
     )
     for investigation in investigations:
         logger.info(
-            f"  📋 {investigation.device_name} ({investigation.priority.value}, {len(investigation.dependencies)} deps)"
+            "  📋 %s (%s, %d deps)",
+            investigation.device_name,
+            investigation.priority.value,
+            len(investigation.dependencies),
         )
 
 
@@ -438,7 +444,8 @@ def _build_successful_state_with_investigations(
         Updated GraphState with investigations populated
     """
     logger.debug(
-        f"🏗️ Building successful state with {len(investigations)} investigations"
+        "🏗️ Building successful state with %d investigations",
+        len(investigations),
     )
 
     return replace(state, investigations=investigations)
