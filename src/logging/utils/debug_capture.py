@@ -106,7 +106,7 @@ class DebugCapture:
         self.logger.info(f"Object type: {type(obj).__name__}")
         self.logger.info(f"Object class: {obj.__class__}")
 
-        capture_file = self.debug_dir / f"{capture_id}.txt"
+        capture_file = self.debug_dir / f"{capture_id}.log"
 
         with open(capture_file, "w", encoding="utf-8") as f:
             f.write(f"# Debug Capture: {capture_id}\n")
@@ -213,7 +213,7 @@ class DebugCapture:
 
         self.logger.info(f"=== CONTEXT CAPTURE START: {capture_id} ===")
 
-        capture_file = self.debug_dir / f"{capture_id}_with_context.txt"
+        capture_file = self.debug_dir / f"{capture_id}_with_context.log"
 
         with open(capture_file, "w", encoding="utf-8") as f:
             f.write(f"# Debug Capture with Context: {capture_id}\n")
