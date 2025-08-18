@@ -275,7 +275,6 @@ def _extract_tool_messages(messages: List) -> List[ExecutedToolCall]:
             fallback_call = ExecutedToolCall(
                 function=getattr(tool_msg, "name", "unknown"),
                 error=f"Failed to convert tool message: {e}",
-                detailed_findings="Tool message conversion failed",
             )
             executed_calls.append(fallback_call)
 
@@ -318,70 +317,11 @@ def _convert_tool_message_to_executed_call(
     if hasattr(tool_msg, "tool_call_id"):
         params["tool_call_id"] = tool_msg.tool_call_id
 
-    # Create detailed findings from the result
-    detailed_findings = _create_detailed_findings_from_result(
-        result_data, function_name
-    )
-
     return ExecutedToolCall(
         function=function_name,
         params=params,
         result=result_data,
-        detailed_findings=detailed_findings,
     )
-
-
-def _create_detailed_findings_from_result(
-    result_data: dict, function_name: str
-) -> str:
-    """
-    Create a human-readable summary of tool execution results.
-
-    Args:
-        result_data: Structured result data from tool execution
-        function_name: Name of the executed function
-
-    Returns:
-        Human-readable detailed findings string
-    """
-    if not result_data:
-        return f"Executed {function_name} - no result data"
-
-    # Extract key information based on common result structure
-    device_name = result_data.get("device_name", "unknown")
-    status = result_data.get("status", "unknown")
-    operation_type = result_data.get("operation_type", function_name)
-
-    findings = (
-        f"Executed {function_name} on device {device_name} - Status: {status}"
-    )
-
-    # Add summary if available
-    if "data" in result_data and isinstance(result_data["data"], dict):
-        data = result_data["data"]
-        if "summary" in data:
-            summary = data["summary"]
-            if isinstance(summary, dict) and "summary" in summary:
-                findings += f" | Summary: {str(summary['summary'])[:200]}..."
-            elif isinstance(summary, str):
-                findings += f" | Summary: {summary[:200]}..."
-
-    # Add metadata if available
-    if "metadata" in result_data:
-        metadata = result_data["metadata"]
-        if isinstance(metadata, dict):
-            relevant_metadata = []
-            for key, value in metadata.items():
-                if key in [
-                    "total_interfaces",
-                    "successful_protocols",
-                    "total_vrfs_on_device",
-                ]:
-                    relevant_metadata.append(f"{key}: {value}")
-            if relevant_metadata:
-                findings += f" | Metadata: {', '.join(relevant_metadata)}"
-
-    return findings
 
 
 def _process_llm_response(

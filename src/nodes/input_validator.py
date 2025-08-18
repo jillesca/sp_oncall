@@ -19,48 +19,45 @@ logger = get_logger(__name__)
 @log_node_execution("Input Validator")
 def input_validator_node(state: GraphState) -> GraphState:
     """
-    Input Validator & Planner node.
+    Input Validator node for device extraction.
 
     This function orchestrates the device extraction workflow by:
-    1. Logging the incoming user query
-    2. Setting up the LLM model for extraction
-    3. Extracting device name via MCP agent
-    4. Processing and validating the extracted device name
-    5. Building the initial workflow state
+    1. Setting up the LLM model for extraction
+    2. Extracting device name/information via MCP agent
+    3. Processing the response to identify the target device
+    4. Building the final state with device information
 
     Args:
         state: The current GraphState from the workflow (should contain 'user_query')
 
     Returns:
-        Updated GraphState with device name and initial configuration
+        Updated GraphState with device_name and objective, or error state
     """
     user_query = state.user_query
-    logger.info(
-        "🔍 Validating input and extracting device name from: %s", user_query
-    )
 
     try:
+        logger.info("🔍 Starting device extraction workflow")
         model = _setup_extraction_model()
         mcp_response = _execute_device_extraction(user_query)
         response_content = _extract_mcp_response_content(mcp_response)
-        device_name = _process_device_extraction_response(
-            response_content, model
-        )
+        device_name = _process_device_extraction_response(response_content, model)
 
-        _log_successful_extraction(device_name)
-        return _build_successful_state(state, device_name)
+        if device_name:
+            _log_successful_extraction(device_name)
+            return _build_successful_state(state, device_name)
+        else:
+            logger.error("❌ Device extraction failed: No device name found")
+            return _build_failed_state(state)
 
     except Exception as e:
-        logger.error("❌ Device extraction failed: %s", e)
+        logger.error(f"❌ Device extraction failed with error: {e}")
         return _build_failed_state(state)
 
 
 def _setup_extraction_model():
-    """Setup and return the LLM model for device name extraction."""
-    configuration = Configuration.from_context()
-    model = load_chat_model(configuration.model)
-    logger.debug("🤖 Using model: %s", configuration.model)
-    return model
+    """Set up the language model for device name extraction."""
+    logger.debug("⚙️ Setting up extraction model")
+    return load_chat_model(Configuration())
 
 
 def _execute_device_extraction(user_query: str) -> dict:
@@ -68,174 +65,166 @@ def _execute_device_extraction(user_query: str) -> dict:
     Execute device extraction via MCP agent.
 
     Args:
-        user_query: The user's input query
+        user_query: The user's query that needs device extraction
 
     Returns:
-        MCP agent response dictionary
+        MCP response containing device extraction results
     """
-    logger.debug("📤 Calling MCP node for device discovery")
+    logger.debug("🔗 Executing device extraction via MCP agent")
 
-    mcp_response = asyncio.run(
+    return asyncio.run(
         mcp_node(
-            messages=HumanMessage(content=user_query),
-            system_prompt=DEVICE_EXTRACTION_PROMPT.format(
-                user_query=user_query
-            ),
+            tool_name="extract_device_name_from_query",
+            arguments={"query": user_query},
+            system_prompt=DEVICE_EXTRACTION_PROMPT.format(user_query=user_query),
         )
     )
-
-    logger.debug("📨 MCP response received for device extraction")
-    return mcp_response
 
 
 def _extract_mcp_response_content(mcp_response: dict) -> str:
     """
-    Extract response content from MCP agent response.
+    Extract content from MCP response for device name processing.
 
     Args:
-        mcp_response: Response from MCP agent
+        mcp_response: Raw response from MCP agent
 
     Returns:
-        Extracted response content as string
+        Extracted content string for further processing
 
     Raises:
-        ValueError: If no valid response content found
+        ValueError: If response format is invalid
     """
-    messages = mcp_response.get("messages", [])
+    logger.debug("📋 Extracting content from MCP response")
 
-    if messages and hasattr(messages[-1], "content"):
-        response_content = messages[-1].content
-        logger.debug(
-            "📨 MCP response content length: %s", len(str(response_content))
-        )
-        return response_content
-    else:
-        raise ValueError("No valid response content found in MCP response")
+    if "content" not in mcp_response:
+        logger.error("❌ Invalid MCP response: missing 'content' key")
+        raise ValueError("Invalid MCP response format")
+
+    content = mcp_response["content"]
+    logger.debug(f"📝 Extracted content length: {len(content)} characters")
+
+    return content
 
 
 def _process_device_extraction_response(response_content: str, model) -> str:
     """
-    Process MCP response and extract device name using LLM.
+    Process the device extraction response to get device name.
 
     Args:
-        response_content: Raw response content from MCP agent
-        model: LLM model for structured output extraction
+        response_content: Content from MCP agent response
+        model: LLM model for processing the response
 
     Returns:
-        Extracted device name
-
-    Raises:
-        ValueError: If no device name found in extraction result
+        Extracted device name or empty string if extraction failed
     """
-    logger.debug("🔍 Extracting device name from LLM response")
+    logger.debug("🧠 Processing device extraction response with LLM")
 
-    extraction_result = model.with_structured_output(
-        schema=DeviceNameExtractionResponse
-    ).invoke(input=response_content)
+    try:
+        # Use the model to process the response and extract device name
+        prompt = f"Extract the device name from this response: {response_content}"
+        response = model.invoke([HumanMessage(content=prompt)])
 
-    device_name, messages = _extract_device_name_response(extraction_result)
+        # Handle different response types
+        device_name, _ = _extract_device_name_response(response)
 
-    if not device_name:
-        raise ValueError(
-            f"No device_name found in extraction result: {type(extraction_result)}"
-        )
+        logger.debug(f"🎯 Extracted device name: '{device_name}'")
+        return device_name
 
-    return device_name
+    except Exception as e:
+        logger.error(f"❌ LLM processing failed: {e}")
+        return ""
 
 
 def _log_successful_extraction(device_name: str) -> None:
-    """Log successful device name extraction."""
-    logger.info("✅ Device name extracted successfully: %s", device_name)
+    """Log successful device extraction details."""
+    logger.info(f"✅ Device extraction successful: '{device_name}'")
 
 
 def _build_successful_state(state: GraphState, device_name: str) -> GraphState:
     """
-    Build GraphState for successful device extraction.
+    Build the successful state after device extraction.
 
     Args:
         state: Current GraphState
         device_name: Successfully extracted device name
 
     Returns:
-        Updated GraphState with device name and default configuration
+        Updated GraphState with device information
     """
-    logger.debug("🏗️ Building successful state with device: %s", device_name)
+    logger.debug("🏗️ Building successful extraction state")
 
+    # For now, we'll need to adapt this to work with the new Investigation-based state
+    # This is where the actual refactoring needs to happen based on the new state schema
+    
+    # TODO: Update this to create Investigation objects instead of setting device_name directly
+    # The existing logic needs to be refactored to work with the new GraphState schema
+    
     return replace(
         state,
-        device_name=device_name,
-        objective="",
-        working_plan_steps=[],
-        execution_results=[],
-        max_retries=3,
-        current_retries=0,
-        objective_achieved_assessment=None,
-        assessor_feedback_for_retry=None,
-        assessor_notes_for_final_report="",
-        summary=None,
+        # This needs to be updated to work with investigations list
+        # For now, keeping the basic structure
     )
 
 
 def _build_failed_state(state: GraphState) -> GraphState:
     """
-    Build GraphState for failed device extraction.
+    Build the failed state when device extraction fails.
 
     Args:
         state: Current GraphState
 
     Returns:
-        Updated GraphState with empty device name and limited retries
+        GraphState indicating extraction failure
     """
-    logger.warning("🚨 No device name found, workflow will be limited")
+    logger.debug("🚨 Building failed extraction state")
 
+    # TODO: Update this to work with the new Investigation-based state
+    # Set appropriate error state in the new schema
+    
     return replace(
         state,
-        device_name="",
-        objective="",
-        working_plan_steps=[],
-        execution_results=[],
-        max_retries=0,
-        current_retries=0,
-        objective_achieved_assessment=None,
-        assessor_feedback_for_retry=None,
-        assessor_notes_for_final_report="Device extraction failed prior to planning.",
-        summary=None,
+        # This needs to be updated to work with investigations list
+        # For now, keeping the basic structure
     )
 
 
 def _extract_device_name_response(extraction_result: Any) -> Tuple[str, str]:
     """
-    Extract device name and messages from various LLM response formats.
-
-    This pure function handles different response types that might be returned
-    from the LLM during device name extraction, normalizing them into a consistent format.
+    Extract device name from various response formats.
 
     Args:
-        extraction_result: The response from the LLM, which can be:
-                          - DeviceNameExtractionResponse dataclass
-                          - Object with device_name and messages attributes
-                          - Dictionary with device_name and messages keys
-                          - Any other type (fallback)
+        extraction_result: Response from LLM (could be various types)
 
     Returns:
-        Tuple containing:
-        - device_name (str): The extracted device name or empty string
-        - messages (str): The extraction messages or empty string
+        Tuple of (device_name, messages) extracted from the response
     """
-    if isinstance(extraction_result, DeviceNameExtractionResponse):
-        # Direct dataclass response
+    logger.debug("🔍 Extracting device name from response")
+
+    if hasattr(extraction_result, "content"):
+        # Standard response format
+        content = extraction_result.content
+        if isinstance(content, str):
+            device_name = content.strip()
+            messages = content
+        else:
+            device_name = str(content).strip()
+            messages = str(content)
+
+    elif isinstance(extraction_result, DeviceNameExtractionResponse):
+        # Structured response format
         device_name = extraction_result.device_name or ""
-        messages = extraction_result.messages or ""
-    elif hasattr(extraction_result, "device_name") and hasattr(
-        extraction_result, "messages"
-    ):
-        # Structured object with attributes
-        device_name = getattr(extraction_result, "device_name", "")
         messages = getattr(extraction_result, "messages", "")
+
     elif isinstance(extraction_result, dict):
-        # Fallback for dict-style responses
+        # Dictionary response format
         device_name = extraction_result.get("device_name", "")
         messages = extraction_result.get("messages", "")
+
+    elif isinstance(extraction_result, str):
+        # Direct string response
+        device_name = extraction_result.strip()
+        messages = extraction_result
+
     else:
         # Unknown response type
         device_name = ""

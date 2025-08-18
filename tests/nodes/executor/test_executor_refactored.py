@@ -13,7 +13,6 @@ from src.nodes.executor import (
     _extract_last_ai_message,
     _extract_tool_messages,
     _convert_tool_message_to_executed_call,
-    _create_detailed_findings_from_result,
     _process_llm_response,
 )
 from schemas.state import ExecutedToolCall
@@ -225,51 +224,6 @@ class TestConvertToolMessageToExecutedCall:
         assert executed_call.function == "unknown"
 
 
-class TestCreateDetailedFindings:
-    """Test creation of detailed findings from result data."""
-
-    def test_create_detailed_findings_success(self):
-        """Test creation of detailed findings with complete data."""
-        result_data = {
-            "device_name": "xrd-5",
-            "status": "success",
-            "operation_type": "system_info",
-            "data": {"summary": {"summary": "System is operational"}},
-            "metadata": {"total_interfaces": 8, "successful_protocols": 1},
-        }
-
-        findings = _create_detailed_findings_from_result(
-            result_data, "get_system_info"
-        )
-
-        assert "get_system_info" in findings
-        assert "xrd-5" in findings
-        assert "success" in findings
-        assert "System is operational" in findings
-        assert "total_interfaces: 8" in findings
-
-    def test_create_detailed_findings_minimal_data(self):
-        """Test creation of detailed findings with minimal data."""
-        result_data = {
-            "device_name": "test-device",
-            "status": "partial_success",
-        }
-
-        findings = _create_detailed_findings_from_result(
-            result_data, "test_function"
-        )
-
-        assert "test_function" in findings
-        assert "test-device" in findings
-        assert "partial_success" in findings
-
-    def test_create_detailed_findings_empty_data(self):
-        """Test creation of detailed findings with empty data."""
-        findings = _create_detailed_findings_from_result({}, "test_function")
-
-        assert findings == "Executed test_function - no result data"
-
-
 class TestProcessLlmResponse:
     """Test processing of LLM response into StepExecutionResult."""
 
@@ -281,12 +235,10 @@ class TestProcessLlmResponse:
             ExecutedToolCall(
                 function="get_system_info",
                 result={"status": "success", "device_name": "xrd-5"},
-                detailed_findings="System info retrieved successfully",
             ),
             ExecutedToolCall(
                 function="get_interface_info",
                 result={"status": "success", "device_name": "xrd-5"},
-                detailed_findings="Interface info retrieved successfully",
             ),
         ]
 
@@ -303,7 +255,6 @@ class TestProcessLlmResponse:
             ExecutedToolCall(
                 function="get_bgp_info",
                 error="BGP feature not available",
-                detailed_findings="BGP query failed",
             ),
             ExecutedToolCall(
                 function="get_routing_info",
@@ -311,7 +262,6 @@ class TestProcessLlmResponse:
                     "status": "partial_success",
                     "metadata": {"protocol_errors": {"bgp": "not found"}},
                 },
-                detailed_findings="Partial routing info retrieved",
             ),
         ]
 

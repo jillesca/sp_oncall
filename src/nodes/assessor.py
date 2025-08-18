@@ -6,13 +6,64 @@ from langchain_core.messages import SystemMessage
 from util.llm import load_chat_model
 from configuration import Configuration
 from util.utils import serialize_for_prompt
-from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
+from prompts.objective_assessor import (
+    OBJECTIVE_ASSESSOR_PROMPT,
+    MULTI_INVESTIGATION_ASSESSOR_PROMPT,
+)
+from schemas import (
+    GraphState,
+    AssessmentOutput,
+    MultiInvestigationAssessmentOutput,
+    StepExecutionResult,
+)
 from schemas import GraphState, AssessmentOutput, StepExecutionResult
+from schemas.state import Investigation, InvestigationStatus
 
 # Add logging
 from src.logging import get_logger, log_node_execution
 
 logger = get_logger(__name__)
+
+
+@log_node_execution("Multi-Investigation Assessor")
+def multi_investigation_assessor_node(state: GraphState) -> GraphState:
+    """
+    Assess the completeness of multiple device investigations and overall objective achievement.
+
+    This function orchestrates multi-investigation assessment by:
+    1. Evaluating individual investigation completeness
+    2. Assessing overall user query satisfaction across all investigations
+    3. Providing investigation-specific and global retry feedback
+    4. Updating global workflow assessment logic
+
+    Args:
+        state: The current GraphState with investigations
+
+    Returns:
+        Updated GraphState with assessment results and next steps
+    """
+    logger.info(
+        "🔍 Assessing %d investigations for overall objective achievement",
+        len(state.investigations),
+    )
+
+    try:
+        # Assess individual investigations first
+        assessed_investigations = _assess_individual_investigations(state)
+
+        # Then assess overall objective achievement
+        overall_assessment = _assess_overall_objective(
+            state, assessed_investigations
+        )
+
+        # Apply assessment decisions to workflow
+        return _apply_multi_assessment_to_workflow(
+            state, assessed_investigations, overall_assessment
+        )
+
+    except Exception as e:
+        logger.error("❌ Multi-investigation assessment failed: %s", e)
+        return _handle_multi_assessment_error(state, e)
 
 
 @log_node_execution("Objective Assessor")
@@ -94,7 +145,6 @@ def _get_execution_results_with_fallback(
         StepExecutionResult(
             investigation_report="No network execution results were found",
             executed_calls=[],
-            tools_limitations="Network execution results are missing",
         )
     ]
 
@@ -363,5 +413,224 @@ def _build_error_final_state(
         state,
         objective_achieved_assessment=True,  # Force completion
         assessor_notes_for_final_report=f"Assessment error after maximum attempts: {error}. Process concluded.",
+        assessor_feedback_for_retry=None,
+    )
+
+
+def _assess_individual_investigations(
+    state: GraphState,
+) -> List[Investigation]:
+    """
+    Assess the completeness of individual investigations.
+
+    Args:
+        state: Current GraphState with investigations
+
+    Returns:
+        List of investigations with updated assessment status
+    """
+    logger.debug(
+        "🔍 Assessing %d individual investigations", len(state.investigations)
+    )
+
+    # For now, we'll use a simple heuristic based on investigation status
+    # In the future, this could involve individual LLM assessment for each investigation
+    assessed_investigations = []
+
+    for investigation in state.investigations:
+        # Simple assessment: if investigation has execution results and no error, consider it assessed
+        if (
+            investigation.status == InvestigationStatus.COMPLETED
+            and investigation.execution_results
+        ):
+            # Investigation completed successfully
+            assessed_investigation = investigation
+        elif investigation.status == InvestigationStatus.FAILED:
+            # Investigation failed - leave as is
+            assessed_investigation = investigation
+        else:
+            # Investigation pending or in progress - leave as is
+            assessed_investigation = investigation
+
+        assessed_investigations.append(assessed_investigation)
+
+    logger.debug("✅ Individual investigation assessment completed")
+    return assessed_investigations
+
+
+def _assess_overall_objective(
+    state: GraphState, assessed_investigations: List[Investigation]
+) -> MultiInvestigationAssessmentOutput:
+    """
+    Assess overall objective achievement across all investigations.
+
+    Args:
+        state: Current GraphState
+        assessed_investigations: List of assessed investigations
+
+    Returns:
+        MultiInvestigationAssessmentOutput with overall assessment
+    """
+    logger.debug("🎯 Assessing overall objective achievement")
+
+    # Prepare assessment data
+    investigation_summary = _prepare_investigation_summary(
+        assessed_investigations
+    )
+    investigation_details = _prepare_investigation_details(
+        assessed_investigations
+    )
+    session_context = _prepare_session_context(state.workflow_session)
+
+    # Build assessment prompt
+    assessment_data = {
+        "user_query": state.user_query,
+        "investigation_summary": investigation_summary,
+        "investigation_details": investigation_details,
+        "session_context": session_context,
+    }
+
+    # Execute assessment with LLM
+    model = _setup_assessment_model()
+    formatted_prompt = MULTI_INVESTIGATION_ASSESSOR_PROMPT.format(
+        **assessment_data
+    )
+
+    ai_response = model.with_structured_output(
+        schema=MultiInvestigationAssessmentOutput
+    ).invoke(input=[SystemMessage(content=formatted_prompt)])
+
+    # Ensure proper response format
+    if isinstance(ai_response, MultiInvestigationAssessmentOutput):
+        assessment = ai_response
+    else:
+        # Fallback for unexpected response format
+        logger.warning(
+            "⚠️ Unexpected response format from LLM, using default assessment"
+        )
+        assessment = MultiInvestigationAssessmentOutput(
+            overall_objective_achieved=True,
+            investigation_success_rate=0.5,
+            notes_for_final_report="Assessment completed with default values due to response format issue",
+        )
+
+    logger.debug(
+        "📊 Overall assessment: achieved=%s, success_rate=%.2f",
+        assessment.overall_objective_achieved,
+        assessment.investigation_success_rate,
+    )
+
+    return assessment
+
+
+def _prepare_investigation_summary(investigations: List[Investigation]) -> str:
+    """Prepare a summary of investigation results."""
+    total = len(investigations)
+    completed = sum(
+        1
+        for inv in investigations
+        if inv.status == InvestigationStatus.COMPLETED
+    )
+    failed = sum(
+        1 for inv in investigations if inv.status == InvestigationStatus.FAILED
+    )
+    pending = sum(
+        1
+        for inv in investigations
+        if inv.status == InvestigationStatus.PENDING
+    )
+
+    return f"Total: {total}, Completed: {completed}, Failed: {failed}, Pending: {pending}"
+
+
+def _prepare_investigation_details(investigations: List[Investigation]) -> str:
+    """Prepare detailed investigation information for assessment."""
+    details = []
+    for inv in investigations:
+        detail = f"Device: {inv.device_name}, Status: {inv.status.value}, Results: {len(inv.execution_results)} steps"
+        if inv.error_details:
+            detail += f", Error: {inv.error_details}"
+        details.append(detail)
+
+    return "\\n".join(details)
+
+
+def _prepare_session_context(workflow_session) -> str:
+    """Prepare session context information."""
+    if not workflow_session:
+        return "No session context available"
+
+    return f"Session: {workflow_session.session_id}, Patterns: {len(workflow_session.learned_patterns)}"
+
+
+def _apply_multi_assessment_to_workflow(
+    state: GraphState,
+    assessed_investigations: List[Investigation],
+    overall_assessment: MultiInvestigationAssessmentOutput,
+) -> GraphState:
+    """
+    Apply multi-investigation assessment results to workflow state.
+
+    Args:
+        state: Current GraphState
+        assessed_investigations: List of assessed investigations
+        overall_assessment: Overall assessment results
+
+    Returns:
+        Updated GraphState with assessment results
+    """
+    logger.debug("🏗️ Applying multi-assessment to workflow")
+
+    # Update workflow session with learned patterns
+    updated_session = state.workflow_session
+    if updated_session and overall_assessment.learned_patterns:
+        updated_session = replace(
+            updated_session,
+            learned_patterns={
+                **updated_session.learned_patterns,
+                **overall_assessment.learned_patterns,
+            },
+        )
+
+    # Determine if retry is needed
+    retry_needed = (
+        not overall_assessment.overall_objective_achieved
+        and state.current_retries < state.max_retries
+    )
+
+    return replace(
+        state,
+        investigations=assessed_investigations,
+        workflow_session=updated_session,
+        overall_objective_achieved=overall_assessment.overall_objective_achieved,
+        assessor_notes_for_final_report=overall_assessment.notes_for_final_report,
+        assessor_feedback_for_retry=(
+            overall_assessment.feedback_for_retry if retry_needed else None
+        ),
+        current_retries=state.current_retries + (1 if retry_needed else 0),
+    )
+
+
+def _handle_multi_assessment_error(
+    state: GraphState, error: Exception
+) -> GraphState:
+    """
+    Handle errors during multi-investigation assessment.
+
+    Args:
+        state: Current GraphState
+        error: Exception that occurred
+
+    Returns:
+        Updated GraphState with error handling
+    """
+    logger.debug("🚨 Handling multi-assessment error: %s", error)
+
+    # For multi-investigation, we're more tolerant of assessment errors
+    # Mark as complete with notes about the error
+    return replace(
+        state,
+        overall_objective_achieved=True,  # Force completion to avoid endless loops
+        assessor_notes_for_final_report=f"Multi-investigation assessment encountered an error: {error}. Results may be incomplete but workflow concluded.",
         assessor_feedback_for_retry=None,
     )

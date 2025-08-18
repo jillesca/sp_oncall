@@ -22,7 +22,7 @@ def decide_next_step(state: GraphState) -> str:
     """
     Router function for the graph.
 
-    Uses the objective_achieved field to decide whether to continue
+    Uses the overall_objective_achieved field to decide whether to continue
     the executor/assessor loop or proceed to report generation.
 
     Args:
@@ -32,10 +32,10 @@ def decide_next_step(state: GraphState) -> str:
         The name of the next node to execute
     """
     logger.debug(
-        f"Routing decision: objective_achieved={state.objective_achieved_assessment}"
+        f"Routing decision: overall_objective_achieved={state.overall_objective_achieved}"
     )
 
-    if state.objective_achieved_assessment:
+    if state.overall_objective_achieved:
         logger.info("✅ Objective achieved, proceeding to report generation")
         return "report_generator"
     else:
@@ -49,7 +49,6 @@ orchestrator = StateGraph(
     state_schema=GraphState, context_schema=Configuration
 )
 
-# Use original node functions now decorated with detailed logging
 orchestrator.add_node(node="input_validator_node", action=input_validator_node)
 orchestrator.add_node(node="planner_node", action=planner_node)
 orchestrator.add_node(node="network_executor", action=llm_network_executor)
