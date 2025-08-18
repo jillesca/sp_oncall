@@ -1,24 +1,42 @@
 import asyncio
-from dataclasses import replace
-from typing import Any, List, Optional
+from typing import Any, List
+from dataclasses import dataclass, replace
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, AIMessage
 
-from schemas import GraphState
 from schemas.state import (
+    GraphState,
     Investigation,
-    InvestigationStatus,
-    InvestigationPriority,
 )
 from src.logging import (
     get_logger,
     log_node_execution,
 )
+from mcp_client import mcp_node
 from util.llm import load_chat_model
 from configuration import Configuration
-from mcp_client import mcp_node
 from prompts.investigation_planning import INVESTIGATION_PLANNING_PROMPT
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class DeviceToInvestigate:
+    device_name: str
+    device_profile: str
+
+
+@dataclass
+class InvestigationPlanningResponse:
+    devices: List[DeviceToInvestigate]
+
+    def __len__(self) -> int:
+        """Return the number of devices."""
+        return len(self.devices)
+
+    def __iter__(self):
+        """Make InvestigationList iterable."""
+        return iter(self.devices)
 
 
 @log_node_execution("Input Validator")
@@ -47,21 +65,23 @@ def input_validator_node(state: GraphState) -> GraphState:
         model = _setup_planning_model()
         mcp_response = _execute_investigation_planning(user_query)
         response_content = _extract_mcp_response_content(mcp_response)
-        device_names = _process_investigation_planning_response(
-            response_content, model
+        investigation_list = _process_investigation_planning_response(
+            response_content, model=model
         )
 
-        if device_names:
-            investigations = _create_investigations_from_devices(
-                device_names, user_query
+        # Happy path: Create Investigation objects and update state
+        if not investigation_list or len(investigation_list) == 0:
+            logger.warning(
+                "⚠️ No devices found in investigation planning response"
             )
-            _log_successful_investigation_planning(investigations)
-            return _build_successful_state_with_investigations(
-                state, investigations
-            )
-        else:
-            logger.error("❌ Investigation planning failed: No devices found")
-            return _build_failed_state(state)
+            return replace(state, investigations=[])
+
+        investigations = _create_investigations_from_response(
+            investigation_list
+        )
+        _log_successful_investigation_planning(investigation_list)
+
+        return replace(state, investigations=investigations)
 
     except Exception as e:
         logger.error("❌ Investigation planning failed with error: %s", e)
@@ -75,7 +95,9 @@ def _setup_planning_model():
     return load_chat_model(configuration.model)
 
 
-def _execute_investigation_planning(user_query: str) -> dict:
+def _execute_investigation_planning(
+    user_query: str, response_format: Any = None
+) -> dict:
     """
     Execute investigation planning via MCP agent.
 
@@ -96,6 +118,7 @@ def _execute_investigation_planning(user_query: str) -> dict:
         mcp_node(
             message=message,
             system_prompt=INVESTIGATION_PLANNING_PROMPT,
+            response_format=response_format,
         )
     )
 
@@ -159,10 +182,10 @@ def _extract_mcp_response_content(mcp_response: Any) -> Any:
 
 
 def _process_investigation_planning_response(
-    response_content: str, model
-) -> List[str]:
+    response_content: str, model: BaseChatModel
+) -> InvestigationPlanningResponse:
     """
-    Process the investigation planning response to get multiple device names.
+    Parses the MCP agent response content for investigation planning.
 
     Args:
         response_content: Content from MCP agent response
@@ -171,297 +194,107 @@ def _process_investigation_planning_response(
     Returns:
         List of extracted device names or empty list if extraction failed
     """
-    logger.debug("🧠 Processing investigation planning response with LLM")
+    logger.debug("🧠 Getting structured output")
 
     try:
         # Use the model to process the response and extract device names
-        prompt = f"""Extract all device names from this response. Return only the device names, one per line.\n        Response to process: {response_content}"""
-        response = model.invoke([HumanMessage(content=prompt)])
+        response = model.with_structured_output(
+            schema=InvestigationPlanningResponse
+        ).invoke(input=response_content)
 
-        # Handle different response types and extract device names
-        device_names = _extract_device_names_from_response(response)
+        from src.logging import debug_capture_object
 
-        logger.debug(
-            "🎯 Extracted %d device names: %s", len(device_names), device_names
+        # Capture any object
+        debug_capture_object(
+            response, label="_process_investigation_planning_response"
         )
-        return device_names
+
+        logger.debug("🎯 Extracted device names: %s", response)
+
+        # Ensure we have a proper InvestigationList object
+        if isinstance(response, InvestigationPlanningResponse):
+            return response
+        elif isinstance(response, dict) and "devices" in response:
+            # Handle case where response is a dict with the expected structure
+            investigations_data = response["devices"]
+            devices = [
+                (
+                    DeviceToInvestigate(
+                        device_name=item["device_name"],
+                        device_profile=item["device_profile"],
+                    )
+                    if isinstance(item, dict)
+                    else item
+                )
+                for item in investigations_data
+            ]
+            return InvestigationPlanningResponse(devices=devices)
+        else:
+            logger.error("❌ Unexpected response format: %s", type(response))
+            return InvestigationPlanningResponse(devices=[])
 
     except Exception as e:
         logger.error("❌ LLM processing failed: %s", e)
-        return []
+        return InvestigationPlanningResponse(devices=[])
 
 
-def _extract_device_names_from_response(extraction_result: Any) -> List[str]:
-    """
-    Extract device names from various response formats.
-
-    Args:
-        extraction_result: Response from LLM (could be various types)
-
-    Returns:
-        List of device names extracted from the response
-    """
-    logger.debug("🔍 Extracting device names from response")
-
-    if hasattr(extraction_result, "content"):
-        content = extraction_result.content
-    elif isinstance(extraction_result, str):
-        content = extraction_result
-    else:
-        content = str(extraction_result)
-
-    # Parse device names from content (assuming one per line or comma-separated)
-    if isinstance(content, str):
-        # Split by newlines and clean up
-        device_names = [
-            name.strip() for name in content.split("\n") if name.strip()
-        ]
-
-        # If no newlines, try comma separation
-        if len(device_names) == 1 and "," in device_names[0]:
-            device_names = [
-                name.strip()
-                for name in device_names[0].split(",")
-                if name.strip()
-            ]
-
-        # Filter out empty names and common non-device responses
-        device_names = [
-            name
-            for name in device_names
-            if name
-            and not name.lower() in ["none", "no device", "not found", "n/a"]
-        ]
-
-        return device_names
-
-    return []
+def _log_successful_investigation_planning(
+    devices: InvestigationPlanningResponse,
+) -> None:
+    """Log successful investigation planning details."""
+    logger.info(
+        "✅ Investigation planning successful: %d devices created",
+        len(devices),
+    )
+    for investigation in devices:
+        logger.info(
+            "  📋 %s (%s)",
+            investigation.device_name,
+            investigation.device_profile,
+        )
 
 
-def _create_investigations_from_devices(
-    device_names: List[str], user_query: str
+def _create_investigations_from_response(
+    planning_response: InvestigationPlanningResponse,
 ) -> List[Investigation]:
     """
-    Create Investigation objects from a list of device names.
+    Create Investigation objects from the planning response.
 
     Args:
-        device_names: List of device names extracted from user query
-        user_query: Original user query for context
+        planning_response: The parsed response containing device information
 
     Returns:
-        List of Investigation objects with appropriate priorities and dependencies
+        List of Investigation objects, one for each device
     """
-    logger.debug("🏗️ Creating investigations for %d devices", len(device_names))
+    logger.debug(
+        "🏗️ Creating %d Investigation objects from planning response",
+        len(planning_response),
+    )
 
     investigations = []
-
-    for i, device_name in enumerate(device_names):
-        # Determine device profile based on device name patterns
-        device_profile = _determine_device_profile(device_name)
-
-        # Determine priority based on device type and position
-        priority = _determine_investigation_priority(
-            device_name, device_profile, i
-        )
-
-        # Create the investigation
+    for device in planning_response:
         investigation = Investigation(
-            device_name=device_name,
-            device_profile=device_profile,
-            objective=_extract_device_specific_objective(
-                device_name, user_query
-            ),
-            status=InvestigationStatus.PENDING,
-            priority=priority,
-            dependencies=_determine_investigation_dependencies(
-                device_name, device_names
-            ),
-            retry_count=0,
+            device_name=device.device_name,
+            device_profile=device.device_profile,
         )
-
         investigations.append(investigation)
-    logger.debug(
-        "📋 Created investigation for %s with priority %s",
-        device_name,
-        priority,
-    )
+        logger.debug(
+            "  ✅ Created investigation for device: %s", device.device_name
+        )
 
     return investigations
 
 
-def _determine_device_profile(device_name: str) -> str:
-    """
-    Determine device profile based on device name patterns.
-
-    Args:
-        device_name: Name of the device
-
-    Returns:
-        Device profile string (e.g., "router", "switch", "firewall")
-    """
-    device_name_lower = device_name.lower()
-
-    # Common device type patterns
-    if any(
-        pattern in device_name_lower
-        for pattern in ["rtr", "router", "r-", "gw", "gateway"]
-    ):
-        return "router"
-    elif any(
-        pattern in device_name_lower for pattern in ["sw", "switch", "sw-"]
-    ):
-        return "switch"
-    elif any(
-        pattern in device_name_lower
-        for pattern in ["fw", "firewall", "asa", "pix"]
-    ):
-        return "firewall"
-    elif any(
-        pattern in device_name_lower
-        for pattern in ["ap", "access", "wireless"]
-    ):
-        return "access_point"
-    elif any(
-        pattern in device_name_lower for pattern in ["core", "agg", "dist"]
-    ):
-        return "core_device"
-    else:
-        return "network_device"
-
-
-def _determine_investigation_priority(
-    device_name: str, device_profile: str, position: int
-) -> InvestigationPriority:
-    """
-    Determine investigation priority based on device characteristics.
-
-    Args:
-        device_name: Name of the device
-        device_profile: Device profile/type
-        position: Position in the device list (for ordering)
-
-    Returns:
-        Investigation priority
-    """
-    device_name_lower = device_name.lower()
-
-    # High priority for core infrastructure
-    if device_profile == "core_device" or any(
-        pattern in device_name_lower for pattern in ["core", "main", "primary"]
-    ):
-        return InvestigationPriority.HIGH
-
-    # High priority for the first device (usually the most relevant)
-    if position == 0:
-        return InvestigationPriority.HIGH
-
-    # Medium priority for routers and firewalls
-    if device_profile in ["router", "firewall"]:
-        return InvestigationPriority.MEDIUM
-
-    # Lower priority for edge devices
-    return InvestigationPriority.LOW
-
-
-def _determine_investigation_dependencies(
-    device_name: str, all_device_names: List[str]
-) -> List[str]:
-    """
-    Determine which other devices this investigation depends on.
-
-    Args:
-        device_name: Current device name
-        all_device_names: List of all device names in the investigation
-
-    Returns:
-        List of device names this investigation depends on
-    """
-    dependencies = []
-    device_name_lower = device_name.lower()
-
-    # Edge devices typically depend on core devices
-    if any(
-        pattern in device_name_lower for pattern in ["edge", "access", "leaf"]
-    ):
-        for other_device in all_device_names:
-            if other_device != device_name:
-                other_device_lower = other_device.lower()
-                if any(
-                    pattern in other_device_lower
-                    for pattern in ["core", "spine", "agg", "dist"]
-                ):
-                    dependencies.append(other_device)
-
-    return dependencies
-
-
-def _extract_device_specific_objective(
-    device_name: str, user_query: str
-) -> Optional[str]:
-    """
-    Extract device-specific objective from the user query.
-
-    Args:
-        device_name: Name of the device
-        user_query: Original user query
-
-    Returns:
-        Device-specific objective or None
-    """
-    # For now, return a simple objective based on the user query
-    # This could be enhanced with more sophisticated parsing
-    return f"Investigate {device_name} in relation to: {user_query}"
-
-
-def _log_successful_investigation_planning(
-    investigations: List[Investigation],
-) -> None:
-    """Log successful investigation planning details."""
-    logger.info(
-        "✅ Investigation planning successful: %d investigations created",
-        len(investigations),
-    )
-    for investigation in investigations:
-        logger.info(
-            "  📋 %s (%s, %d deps)",
-            investigation.device_name,
-            investigation.priority.value,
-            len(investigation.dependencies),
-        )
-
-
-def _build_successful_state_with_investigations(
-    state: GraphState, investigations: List[Investigation]
-) -> GraphState:
-    """
-    Build the successful state after multi-device extraction.
-
-    Args:
-        state: Current GraphState
-        investigations: List of Investigation objects created
-
-    Returns:
-        Updated GraphState with investigations populated
-    """
-    logger.debug(
-        "🏗️ Building successful state with %d investigations",
-        len(investigations),
-    )
-
-    return replace(state, investigations=investigations)
-
-
 def _build_failed_state(state: GraphState) -> GraphState:
     """
-    Build the failed state when investigation planning fails.
+    Build a failed state when investigation planning fails.
 
     Args:
-        state: Current GraphState
+        state: Original state to preserve user_query and other data
 
     Returns:
-        GraphState indicating planning failure
+        Updated GraphState with empty investigations list
     """
-    logger.debug("🚨 Building failed planning state")
+    logger.warning("🚨 Building failed state - no investigations created")
 
-    # Return state with empty investigations list to indicate failure
     return replace(state, investigations=[])

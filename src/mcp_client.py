@@ -27,6 +27,7 @@ async def mcp_node(
     message: HumanMessage,
     system_prompt: str = "",
     client_config: Optional[Dict[str, Any]] = None,
+    response_format: Any = None,
 ) -> Dict[str, List[AIMessage]]:
     """
     Generic node for executing MCP tools in the LangGraph pipeline.
@@ -53,7 +54,9 @@ async def mcp_node(
     model = _setup_mcp_model()
     mcp_config = await _load_mcp_config(client_config)
     tools = await _setup_mcp_tools(mcp_config)
-    result = await _execute_mcp_agent(model, message, tools, system_prompt)
+    result = await _execute_mcp_agent(
+        model, message, tools, system_prompt, response_format
+    )
 
     _log_execution_results(result)
 
@@ -155,7 +158,11 @@ def _log_available_tools(tools: List[Any]) -> None:
 
 
 async def _execute_mcp_agent(
-    model, message: HumanMessage, tools: List[Any], system_prompt: str
+    model,
+    message: HumanMessage,
+    tools: List[Any],
+    system_prompt: str,
+    response_format: Any = None,
 ) -> Dict[str, List[AIMessage]]:
     """
     Create a reactive agent with the given model, tools, and prompt.
@@ -174,6 +181,7 @@ async def _execute_mcp_agent(
         model=model,
         tools=tools,
         prompt=system_prompt,
+        response_format=response_format,
     )
 
     logger.info("🎯 Executing MCP agent with %s tools available", len(tools))
