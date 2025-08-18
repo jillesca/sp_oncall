@@ -10,7 +10,7 @@ from .assessment_schema import (
     MultiInvestigationAssessmentOutput,
 )
 from .state import GraphState, StepExecutionResult, ExecutedToolCall
-from .device_extraction_schema import DeviceNameExtractionResponse
+from .investigation_planning_schema import DeviceNameExtractionResponse
 
 __all__ = [
     "GraphState",

@@ -1,22 +1,9 @@
-DEVICE_EXTRACTION_PROMPT = """You are a network operations assistant. Your task is to extract the device name of the network device referenced in the user's query. 
+INVESTIGATION_PLANNING_PROMPT = """
+You are a network operations assistant specialized in multi-device investigation planning. Your task is to identify all network devices mentioned or implied in the user's query and create a comprehensive investigation plan.
 
 To do this, follow these steps:
 
-1. You must use the get_devices() function from gNMIBuddy to retrieve the list of available device names in the inventory.
-2. Compare the user query to the inventory and select the device name that matches the user's intent. Only select a device name that is present in the inventory. If no device is referenced or the device is not in the inventory, return an empty string.
-3. Return the device name as a structured output in the field 'device_name'.
-4. is key to ensure that the device name is in the correct format and matches the inventory exactly, otherwise, other agents may not be able to use it.
-
-Here is the user query:
-
-{user_query}
-"""
-
-MULTI_DEVICE_EXTRACTION_PROMPT = """You are a network operations assistant specialized in multi-device investigation planning. Your task is to identify all network devices mentioned or implied in the user's query and create a comprehensive investigation plan.
-
-To do this, follow these steps:
-
-1. **Device Discovery**: Use the get_devices() function from gNMIBuddy to retrieve the complete list of available device names in the inventory.
+1. **Device Discovery**: Review if you have any tools available to retrieve the complete list of available device names in the inventory.
 
 2. **Device Analysis**: Analyze the user query to identify:
    - Explicitly mentioned device names
@@ -24,7 +11,7 @@ To do this, follow these steps:
    - Implicit device relationships (e.g., investigating a network path involves multiple devices)
    - Comparative analyses (e.g., "compare performance between...")
 
-3. **Device Profiling**: For each identified device, attempt to determine:
+3. **Device Profiling**: Review if you have any tools available to gather device profiles. For each identified device, attempt to determine:
    - Device type/model (e.g., "cisco_xr", "cisco_ios", "juniper_mx")
    - Device role (e.g., "core_router", "edge_router", "access_switch")
    - Any contextual hints from naming conventions
@@ -44,7 +31,7 @@ To do this, follow these steps:
    - Health assessment, performance analysis, troubleshooting, configuration review, etc.
 
 **Important Guidelines**:
-- Only include devices that exist in the inventory (from get_devices())
+- Only include devices that exist in the inventory from your tools.
 - If user mentions device patterns but no specific names, expand the pattern intelligently
 - Default to single-device investigation if query is ambiguous
 - Provide clear reasoning in the messages field
