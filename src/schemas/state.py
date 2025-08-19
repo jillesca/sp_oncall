@@ -99,14 +99,6 @@ class GraphState:
         """Return a JSON representation of the graph state."""
         return json.dumps(asdict(self), indent=2, default=str)
 
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return (
-            f"GraphState(user_query='{self.user_query[:50]}...', "
-            f"investigations={len(self.investigations)} investigations, "
-            f"current_retries={self.current_retries})"
-        )
-
 
 @dataclass
 class WorkflowSession:
@@ -127,15 +119,6 @@ class WorkflowSession:
     def __str__(self) -> str:
         """Return a JSON representation of the workflow session."""
         return json.dumps(asdict(self), indent=2, default=str)
-
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return (
-            f"WorkflowSession(session_id='{self.session_id}', "
-            f"reports={len(self.previous_reports)}, "
-            f"patterns={len(self.learned_patterns)}, "
-            f"relationships={len(self.device_relationships)})"
-        )
 
 
 class InvestigationStatus(Enum):
@@ -192,16 +175,15 @@ class Investigation:
 
     device_name: str
     device_profile: str = ""
+    role: str = ""
     objective: Optional[str] = None
-    working_plan_steps: List[str] = field(default_factory=list)
+    working_plan_steps: str = ""
     execution_results: List["StepExecutionResult"] = field(
         default_factory=list
     )
 
     status: InvestigationStatus = InvestigationStatus.PENDING
     priority: InvestigationPriority = InvestigationPriority.MEDIUM
-    dependencies: List[str] = field(default_factory=list)
-    retry_count: int = 0
 
     report: Optional[str] = None
     error_details: Optional[str] = None
@@ -209,16 +191,6 @@ class Investigation:
     def __str__(self) -> str:
         """Return a JSON representation of the investigation."""
         return json.dumps(asdict(self), indent=2, default=str)
-
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return (
-            f"Investigation(device_name='{self.device_name}', "
-            f"status={self.status.value}, "
-            f"priority={self.priority.value}, "
-            f"steps={len(self.working_plan_steps)}, "
-            f"results={len(self.execution_results)})"
-        )
 
 
 @dataclass
@@ -236,10 +208,6 @@ class StepExecutionResult:
     def __str__(self) -> str:
         """Return a JSON representation of the step execution result."""
         return json.dumps(asdict(self), indent=2, default=str)
-
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return f"StepExecutionResult(investigation_report='{self.investigation_report[:50]}...', executed_calls={len(self.executed_calls)} calls)"
 
 
 @dataclass
@@ -261,7 +229,3 @@ class ExecutedToolCall:
     def __str__(self) -> str:
         """Return a JSON representation of the tool call."""
         return json.dumps(asdict(self), indent=2, default=str)
-
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return f"ExecutedToolCall(function='{self.function}', params={self.params}, error={self.error})"

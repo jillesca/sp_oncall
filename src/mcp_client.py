@@ -188,7 +188,7 @@ async def _execute_mcp_agent(
     logger.debug("🤖 User request: %s", message.content)
 
     return await agent.ainvoke(
-        {"messages": [{"role": "user", "content": message.content}]}
+        input={"messages": [{"role": "user", "content": message.content}]}
     )
 
 

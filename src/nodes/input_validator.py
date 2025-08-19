@@ -2,7 +2,7 @@ import asyncio
 from typing import Any, List
 from dataclasses import dataclass, replace
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 
 from schemas.state import (
     GraphState,
@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 class DeviceToInvestigate:
     device_name: str
     device_profile: str
+    role: str = ""
 
 
 @dataclass
@@ -175,14 +176,13 @@ def _extract_mcp_response_content(mcp_response: Any) -> Any:
         logger.error("❌ No AIMessage found in MCP response messages")
         raise ValueError("No AIMessage found in MCP response messages")
 
-    content = last_ai_message.content
-    logger.debug("🎯 Content: %s", content)
+    logger.debug("🎯 Content: %s", last_ai_message.content)
 
-    return content
+    return last_ai_message
 
 
 def _process_investigation_planning_response(
-    response_content: str, model: BaseChatModel
+    response_content: BaseMessage, model: BaseChatModel
 ) -> InvestigationPlanningResponse:
     """
     Parses the MCP agent response content for investigation planning.
@@ -200,7 +200,7 @@ def _process_investigation_planning_response(
         # Use the model to process the response and extract device names
         response = model.with_structured_output(
             schema=InvestigationPlanningResponse
-        ).invoke(input=response_content)
+        ).invoke(input=response_content.content)
 
         from src.logging import debug_capture_object
 
@@ -222,6 +222,7 @@ def _process_investigation_planning_response(
                     DeviceToInvestigate(
                         device_name=item["device_name"],
                         device_profile=item["device_profile"],
+                        role=item["role"],
                     )
                     if isinstance(item, dict)
                     else item

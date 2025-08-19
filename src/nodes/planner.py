@@ -1,72 +1,37 @@
-from dataclasses import replace
-from typing import Any, Tuple, List
-from langchain_core.messages import SystemMessage
+from dataclasses import field, replace, dataclass
+from typing import Any, List, Optional
+from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
+from langchain_core.language_models import BaseChatModel
 
 from util.llm import load_chat_model
-from util.plans import load_plan_data
+from util.plans import load_plans, plans_to_string
 from configuration import Configuration
-from prompts.planner import PLANNER_PROMPT, MULTI_INVESTIGATION_PLANNER_PROMPT
-from schemas import GraphState, PlannerOutput
-from schemas.state import Investigation, InvestigationStatus
-
-# Add logging
+from prompts.planner import PLANNER_PROMPT
+from schemas.state import Investigation, GraphState
 from src.logging import get_logger, log_node_execution
 
 logger = get_logger(__name__)
 
 
-@log_node_execution("Multi-Investigation Planner")
-def multi_investigation_planner_node(state: GraphState) -> GraphState:
-    """
-    Multi-Investigation Planner node for the new investigation workflow.
+@dataclass
+class DevicePlan:
+    device_name: str
+    role: str = ""
+    objective: Optional[str] = None
+    working_plan_steps: str = ""
 
-    This function orchestrates planning for multiple device investigations by:
-    1. Iterating over pending investigations
-    2. Creating device-specific plans using device profile and context
-    3. Handling cross-investigation dependencies
-    4. Updating investigation objectives and working plan steps
-    5. Building the updated state with planning results
 
-    Args:
-        state: The current GraphState from the workflow with investigations
+@dataclass
+class PlanningResponse:
+    plan: List[DevicePlan]
 
-    Returns:
-        Updated GraphState with planned investigations
-    """
-    logger.info("📋 Planning for %d investigations", len(state.investigations))
+    def __len__(self) -> int:
+        """Return the number of devices."""
+        return len(self.plan)
 
-    try:
-        pending_investigations = state.get_pending_investigations()
-
-        if not pending_investigations:
-            logger.info("✅ No pending investigations to plan")
-            return state
-
-        available_plans = _load_available_plans()
-        model = _setup_planning_model()
-
-        planned_investigations = []
-        for investigation in state.investigations:
-            if investigation.status == InvestigationStatus.PENDING:
-                planned_investigation = _plan_single_investigation(
-                    investigation,
-                    state.user_query,
-                    state.workflow_session,
-                    available_plans,
-                    model,
-                )
-                planned_investigations.append(planned_investigation)
-            else:
-                planned_investigations.append(investigation)
-
-        _log_successful_multi_planning(planned_investigations)
-        return _build_successful_multi_planning_state(
-            state, planned_investigations
-        )
-
-    except Exception as e:
-        logger.error("❌ Multi-investigation planning failed: %s", e)
-        return _build_failed_multi_planning_state(state, e)
+    def __iter__(self):
+        """Make PlanningResponse iterable."""
+        return iter(self.plan)
 
 
 @log_node_execution("Planner")
@@ -92,14 +57,22 @@ def planner_node(state: GraphState) -> GraphState:
 
     try:
         available_plans = _load_available_plans()
-        model = _setup_planning_model()
-        system_message = _build_planning_prompt(user_query, available_plans)
-        response = _execute_plan_selection(model, system_message)
-        objective, working_plan_steps = _process_planning_response(response)
+        model = _load_planning_model()
+        investigations_summary = _extract_investigations_summary(
+            state.investigations
+        )
+        response = _execute_plan_selection(
+            model, user_query, available_plans, investigations_summary
+        )
+        planning_response = _process_planning_response(
+            response_content=response, model=model
+        )
 
-        _log_successful_planning(objective, working_plan_steps)
+        logger.debug("📋 PlanningResponse: %s", planning_response)
+
         return _build_successful_planning_state(
-            state, objective, working_plan_steps
+            state,
+            planning_response,
         )
 
     except Exception as e:
@@ -107,14 +80,15 @@ def planner_node(state: GraphState) -> GraphState:
         return _build_failed_planning_state(state, e)
 
 
-def _load_available_plans() -> Any:
-    """Load available plans from the plan repository."""
-    available_plans = load_plan_data()
-    logger.debug("📚 Loaded %s available plans", len(available_plans))
-    return available_plans
+def _load_available_plans() -> str:
+    """Load available plans from the plan repository and format them as string."""
+    plans = load_plans()
+    available_plans_string = plans_to_string(plans)
+    logger.debug("📚 Loaded %s available plans", len(plans))
+    return available_plans_string
 
 
-def _setup_planning_model():
+def _load_planning_model():
     """Setup and return the LLM model for plan selection."""
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
@@ -122,49 +96,42 @@ def _setup_planning_model():
     return model
 
 
-def _build_planning_prompt(user_query: str, available_plans: Any) -> str:
-    """
-    Build the planning prompt for LLM plan selection.
-
-    Args:
-        user_query: The user's input query
-        available_plans: Available plans data
-
-    Returns:
-        Formatted system message for plan selection
-    """
-    logger.debug("🏗️ Generating plan selection prompt")
-
-    system_message = PLANNER_PROMPT.format(
-        user_query=user_query, available_plans=available_plans
-    )
-
-    logger.debug("📤 Plan selection prompt generated")
-    return system_message
-
-
-def _execute_plan_selection(model, system_message: str) -> Any:
+def _execute_plan_selection(
+    model: BaseChatModel,
+    user_query: str,
+    available_plans: str,
+    investigations_summary: str,
+) -> BaseMessage:
     """
     Execute plan selection using the LLM.
 
     Args:
         model: LLM model for structured output
-        system_message: Formatted planning prompt
+        user_query: The user's query for planning
+        available_plans: Formatted string containing all available plans
+        investigations_summary: Summary of devices and profiles under investigation
 
     Returns:
         LLM response with plan selection
     """
     logger.debug("🚀 Invoking LLM for plan selection")
 
-    response = model.with_structured_output(schema=PlannerOutput).invoke(
-        input=[SystemMessage(content=system_message)]
-    )
+    messages = [
+        SystemMessage(content=PLANNER_PROMPT),
+        HumanMessage(content=f"request: {user_query}"),
+        HumanMessage(content=f"#available_plans:\n{available_plans}"),
+        HumanMessage(content=f"#investigations:\n{investigations_summary}"),
+    ]
+    response = model.invoke(input=messages)
 
     logger.debug("📨 LLM plan selection response received")
+    logger.debug("  Response: %s", response)
     return response
 
 
-def _process_planning_response(response: Any) -> Tuple[str, List[Any]]:
+def _process_planning_response(
+    response_content: BaseMessage, model: BaseChatModel
+) -> PlanningResponse:
     """
     Process LLM response and extract objective and working plan steps.
 
@@ -174,45 +141,139 @@ def _process_planning_response(response: Any) -> Tuple[str, List[Any]]:
     Returns:
         Tuple of (objective, working_plan_steps)
     """
-    objective, working_plan_steps = _extract_planner_response(response)
+    logger.debug("🧠 Getting structured output")
 
-    logger.debug("🔍 Extracted planning data:")
-    logger.debug("  Objective: %s", objective)
-    logger.debug("  Steps count: %s", len(working_plan_steps))
+    try:
+        # Use the model to process the response and extract device names
+        response = model.with_structured_output(
+            schema=PlanningResponse
+        ).invoke(input=response_content.content)
 
-    return objective, working_plan_steps
+        logger.debug("🎯 Extracted device names: %s", response)
+
+        # Ensure we have a proper InvestigationList object
+        if isinstance(response, PlanningResponse):
+            return response
+        elif isinstance(response, dict) and "plan" in response:
+            # Handle case where response is a dict with the expected structure
+            investigations_data = response["plan"]
+            plan = [
+                (
+                    DevicePlan(
+                        device_name=item["device_name"],
+                        objective=item["objective"],
+                        working_plan_steps=item["working_plan_steps"],
+                    )
+                    if isinstance(item, dict)
+                    else item
+                )
+                for item in investigations_data
+            ]
+            return PlanningResponse(plan=plan)
+        else:
+            logger.error("❌ Unexpected response format: %s", type(response))
+            return PlanningResponse(plan=[])
+
+    except Exception as e:
+        logger.error("❌ LLM processing failed: %s", e)
+        return PlanningResponse(plan=[])
 
 
-def _log_successful_planning(
-    objective: str, working_plan_steps: List[Any]
-) -> None:
-    """Log successful plan generation details."""
-    logger.info(
-        "✅ Plan generation successful - Selected plan with %s steps",
-        len(working_plan_steps),
+def _extract_investigations_summary(
+    investigations: List[Investigation],
+) -> str:
+    """
+    Extract relevant investigation data for LLM planning context in markdown format.
+
+    Creates a copy of essential investigation information to avoid state mutation
+    and provides only the necessary context for plan selection in a structured
+    markdown format that enhances LLM comprehension.
+
+    Args:
+        investigations: List of Investigation objects from the state
+
+    Returns:
+        Markdown-formatted string containing device names and profiles for each investigation
+    """
+    if not investigations:
+        return "## Investigations\n\nNo investigations defined."
+
+    summary_lines = ["## Devices"]
+    summary_lines.append("")  # Empty line after header
+
+    for i, investigation in enumerate(investigations, 1):
+        # Device header with numbering
+        summary_lines.append(f"### {i}. Device: `{investigation.device_name}`")
+        summary_lines.append("")  # Empty line after device header
+
+        # Device profile section
+        summary_lines.append("**Device Profile:**")
+        summary_lines.append(f"**Role:** {investigation.role}")
+        summary_lines.append(f"```json")
+        summary_lines.append(investigation.device_profile)
+        summary_lines.append("```")
+        summary_lines.append("")  # Empty line between devices
+
+    logger.debug(
+        "📊 Extracted markdown summary for %s devices",
+        len(investigations),
     )
-    logger.debug("📋 Objective: %s", objective)
+    return "\n".join(summary_lines)
 
 
 def _build_successful_planning_state(
-    state: GraphState, objective: str, working_plan_steps: List[Any]
+    state: GraphState, planning_response: PlanningResponse
 ) -> GraphState:
     """
     Build GraphState for successful planning.
 
+    Updates Investigation objects with planning data by matching device names.
+    Creates a new GraphState with updated Investigation objects using immutable operations.
+
     Args:
         state: Current GraphState
-        objective: Extracted objective
-        working_plan_steps: Extracted working plan steps
+        planning_response: PlanningResponse containing device-specific plans
 
     Returns:
-        Updated GraphState with planning results
+        Updated GraphState with planning results applied to matching investigations
     """
     logger.debug("🏗️ Building successful planning state")
 
-    return replace(
-        state, objective=objective, working_plan_steps=working_plan_steps
-    )
+    from src.logging import debug_capture_object
+
+    # Capture any object
+    debug_capture_object(planning_response, label="planning_response")
+    debug_capture_object(state, label="planning_state")
+
+    # Create a mapping of device plans for efficient lookup
+    device_plans_map = {
+        plan.device_name: plan for plan in planning_response.plan
+    }
+
+    # Update investigations with planning data
+    updated_investigations = []
+    for investigation in state.investigations:
+        device_plan = device_plans_map.get(investigation.device_name)
+        if device_plan:
+            # Update investigation with planning data using replace
+            updated_investigation = replace(
+                investigation,
+                objective=device_plan.objective,
+                working_plan_steps=device_plan.working_plan_steps,
+            )
+            updated_investigations.append(updated_investigation)
+            logger.debug(
+                "📝 Updated investigation for device: %s",
+                investigation.device_name,
+            )
+        else:
+            # Keep investigation unchanged if no plan found
+            updated_investigations.append(investigation)
+            logger.debug(
+                "⚠️ No plan found for device: %s", investigation.device_name
+            )
+
+    return replace(state, investigations=updated_investigations)
 
 
 def _build_failed_planning_state(
@@ -221,206 +282,36 @@ def _build_failed_planning_state(
     """
     Build GraphState for failed planning.
 
+    Updates Investigation objects with error information when planning fails.
+    Creates a new GraphState with updated Investigation objects using immutable operations.
+
     Args:
         state: Current GraphState
         error: Exception that occurred during planning
 
     Returns:
-        Updated GraphState with error information
+        Updated GraphState with error information applied to investigations
     """
     logger.debug("🏗️ Building failed planning state due to error: %s", error)
 
-    objective = (
-        f"Tool Error: Error extracting device name from user query: {error}"
+    error_objective = (
+        f"Planning Error: Failed to generate plan for device - {error}"
     )
-    working_plan_steps = []
+    error_working_plan_steps = "Planning failed. Manual intervention required."
 
-    return replace(
-        state, objective=objective, working_plan_steps=working_plan_steps
-    )
-
-
-def _extract_planner_response(response: Any) -> Tuple[str, List[Any]]:
-    """
-    Extract objective and steps from various LLM response formats.
-
-    This pure function handles different response types that might be returned
-    from the LLM, normalizing them into a consistent format.
-
-    Args:
-        response: The response from the LLM, which can be:
-                 - PlannerOutput dataclass
-                 - Object with objective and steps attributes
-                 - Dictionary with objective and steps keys
-                 - Any other type (fallback)
-
-    Returns:
-        Tuple containing:
-        - objective (str): The extracted objective or default message
-        - working_plan_steps (List[Any]): The extracted steps or empty list
-    """
-    default_objective = "No objective defined in plan."
-
-    if isinstance(response, PlannerOutput):
-        # Direct dataclass response
-        objective = response.objective or default_objective
-        working_plan_steps = response.steps or []
-    elif hasattr(response, "objective") and hasattr(response, "steps"):
-        # Structured object with attributes
-        objective = getattr(response, "objective", default_objective)
-        working_plan_steps = getattr(response, "steps", [])
-    elif isinstance(response, dict):
-        # Fallback for dict-style responses
-        objective = response.get("objective", default_objective)
-        working_plan_steps = response.get("steps", [])
-    else:
-        # Unknown response type
-        objective = default_objective
-        working_plan_steps = []
-
-    return objective, working_plan_steps
-
-
-def _plan_single_investigation(
-    investigation: Investigation,
-    user_query: str,
-    workflow_session,
-    available_plans: Any,
-    model,
-) -> Investigation:
-    """
-    Plan a single investigation for a specific device.
-
-    Args:
-        investigation: Investigation object to plan
-        user_query: Original user query for context
-        workflow_session: Historical context for planning
-        available_plans: Available plan templates
-        model: LLM model for plan generation
-
-    Returns:
-        Updated Investigation with objective and working plan steps
-    """
-    logger.debug(
-        "📋 Planning investigation for device: %s", investigation.device_name
-    )
-
-    # Build context for this specific investigation
-    session_context = ""
-    if workflow_session:
-        session_context = f"Session ID: {workflow_session.session_id}, Previous patterns: {len(workflow_session.learned_patterns)}"
-
-    # Format the planning prompt with investigation-specific context
-    planning_prompt = MULTI_INVESTIGATION_PLANNER_PROMPT.format(
-        user_query=user_query,
-        device_name=investigation.device_name,
-        device_profile=investigation.device_profile or "unknown",
-        priority=investigation.priority.value,
-        dependencies=(
-            ", ".join(investigation.dependencies)
-            if investigation.dependencies
-            else "none"
-        ),
-        session_context=session_context,
-        available_plans=available_plans,
-    )
-
-    # Execute planning with LLM
-    response = model.with_structured_output(schema=PlannerOutput).invoke(
-        input=[SystemMessage(content=planning_prompt)]
-    )
-
-    # Extract objective and steps
-    objective, working_plan_steps = _extract_planner_response(response)
-
-    # Update the investigation with planning results
-    updated_investigation = replace(
-        investigation,
-        objective=objective,
-        working_plan_steps=working_plan_steps,
-    )
-
-    logger.debug(
-        "✅ Planned %d steps for device %s",
-        len(working_plan_steps),
-        investigation.device_name,
-    )
-    return updated_investigation
-
-
-def _log_successful_multi_planning(
-    planned_investigations: List[Investigation],
-) -> None:
-    """Log successful multi-investigation planning details."""
-    total_steps = sum(
-        len(inv.working_plan_steps) for inv in planned_investigations
-    )
-
-    logger.info(
-        "✅ Multi-investigation planning successful - %d investigations planned",
-        len(planned_investigations),
-    )
-    logger.info("📊 Total steps across all investigations: %d", total_steps)
-
-    for inv in planned_investigations:
-        if (
-            inv.status == InvestigationStatus.PENDING
-            and inv.working_plan_steps
-        ):
-            logger.debug(
-                "📋 %s: %d steps planned",
-                inv.device_name,
-                len(inv.working_plan_steps),
-            )
-
-
-def _build_successful_multi_planning_state(
-    state: GraphState, planned_investigations: List[Investigation]
-) -> GraphState:
-    """
-    Build GraphState for successful multi-investigation planning.
-
-    Args:
-        state: Current GraphState
-        planned_investigations: List of planned investigations
-
-    Returns:
-        Updated GraphState with planned investigations
-    """
-    logger.debug("🏗️ Building successful multi-planning state")
-
-    return replace(state, investigations=planned_investigations)
-
-
-def _build_failed_multi_planning_state(
-    state: GraphState, error: Exception
-) -> GraphState:
-    """
-    Build GraphState for failed multi-investigation planning.
-
-    Args:
-        state: Current GraphState
-        error: Exception that occurred during planning
-
-    Returns:
-        Updated GraphState with error information
-    """
-    logger.debug(
-        "🏗️ Building failed multi-planning state due to error: %s", error
-    )
-
-    # Mark all pending investigations as failed due to planning error
-    failed_investigations = []
+    # Update all investigations with error information
+    updated_investigations = []
     for investigation in state.investigations:
-        if investigation.status == InvestigationStatus.PENDING:
-            failed_investigation = replace(
-                investigation,
-                status=InvestigationStatus.FAILED,
-                error_details=f"Planning failed: {error}",
-                objective=f"Planning Error: Failed to create investigation plan - {error}",
-            )
-            failed_investigations.append(failed_investigation)
-        else:
-            failed_investigations.append(investigation)
+        updated_investigation = replace(
+            investigation,
+            objective=error_objective,
+            working_plan_steps=error_working_plan_steps,
+            error_details=str(error),
+        )
+        updated_investigations.append(updated_investigation)
+        logger.debug(
+            "❌ Updated investigation with error for device: %s",
+            investigation.device_name,
+        )
 
-    return replace(state, investigations=failed_investigations)
+    return replace(state, investigations=updated_investigations)
