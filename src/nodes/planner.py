@@ -149,7 +149,8 @@ def _process_planning_response(
             schema=PlanningResponse
         ).invoke(input=response_content.content)
 
-        logger.debug("🎯 Extracted device names: %s", response)
+        # Debug capture for structured output analysis
+        logger.debug("📋 Structured output captured: %s", response)
 
         # Ensure we have a proper InvestigationList object
         if isinstance(response, PlanningResponse):
@@ -238,12 +239,6 @@ def _build_successful_planning_state(
         Updated GraphState with planning results applied to matching investigations
     """
     logger.debug("🏗️ Building successful planning state")
-
-    from src.logging import debug_capture_object
-
-    # Capture any object
-    debug_capture_object(planning_response, label="planning_response")
-    debug_capture_object(state, label="planning_state")
 
     # Create a mapping of device plans for efficient lookup
     device_plans_map = {

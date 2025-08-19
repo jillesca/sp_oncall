@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import Any, List
 from dataclasses import dataclass, replace
 from langchain_core.language_models import BaseChatModel
@@ -202,6 +203,7 @@ def _process_investigation_planning_response(
             schema=InvestigationPlanningResponse
         ).invoke(input=response_content.content)
 
+        logger.debug("📋 Structured output captured: %s", response)
         from src.logging import debug_capture_object
 
         # Capture any object
@@ -213,7 +215,18 @@ def _process_investigation_planning_response(
 
         # Ensure we have a proper InvestigationList object
         if isinstance(response, InvestigationPlanningResponse):
-            return response
+            # Normalize device profiles in case they have inconsistent formats
+            normalized_devices = []
+            for device in response.devices:
+                normalized_device = DeviceToInvestigate(
+                    device_name=device.device_name,
+                    device_profile=_normalize_device_profile(
+                        device.device_profile
+                    ),
+                    role=device.role,
+                )
+                normalized_devices.append(normalized_device)
+            return InvestigationPlanningResponse(devices=normalized_devices)
         elif isinstance(response, dict) and "devices" in response:
             # Handle case where response is a dict with the expected structure
             investigations_data = response["devices"]
@@ -221,8 +234,10 @@ def _process_investigation_planning_response(
                 (
                     DeviceToInvestigate(
                         device_name=item["device_name"],
-                        device_profile=item["device_profile"],
-                        role=item["role"],
+                        device_profile=_normalize_device_profile(
+                            item["device_profile"]
+                        ),
+                        role=item.get("role", ""),
                     )
                     if isinstance(item, dict)
                     else item
@@ -239,6 +254,75 @@ def _process_investigation_planning_response(
         return InvestigationPlanningResponse(devices=[])
 
 
+def _normalize_device_profile(device_profile: Any) -> str:
+    """
+    Normalize device_profile to a consistent string format.
+
+    Handles various input types from LLM responses:
+    - Empty/None values -> "unknown"
+    - String values -> returned as-is (stripped)
+    - Dictionary values -> converted to JSON string to preserve all information
+    - Other types -> converted to string
+
+    This ensures downstream functions receive consistent string data while
+    preserving all the rich information from dictionary structures that
+    LLMs can still understand and parse.
+
+    Args:
+        device_profile: The device profile value from LLM response
+
+    Returns:
+        String representation of the device profile
+    """
+    if device_profile is None:
+        logger.debug("🔄 Normalizing None device_profile to 'unknown'")
+        return "unknown"
+
+    if isinstance(device_profile, str):
+        normalized = device_profile.strip()
+        if not normalized:
+            logger.debug(
+                "🔄 Normalizing empty string device_profile to 'unknown'"
+            )
+            return "unknown"
+        logger.debug("🔄 Using string device_profile: %s", normalized)
+        return normalized
+
+    if isinstance(device_profile, dict):
+        # Handle empty dict case
+        if not device_profile:
+            logger.debug(
+                "🔄 Normalizing empty dict device_profile to 'unknown'"
+            )
+            return "unknown"
+
+        # Convert entire dictionary to JSON string to preserve all information
+        # This ensures LLMs can still understand the structure while maintaining string type
+        try:
+            result = json.dumps(device_profile, sort_keys=True)
+            logger.debug(
+                "🔄 Converted dict device_profile to JSON string: %s", result
+            )
+            return result
+        except (TypeError, ValueError) as e:
+            # Fallback to string representation if JSON serialization fails
+            result = str(device_profile).strip()
+            logger.debug(
+                "🔄 JSON serialization failed, using string representation: %s",
+                result,
+            )
+            return result if result else "unknown"
+
+    # Handle any other type by converting to string
+    result = str(device_profile).strip()
+    logger.debug(
+        "🔄 Converted %s device_profile to string: %s",
+        type(device_profile).__name__,
+        result,
+    )
+    return result if result else "unknown"
+
+
 def _log_successful_investigation_planning(
     devices: InvestigationPlanningResponse,
 ) -> None:
@@ -249,8 +333,9 @@ def _log_successful_investigation_planning(
     )
     for investigation in devices:
         logger.info(
-            "  📋 %s (%s)",
+            "  📋 %s (role: %s, profile: %s)",
             investigation.device_name,
+            investigation.role,
             investigation.device_profile,
         )
 
@@ -277,10 +362,13 @@ def _create_investigations_from_response(
         investigation = Investigation(
             device_name=device.device_name,
             device_profile=device.device_profile,
+            role=device.role,
         )
         investigations.append(investigation)
         logger.debug(
-            "  ✅ Created investigation for device: %s", device.device_name
+            "  ✅ Created investigation for device: %s (role: %s)",
+            device.device_name,
+            device.role,
         )
 
     return investigations

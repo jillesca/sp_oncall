@@ -177,6 +177,8 @@ def _execute_objective_assessment(
         input=[SystemMessage(content=formatted_prompt)]
     )
 
+    logger.debug("📋 Structured output captured: %s", ai_response)
+
     assessment = _ensure_proper_assessment_format(ai_response)
 
     logger.debug(
@@ -499,6 +501,8 @@ def _assess_overall_objective(
     ai_response = model.with_structured_output(
         schema=MultiInvestigationAssessmentOutput
     ).invoke(input=[SystemMessage(content=formatted_prompt)])
+
+    logger.debug("📋 Structured output captured: %s", ai_response)
 
     # Ensure proper response format
     if isinstance(ai_response, MultiInvestigationAssessmentOutput):
