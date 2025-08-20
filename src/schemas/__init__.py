@@ -8,7 +8,13 @@ from .assessment_schema import (
     AssessmentOutput,
     MultiInvestigationAssessmentOutput,
 )
-from .state import GraphState, StepExecutionResult, ExecutedToolCall
+from .state import (
+    GraphState,
+    StepExecutionResult,
+    ExecutedToolCall,
+    Investigation,
+    InvestigationStatus,
+)
 
 __all__ = [
     "GraphState",
@@ -16,4 +22,6 @@ __all__ = [
     "MultiInvestigationAssessmentOutput",
     "ExecutedToolCall",
     "StepExecutionResult",
+    "Investigation",
+    "InvestigationStatus",
 ]

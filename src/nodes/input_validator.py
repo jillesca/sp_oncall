@@ -64,7 +64,7 @@ def input_validator_node(state: GraphState) -> GraphState:
 
     try:
         logger.info("🔍 Starting multi-device investigation setup")
-        model = _setup_planning_model()
+        model = _load_model()
         mcp_response = _execute_investigation_planning(user_query)
         response_content = _extract_mcp_response_content(mcp_response)
         investigation_list = _process_investigation_planning_response(
@@ -90,11 +90,12 @@ def input_validator_node(state: GraphState) -> GraphState:
         return _build_failed_state(state)
 
 
-def _setup_planning_model():
-    """Set up the language model for investigation planning."""
-    logger.debug("⚙️ Setting up planning model")
+def _load_model():
+    """Setup and return the LLM model for plan selection."""
     configuration = Configuration.from_context()
-    return load_chat_model(configuration.model)
+    model = load_chat_model(configuration.model)
+    logger.debug("🤖 Using model: %s", configuration.model)
+    return model
 
 
 def _execute_investigation_planning(

@@ -57,7 +57,7 @@ def planner_node(state: GraphState) -> GraphState:
 
     try:
         available_plans = _load_available_plans()
-        model = _load_planning_model()
+        model = _load_model()
         investigations_summary = _extract_investigations_summary(
             state.investigations
         )
@@ -88,7 +88,7 @@ def _load_available_plans() -> str:
     return available_plans_string
 
 
-def _load_planning_model():
+def _load_model():
     """Setup and return the LLM model for plan selection."""
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)

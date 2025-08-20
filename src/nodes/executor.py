@@ -6,10 +6,15 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from mcp_client import mcp_node
 from util.llm import load_chat_model
 from configuration import Configuration
-from schemas import GraphState, StepExecutionResult, ExecutedToolCall
+from schemas import (
+    GraphState,
+    StepExecutionResult,
+    ExecutedToolCall,
+    Investigation,
+    InvestigationStatus,
+)
 from prompts.network_executor import NETWORK_EXECUTOR_PROMPT
 
-# Add logging
 from src.logging import get_logger, log_node_execution
 
 logger = get_logger(__name__)
@@ -18,147 +23,335 @@ logger = get_logger(__name__)
 @log_node_execution("Network Executor")
 def llm_network_executor(state: GraphState) -> GraphState:
     """
-    Execute network operations for a specific device using available MCP tools.
+    Execute network operations for multiple device investigations concurrently.
 
     This function orchestrates the complete investigation workflow by:
-    1. Validating the current state
-    2. Building appropriate prompts for the LLM
-    3. Executing commands via MCP agent
-    4. Processing and structuring the response
-    5. Updating the workflow state
+    1. Identifying pending investigations ready for execution
+    2. Building appropriate prompts for each device investigation
+    3. Executing commands concurrently via MCP agent
+    4. Processing and structuring the responses
+    5. Updating the workflow state with execution results
 
     Args:
         state: The current GraphState from the workflow
 
     Returns:
-        Updated GraphState with execution results
+        Updated GraphState with execution results for all investigations
     """
-    device_name = state.device_name
-    logger.info("🔧 Executing network commands on device: %s", device_name)
 
     _log_incoming_state(state)
 
     try:
-        prompts = _build_execution_prompts(state)
-        model = _setup_llm_model()
+        # Get investigations ready for execution
+        ready_investigations = state.get_ready_investigations()
 
-        mcp_response = _execute_via_mcp_agent(prompts, device_name)
-        llm_analysis, executed_tool_calls = _extract_response_content(
-            mcp_response
+        if not ready_investigations:
+            logger.info("🔍 No investigations ready for execution")
+            return state
+
+        logger.info(
+            "🚀 Starting execution for %s investigations",
+            len(ready_investigations),
         )
-        step_result = _process_llm_response(llm_analysis, executed_tool_calls)
 
-        return _update_state_with_success(state, step_result)
+        # Execute all investigations concurrently
+        updated_investigations = asyncio.run(
+            _execute_investigations_concurrently(ready_investigations, state)
+        )
+
+        # Update state with completed investigations
+        return _update_state_with_investigations(state, updated_investigations)
 
     except Exception as e:
-        logger.error("❌ Command execution failed on %s: %s", device_name, e)
-        return _update_state_with_error(state, e)
+        logger.error("❌ Executor failed: %s", e)
+        return _update_state_with_global_error(state, e)
 
 
 def _log_incoming_state(state: GraphState) -> None:
     """Log incoming state information for debugging purposes."""
-    device_name = state.device_name
-
     logger.debug(
-        "📥 Executor received state: device_name='%s', objective='%s', "
-        "working_plan_steps=%s steps, execution_results=%s previous results, retries=%s",
-        device_name,
-        state.objective,
-        len(state.working_plan_steps) if state.working_plan_steps else 0,
-        len(state.execution_results),
+        "📥 Executor received state: user_query='%s', investigations=%s total, "
+        "ready_investigations=%s, current_retries=%s",
+        state.user_query,
+        len(state.investigations),
+        len(state.get_ready_investigations()),
         state.current_retries,
     )
 
-    if state.working_plan_steps:
-        logger.debug("📋 Working plan steps to execute:")
-        for i, step in enumerate(state.working_plan_steps, 1):
-            logger.debug("  Step %s: %s", i, step)
+    ready_investigations = state.get_ready_investigations()
+    if ready_investigations:
+        logger.debug("📋 Ready investigations:")
+        for i, investigation in enumerate(ready_investigations, 1):
+            logger.debug(
+                "  Investigation %s: device=%s, status=%s, objective='%s'",
+                i,
+                investigation.device_name,
+                investigation.status,
+                investigation.objective or "Not specified",
+            )
+
+    if state.workflow_session:
+        logger.debug(
+            "📚 Workflow session context available: %s previous reports",
+            len(state.workflow_session.previous_reports),
+        )
 
     if state.current_retries > 0:
         logger.warning(
-            "🔄 Retry execution #%s for device %s",
+            "🔄 Retry execution #%s for workflow",
             state.current_retries,
-            device_name,
         )
 
 
-def _build_execution_prompts(state: GraphState) -> tuple[str, str]:
-    """
-    Build system prompt and human message for LLM execution.
-
-    Returns:
-        Tuple of (system_prompt, human_message_content)
-    """
-    retry_context = _build_retry_context(state)
-
-    system_prompt = (
-        f"Execute the following network operations plan for {state.device_name}\n"
-        f"Device name: {state.device_name}\n"
-        f"IMPORTANT: Focus ONLY on device {state.device_name} - do not attempt to gather information from any other devices.\n"
-        f"Objective: {state.objective}\n\n"
-        f"Your investigation plan:"
-    ) + retry_context
-
-    human_message_content = NETWORK_EXECUTOR_PROMPT.format(
-        device_name=state.device_name,
-        working_plan_steps=state.working_plan_steps,
-    )
-
-    logger.debug("🏗️ Built prompts for device: %s", state.device_name)
-    logger.debug("  System prompt: %s...", system_prompt[:200])
-    logger.debug(
-        "  Human message length: %s characters", len(human_message_content)
-    )
-
-    return system_prompt, human_message_content
-
-
-def _build_retry_context(state: GraphState) -> str:
-    """Build retry context string if this is a retry execution."""
-    if state.current_retries > 0 and state.assessor_feedback_for_retry:
-        retry_context = (
-            f"\nThis is retry #{state.current_retries}. "
-            f"Previous execution feedback: {state.assessor_feedback_for_retry}"
-        )
-        logger.debug("� Retry context: %s", state.assessor_feedback_for_retry)
-        return retry_context
-    return ""
-
-
-def _setup_llm_model():
-    """Setup and return the LLM model for structured output extraction."""
+def _load_model():
+    """Setup and return the LLM model for plan selection."""
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
     logger.debug("🤖 Using model: %s", configuration.model)
     return model
 
 
-def _execute_via_mcp_agent(prompts: tuple[str, str], device_name: str) -> dict:
+async def _execute_investigations_concurrently(
+    investigations: List[Investigation], state: GraphState
+) -> List[Investigation]:
     """
-    Execute the investigation plan via MCP agent.
+    Execute multiple investigations concurrently and return updated investigations.
 
     Args:
-        prompts: Tuple of (system_prompt, human_message_content)
-        device_name: Name of the device being investigated
+        investigations: List of investigations ready for execution
+        state: Current GraphState for workflow context
 
     Returns:
-        MCP agent response dictionary
+        List of updated Investigation objects with execution results
     """
-    system_prompt, human_message_content = prompts
-
-    logger.debug("📤 Sending to MCP agent:")
-    logger.debug("  Human message preview: %s...", human_message_content[:300])
-
-    logger.info("🚀 Calling MCP agent for device %s", device_name)
-    mcp_response = asyncio.run(
-        mcp_node(
-            messages=HumanMessage(content=human_message_content),
-            system_prompt=system_prompt,
-        )
+    logger.info(
+        "🚀 Starting concurrent execution for %s investigations",
+        len(investigations),
     )
 
-    logger.debug("📨 MCP agent response received: %s", type(mcp_response))
-    return mcp_response
+    # Create tasks for concurrent execution
+    tasks = []
+    for investigation in investigations:
+        task = _execute_single_investigation(investigation, state)
+        tasks.append(task)
+
+    # Execute all investigations concurrently
+    completed_investigations = await asyncio.gather(
+        *tasks, return_exceptions=True
+    )
+
+    # Process results and handle any exceptions
+    updated_investigations = []
+    for i, result in enumerate(completed_investigations):
+        if isinstance(result, Exception):
+            logger.error(
+                "❌ Investigation failed for %s: %s",
+                investigations[i].device_name,
+                result,
+            )
+            # Create a failed investigation
+            failed_investigation = replace(
+                investigations[i],
+                status=InvestigationStatus.FAILED,
+                error_details=str(result),
+            )
+            updated_investigations.append(failed_investigation)
+        else:
+            updated_investigations.append(result)
+
+    logger.info("✅ Completed %s investigations", len(updated_investigations))
+    return updated_investigations
+
+
+async def _execute_single_investigation(
+    investigation: Investigation, state: GraphState
+) -> Investigation:
+    """
+    Execute a single investigation using the MCP agent.
+
+    Args:
+        investigation: Investigation to execute
+        state: Current GraphState for workflow context
+
+    Returns:
+        Updated Investigation with execution results
+    """
+    logger.info(
+        "🔍 Executing investigation for device: %s", investigation.device_name
+    )
+
+    try:
+        # Build context for this investigation
+        context = _build_investigation_context(investigation, state)
+        message = HumanMessage(content=context)
+
+        logger.debug(
+            "📤 Sending to MCP agent for device %s", investigation.device_name
+        )
+        logger.debug("  context length: %s characters", len(context))
+
+        # Execute via MCP agent
+        mcp_response = await mcp_node(
+            message=message,
+            system_prompt=NETWORK_EXECUTOR_PROMPT,
+        )
+
+        logger.debug(
+            "📨 MCP agent response received for %s", investigation.device_name
+        )
+
+        # Process the response
+        llm_analysis, executed_tool_calls = _extract_response_content(
+            mcp_response
+        )
+        step_result = _process_llm_response(llm_analysis, executed_tool_calls)
+
+        # Update investigation with results
+        updated_investigation = replace(
+            investigation,
+            status=InvestigationStatus.COMPLETED,
+            execution_results=investigation.execution_results + [step_result],
+            report=llm_analysis,  # Store the investigation report
+        )
+
+        logger.info(
+            "✅ Investigation completed for device: %s",
+            investigation.device_name,
+        )
+        return updated_investigation
+
+    except Exception as e:
+        logger.error(
+            "❌ Investigation failed for device %s: %s",
+            investigation.device_name,
+            e,
+        )
+        return replace(
+            investigation,
+            status=InvestigationStatus.FAILED,
+            error_details=str(e),
+        )
+
+
+def _build_investigation_context(
+    investigation: Investigation, state: GraphState
+) -> str:
+    """
+    Build context string for a specific investigation.
+
+    Args:
+        investigation: Investigation to build context for
+        state: Current GraphState for workflow context
+
+    Returns:
+        Formatted context string for the MCP agent
+    """
+    context_parts = [
+        f"User query: {state.user_query}",
+        f"device_name: {investigation.device_name}",
+        f"device_profile: {investigation.device_profile}",
+        f"role: {investigation.role}",
+        f"objective: {investigation.objective}",
+        f"working_plan_steps: {investigation.working_plan_steps}",
+    ]
+
+    # Add workflow session context if available
+    if state.workflow_session:
+        context_parts.append("\n--- PREVIOUS INVESTIGATION CONTEXT ---")
+        if state.workflow_session.previous_reports:
+            context_parts.append("Previous investigation reports:")
+            for i, report in enumerate(
+                state.workflow_session.previous_reports, 1
+            ):
+                context_parts.append(f"Report {i}: {report}")
+
+        if state.workflow_session.learned_patterns:
+            context_parts.append(
+                f"Learned patterns: {state.workflow_session.learned_patterns}"
+            )
+
+        if state.workflow_session.device_relationships:
+            context_parts.append(
+                f"Device relationships: {state.workflow_session.device_relationships}"
+            )
+
+    # Add retry context if this is a retry
+    if state.current_retries > 0 and state.assessor_feedback_for_retry:
+        context_parts.append(f"\n--- RETRY CONTEXT ---")
+        context_parts.append(f"This is retry #{state.current_retries}")
+        context_parts.append(
+            f"Previous execution feedback: {state.assessor_feedback_for_retry}"
+        )
+
+    return "\n".join(context_parts)
+
+
+def _update_state_with_investigations(
+    state: GraphState, updated_investigations: List[Investigation]
+) -> GraphState:
+    """
+    Update the GraphState with completed investigations.
+
+    Args:
+        state: Current GraphState
+        updated_investigations: List of updated investigations
+
+    Returns:
+        Updated GraphState
+    """
+    # Create a mapping of device names to updated investigations
+    investigation_map = {
+        inv.device_name: inv for inv in updated_investigations
+    }
+
+    # Update the investigations list
+    updated_investigation_list = []
+    for investigation in state.investigations:
+        if investigation.device_name in investigation_map:
+            # Use the updated investigation
+            updated_investigation_list.append(
+                investigation_map[investigation.device_name]
+            )
+        else:
+            # Keep the original investigation
+            updated_investigation_list.append(investigation)
+
+    logger.info(
+        "📊 Updated %s investigations in state", len(updated_investigations)
+    )
+
+    return replace(state, investigations=updated_investigation_list)
+
+
+def _update_state_with_global_error(
+    state: GraphState, error: Exception
+) -> GraphState:
+    """
+    Update state with a global error that affects the entire workflow.
+
+    Args:
+        state: Current GraphState
+        error: Exception that occurred during execution
+
+    Returns:
+        Updated GraphState with error information
+    """
+    logger.error("❌ Global execution error: %s", error)
+
+    # Mark all ready investigations as failed
+    updated_investigations = []
+    for investigation in state.investigations:
+        if investigation.status == InvestigationStatus.PENDING:
+            failed_investigation = replace(
+                investigation,
+                status=InvestigationStatus.FAILED,
+                error_details=f"Global execution error: {error}",
+            )
+            updated_investigations.append(failed_investigation)
+        else:
+            updated_investigations.append(investigation)
+
+    return replace(state, investigations=updated_investigations)
 
 
 def _extract_response_content(
@@ -374,96 +567,3 @@ def _log_processed_data(
                 call.function,
                 call.error or "None",
             )
-
-
-def _update_state_with_success(
-    state: GraphState, step_result: StepExecutionResult
-) -> GraphState:
-    """
-    Update state with successful execution results.
-
-    Args:
-        state: Current GraphState
-        step_result: Successful execution result
-
-    Returns:
-        Updated GraphState
-    """
-    new_execution_results = state.execution_results + [step_result]
-
-    _log_state_changes(state, new_execution_results, step_result)
-
-    logger.info("✅ Command execution successful on %s", state.device_name)
-    logger.debug(
-        "📈 Execution summary: %s commands executed, report length: %s characters",
-        len(step_result.executed_calls),
-        len(step_result.investigation_report),
-    )
-
-    updated_state = replace(state, execution_results=new_execution_results)
-    _log_final_state_verification(updated_state)
-
-    return updated_state
-
-
-def _update_state_with_error(
-    state: GraphState, error: Exception
-) -> GraphState:
-    """
-    Update state with error execution results.
-
-    Args:
-        state: Current GraphState
-        error: Exception that occurred during execution
-
-    Returns:
-        Updated GraphState with error information
-    """
-    logger.error("❌ Exception type: %s", type(error).__name__)
-    logger.error("❌ Exception details: %s", str(error))
-
-    error_result = StepExecutionResult(
-        investigation_report=f"Error executing plan: {error}",
-        executed_calls=[],
-    )
-
-    new_execution_results = state.execution_results + [error_result]
-
-    logger.debug("📤 Error state changes:")
-    logger.debug("  Added error result to execution_results")
-    logger.debug(
-        "  New execution_results count: %s", len(new_execution_results)
-    )
-
-    return replace(state, execution_results=new_execution_results)
-
-
-def _log_state_changes(
-    state: GraphState,
-    new_execution_results: list,
-    step_result: StepExecutionResult,
-) -> None:
-    """Log state changes for debugging purposes."""
-    logger.debug("📤 State changes:")
-    logger.debug(
-        "  Previous execution_results count: %s", len(state.execution_results)
-    )
-    logger.debug(
-        "  New execution_results count: %s", len(new_execution_results)
-    )
-    logger.debug(
-        "  Added result: investigation_report=%s chars, executed_calls=%s calls",
-        len(step_result.investigation_report),
-        len(step_result.executed_calls),
-    )
-
-
-def _log_final_state_verification(updated_state: GraphState) -> None:
-    """Log final state verification for debugging purposes."""
-    logger.debug("📥 Final state verification:")
-    logger.debug(
-        "  Final execution_results count: %s",
-        len(updated_state.execution_results),
-    )
-    logger.debug("  Device name: %s", updated_state.device_name)
-    logger.debug("  Objective: %s", updated_state.objective)

@@ -184,6 +184,7 @@ class Investigation:
 
     status: InvestigationStatus = InvestigationStatus.PENDING
     priority: InvestigationPriority = InvestigationPriority.MEDIUM
+    dependencies: List[str] = field(default_factory=list)
 
     report: Optional[str] = None
     error_details: Optional[str] = None
