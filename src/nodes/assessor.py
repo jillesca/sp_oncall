@@ -14,10 +14,9 @@ from schemas import (
     GraphState,
     AssessmentOutput,
     MultiInvestigationAssessmentOutput,
-    StepExecutionResult,
 )
-from schemas import GraphState, AssessmentOutput, StepExecutionResult
-from schemas.state import Investigation, InvestigationStatus
+from schemas import GraphState, AssessmentOutput
+from schemas.state import Investigation, InvestigationStatus, ExecutedToolCall
 
 # Add logging
 from src.logging import get_logger, log_node_execution
@@ -128,7 +127,7 @@ def _prepare_assessment_data(state: GraphState) -> dict:
 
 def _get_execution_results_with_fallback(
     state: GraphState,
-) -> List[StepExecutionResult]:
+) -> List[ExecutedToolCall]:
     """
     Provides execution results with a sensible fallback if none exist.
 
@@ -138,12 +137,11 @@ def _get_execution_results_with_fallback(
     Returns:
         List of execution results or fallback data
     """
-    if state.execution_results:
-        return state.execution_results
+    if state.Investigation:
+        return state.Investigation
 
     return [
-        StepExecutionResult(
-            investigation_report="No network execution results were found",
+        ExecutedToolCall(
             executed_calls=[],
         )
     ]

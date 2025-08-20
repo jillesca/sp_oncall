@@ -8,7 +8,6 @@ from util.llm import load_chat_model
 from configuration import Configuration
 from schemas import (
     GraphState,
-    StepExecutionResult,
     ExecutedToolCall,
     Investigation,
     InvestigationStatus,
@@ -204,13 +203,15 @@ async def _execute_single_investigation(
         llm_analysis, executed_tool_calls = _extract_response_content(
             mcp_response
         )
-        step_result = _process_llm_response(llm_analysis, executed_tool_calls)
+
+        _log_processed_data(llm_analysis, executed_tool_calls)
 
         # Update investigation with results
         updated_investigation = replace(
             investigation,
             status=InvestigationStatus.COMPLETED,
-            execution_results=investigation.execution_results + [step_result],
+            execution_results=investigation.execution_results
+            + executed_tool_calls,
             report=llm_analysis,  # Store the investigation report
         )
 
@@ -514,35 +515,6 @@ def _convert_tool_message_to_executed_call(
         function=function_name,
         params=params,
         result=result_data,
-    )
-
-
-def _process_llm_response(
-    llm_analysis: str, executed_tool_calls: List[ExecutedToolCall]
-) -> StepExecutionResult:
-    """
-    Process LLM analysis and tool execution results into a structured StepExecutionResult.
-
-    Args:
-        llm_analysis: The LLM's analysis report from the last AIMessage
-        executed_tool_calls: List of ExecutedToolCall objects from ToolMessages
-
-    Returns:
-        Structured StepExecutionResult
-    """
-    logger.debug(
-        "🔍 Processing LLM analysis and %s tool calls",
-        len(executed_tool_calls),
-    )
-
-    # Use the LLM analysis as the investigation report
-    investigation_report = llm_analysis
-
-    _log_processed_data(investigation_report, executed_tool_calls)
-
-    return StepExecutionResult(
-        investigation_report=investigation_report,
-        executed_calls=executed_tool_calls,
     )
 
 

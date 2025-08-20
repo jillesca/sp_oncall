@@ -178,9 +178,7 @@ class Investigation:
     role: str = ""
     objective: Optional[str] = None
     working_plan_steps: str = ""
-    execution_results: List["StepExecutionResult"] = field(
-        default_factory=list
-    )
+    execution_results: List["ExecutedToolCall"] = field(default_factory=list)
 
     status: InvestigationStatus = InvestigationStatus.PENDING
     priority: InvestigationPriority = InvestigationPriority.MEDIUM
@@ -191,23 +189,6 @@ class Investigation:
 
     def __str__(self) -> str:
         """Return a JSON representation of the investigation."""
-        return json.dumps(asdict(self), indent=2, default=str)
-
-
-@dataclass
-class StepExecutionResult:
-    """Outcome of executing a single natural-language plan step.
-
-    Attributes:
-        investigation_report: Narrative report produced by the LLM for this step.
-        executed_calls: Sequence of concrete tool calls performed for this step.
-    """
-
-    investigation_report: str
-    executed_calls: List[ExecutedToolCall] = field(default_factory=list)
-
-    def __str__(self) -> str:
-        """Return a JSON representation of the step execution result."""
         return json.dumps(asdict(self), indent=2, default=str)
 
 
