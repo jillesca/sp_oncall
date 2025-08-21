@@ -9,6 +9,8 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import List, Dict, Any, Optional
 
+from .assessment_schema import AssessmentOutput
+
 
 @dataclass
 class GraphState:
@@ -23,10 +25,9 @@ class GraphState:
         max_retries: Maximum retry attempts per investigation.
         current_retries: Global retry counter for the entire workflow.
 
-        # Global assessment state
-        overall_objective_achieved: Whether the user's overall query is satisfied.
-        assessor_feedback_for_retry: Global feedback for workflow retry.
-        assessor_notes_for_final_report: Notes for the comprehensive final report.
+        # Assessment results (composition with AssessmentOutput)
+        assessment: Assessment results from the objective assessor node.
+                   Contains is_objective_achieved, notes_for_final_report, and feedback_for_retry.
 
         # Final output
         final_report: Comprehensive report combining all investigations.
@@ -40,10 +41,7 @@ class GraphState:
     max_retries: int = 3
     current_retries: int = 0
 
-    # Global assessment state
-    overall_objective_achieved: Optional[bool] = None
-    assessor_feedback_for_retry: Optional[str] = None
-    assessor_notes_for_final_report: Optional[str] = None
+    assessment: Optional[AssessmentOutput] = None
 
     # Final output
     final_report: Optional[str] = None

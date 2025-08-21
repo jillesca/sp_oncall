@@ -50,3 +50,4 @@ These are rules you must always follow:
 - If you encounter obstacles or challenges during your work, you should document these issues in the issue thread and seek assistance from the team.
 - If logging variables, log entries must use lazy loading. f-strings are prohibited.
 - import statements should be grouped logically (e.g., standard library imports, third-party imports, local application imports) and separated by blank lines. They must also be at the top of the module so is easy to know what modules are being used.
+- Dont create/add backwards compatible code. All code must be refactor to use the new changes. Otherwise it will create tech debt.

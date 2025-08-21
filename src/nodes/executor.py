@@ -259,12 +259,18 @@ def _build_investigation_context(
             )
 
     # Add retry context if this is a retry
-    if state.current_retries > 0 and state.assessor_feedback_for_retry:
-        context_parts.append(f"\n--- RETRY CONTEXT ---")
-        context_parts.append(f"This is retry #{state.current_retries}")
+    if state.current_retries > 0:
+        context_parts.append("\n--- RETRY CONTEXT ---")
         context_parts.append(
-            f"Previous execution feedback: {state.assessor_feedback_for_retry}"
+            f"This is retry #{state.current_retries} of {state.max_retries}"
         )
+
+        feedback = (
+            state.assessment.feedback_for_retry
+            if state.assessment and state.assessment.feedback_for_retry
+            else "No specific feedback provided from assessor"
+        )
+        context_parts.append(f"Previous execution feedback: {feedback}")
 
     return "\n".join(context_parts)
 

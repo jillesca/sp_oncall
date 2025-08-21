@@ -1,5 +1,4 @@
-import json
-from typing import Dict, Any, List
+from typing import Dict, List
 from dataclasses import replace
 from langchain_core.messages import SystemMessage
 
@@ -246,7 +245,11 @@ def _prepare_multi_investigation_report_input(
         "success_rate": f"{success_rate:.1%}",
         "investigation_summaries": investigation_summaries,
         "cross_device_analysis": cross_device_analysis,
-        "assessor_notes": state.assessor_notes_for_final_report or "None",
+        "assessor_notes": (
+            state.assessment.notes_for_final_report
+            if state.assessment
+            else "No assessment notes available"
+        ),
         "session_context": session_context,
     }
 
@@ -354,14 +357,15 @@ def _generate_multi_investigation_report(
 
 
 def _update_workflow_session_patterns(
-    state: GraphState, report_input: Dict[str, str]
+    state: GraphState,
+    report_input: Dict[str, str],  # pylint: disable=unused-argument
 ) -> GraphState:
     """
     Update workflow session with learned patterns from this investigation.
 
     Args:
         state: Current GraphState
-        report_input: Report input data containing investigation insights
+        report_input: Report input data containing investigation insights (reserved for future use)
 
     Returns:
         Updated GraphState with enhanced workflow session

@@ -1,150 +1,173 @@
 from dataclasses import replace
-from typing import Any, List
 
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 
 from util.llm import load_chat_model
 from configuration import Configuration
-from util.utils import serialize_for_prompt
-from prompts.objective_assessor import (
-    OBJECTIVE_ASSESSOR_PROMPT,
-    MULTI_INVESTIGATION_ASSESSOR_PROMPT,
-)
-from schemas import (
-    GraphState,
-    AssessmentOutput,
-    MultiInvestigationAssessmentOutput,
-)
+from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
 from schemas import GraphState, AssessmentOutput
-from schemas.state import Investigation, InvestigationStatus, ExecutedToolCall
-
-# Add logging
+from schemas.state import Investigation
 from src.logging import get_logger, log_node_execution
+from .markdown_builder import MarkdownBuilder
 
 logger = get_logger(__name__)
-
-
-@log_node_execution("Multi-Investigation Assessor")
-def multi_investigation_assessor_node(state: GraphState) -> GraphState:
-    """
-    Assess the completeness of multiple device investigations and overall objective achievement.
-
-    This function orchestrates multi-investigation assessment by:
-    1. Evaluating individual investigation completeness
-    2. Assessing overall user query satisfaction across all investigations
-    3. Providing investigation-specific and global retry feedback
-    4. Updating global workflow assessment logic
-
-    Args:
-        state: The current GraphState with investigations
-
-    Returns:
-        Updated GraphState with assessment results and next steps
-    """
-    logger.info(
-        "🔍 Assessing %d investigations for overall objective achievement",
-        len(state.investigations),
-    )
-
-    try:
-        # Assess individual investigations first
-        assessed_investigations = _assess_individual_investigations(state)
-
-        # Then assess overall objective achievement
-        overall_assessment = _assess_overall_objective(
-            state, assessed_investigations
-        )
-
-        # Apply assessment decisions to workflow
-        return _apply_multi_assessment_to_workflow(
-            state, assessed_investigations, overall_assessment
-        )
-
-    except Exception as e:
-        logger.error("❌ Multi-investigation assessment failed: %s", e)
-        return _handle_multi_assessment_error(state, e)
 
 
 @log_node_execution("Objective Assessor")
 def objective_assessor_node(state: GraphState) -> GraphState:
     """
-    Determines whether the network execution results successfully fulfill the user's request.
+    Unified objective assessor node that evaluates all investigations and determines workflow completion.
 
     This function orchestrates the assessment workflow by:
-    1. Preparing assessment data from the current state
+    1. Building comprehensive context from all investigations
     2. Setting up the LLM model for assessment
-    3. Generating assessment prompts and executing assessment
+    3. Generating assessment prompt and executing assessment
     4. Processing the assessment response
     5. Applying assessment decisions to update workflow state
 
     Args:
-        state: The current workflow state containing user query, execution results, etc.
+        state: The current workflow state containing user query, investigations, etc.
 
     Returns:
         Updated workflow state with the assessment results and next steps.
     """
-    logger.info("🔍 Assessing objective achievement for: %s", state.objective)
+    logger.info(
+        "🔍 Assessing overall objective achievement for %d investigations",
+        len(state.investigations),
+    )
 
     try:
-        assessment_data = _prepare_assessment_data(state)
+        assessment_context = _build_assessment_context(state)
         model = _setup_assessment_model()
-        ai_assessment = _execute_objective_assessment(model, assessment_data)
+        ai_assessment = _execute_assessment(model, assessment_context)
         return _apply_assessment_to_workflow(state, ai_assessment)
 
-    except Exception as e:
+    except (ValueError, TypeError, AttributeError) as e:
         logger.error("❌ Assessment failed: %s", e)
+        return _handle_assessment_error(state, e)
+    except Exception as e:  # Catch all other unexpected errors
+        logger.error("❌ Unexpected assessment error: %s", e)
         return _handle_assessment_error(state, e)
 
 
-def _prepare_assessment_data(state: GraphState) -> dict:
+def _build_assessment_context(state: GraphState) -> str:
     """
-    Prepare assessment data from the workflow state.
+    Build comprehensive assessment context from all investigations in markdown format.
 
     Args:
         state: Current workflow state
 
     Returns:
-        Dictionary containing assessment prompt information
+        Markdown-formatted context string for the LLM
     """
-    logger.debug("📋 Preparing prompt information for AI assessment")
+    logger.debug(
+        "📋 Building assessment context for %d investigations",
+        len(state.investigations),
+    )
 
-    execution_results = _get_execution_results_with_fallback(state)
+    builder = MarkdownBuilder()
+    builder.add_header("Network Investigation Assessment Context")
 
-    prompt_information = {
-        "user_query": state.user_query or "User question not available",
-        "objective": serialize_for_prompt(
-            state.objective or "Objective not available"
-        ),
-        "working_plan_steps": serialize_for_prompt(
-            state.working_plan_steps or []
-        ),
-        "execution_results": serialize_for_prompt(execution_results),
-    }
+    builder.add_section("User Query")
+    builder.add_text(state.user_query)
 
-    logger.debug("📤 Assessment data prepared")
-    return prompt_information
-
-
-def _get_execution_results_with_fallback(
-    state: GraphState,
-) -> List[ExecutedToolCall]:
-    """
-    Provides execution results with a sensible fallback if none exist.
-
-    Args:
-        state: Current workflow state
-
-    Returns:
-        List of execution results or fallback data
-    """
-    if state.Investigation:
-        return state.Investigation
-
-    return [
-        ExecutedToolCall(
-            executed_calls=[],
+    if state.current_retries > 0:
+        builder.add_section("Retry Information")
+        builder.add_bullet(
+            f"Current attempt: {state.current_retries} of {state.max_retries}"
         )
-    ]
+        previous_feedback = (
+            state.assessment.feedback_for_retry
+            if state.assessment and state.assessment.feedback_for_retry
+            else "No specific feedback provided"
+        )
+        builder.add_bullet(f"Previous feedback: {previous_feedback}")
+
+    builder.add_section("Device Investigations")
+
+    if not state.investigations:
+        builder.add_text("No device investigations found.")
+    else:
+        for i, investigation in enumerate(state.investigations, 1):
+            _add_investigation_to_builder(builder, investigation, i)
+
+    _add_session_context_to_builder(builder, state.workflow_session)
+
+    context_string = builder.build()
+    logger.debug(
+        "📤 Assessment context prepared (%d characters)", len(context_string)
+    )
+    return context_string
+
+
+def _add_investigation_to_builder(
+    builder: MarkdownBuilder, investigation: Investigation, index: int
+) -> None:
+    """
+    Add individual investigation context to the markdown builder.
+
+    Args:
+        builder: Markdown builder instance
+        investigation: Investigation object to format
+        index: Investigation number for display
+    """
+    builder.add_subsection(
+        f"Investigation {index}: {investigation.device_name}"
+    )
+
+    builder.add_bold_text("Status:", investigation.status.value)
+    builder.add_bold_text(
+        "Device Profile:", investigation.device_profile or "Not available"
+    )
+    builder.add_bold_text("Role:", investigation.role or "Not specified")
+    builder.add_bold_text(
+        "Objective:", investigation.objective or "Not specified"
+    )
+
+    builder.add_bold_text("Working Plan Steps:")
+    builder.add_code_block(
+        investigation.working_plan_steps or "No plan steps defined"
+    )
+
+    _add_execution_results_to_builder(builder, investigation.execution_results)
+
+    if investigation.report:
+        builder.add_bold_text("Investigation Report:")
+        builder.add_code_block(investigation.report)
+
+    if investigation.error_details:
+        builder.add_bold_text("Error Details:", investigation.error_details)
+
+    builder.add_separator()
+
+
+def _add_session_context_to_builder(
+    builder: MarkdownBuilder, workflow_session
+) -> None:
+    """
+    Add workflow session context to the markdown builder.
+
+    Args:
+        builder: Markdown builder instance
+        workflow_session: WorkflowSession object or None
+    """
+    builder.add_section("Workflow Session Context")
+
+    if not workflow_session:
+        builder.add_text("No previous workflow session context available.")
+        return
+
+    builder.add_bold_text("Session ID:", workflow_session.session_id)
+
+    _add_previous_reports_to_builder(
+        builder, workflow_session.previous_reports
+    )
+    _add_learned_patterns_to_builder(
+        builder, workflow_session.learned_patterns
+    )
+    _add_device_relationships_to_builder(
+        builder, workflow_session.device_relationships
+    )
 
 
 def _setup_assessment_model():
@@ -155,24 +178,26 @@ def _setup_assessment_model():
     return model
 
 
-def _execute_objective_assessment(
-    model, assessment_data: dict
-) -> AssessmentOutput:
+def _execute_assessment(model, assessment_context: str) -> AssessmentOutput:
     """
     Execute objective assessment using the LLM.
 
     Args:
         model: LLM model for structured output
-        assessment_data: Prepared assessment data
+        assessment_context: Prepared assessment context
 
     Returns:
         Assessment output from the LLM
     """
     logger.debug("🚀 Invoking LLM for objective assessment")
 
-    formatted_prompt = OBJECTIVE_ASSESSOR_PROMPT.format(**assessment_data)
+    messages = [
+        SystemMessage(content=OBJECTIVE_ASSESSOR_PROMPT),
+        HumanMessage(content=assessment_context),
+    ]
+
     ai_response = model.with_structured_output(schema=AssessmentOutput).invoke(
-        input=[SystemMessage(content=formatted_prompt)]
+        input=messages
     )
 
     logger.debug("📋 Structured output captured: %s", ai_response)
@@ -186,7 +211,7 @@ def _execute_objective_assessment(
     return assessment
 
 
-def _ensure_proper_assessment_format(ai_response: Any) -> AssessmentOutput:
+def _ensure_proper_assessment_format(ai_response) -> AssessmentOutput:
     """
     Ensures the AI's response is in a reliable format we can work with.
 
@@ -255,9 +280,7 @@ def _build_successful_assessment_state(
 
     return replace(
         state,
-        objective_achieved_assessment=True,
-        assessor_notes_for_final_report=assessment.notes_for_final_report,
-        assessor_feedback_for_retry=None,
+        assessment=assessment,
     )
 
 
@@ -303,11 +326,15 @@ def _build_retry_state(
         assessment.feedback_for_retry or _get_encouraging_retry_guidance()
     )
 
+    # Create updated assessment with retry feedback
+    retry_assessment = replace(
+        assessment,
+        feedback_for_retry=feedback,
+    )
+
     return replace(
         state,
-        objective_achieved_assessment=False,
-        assessor_notes_for_final_report=assessment.notes_for_final_report,
-        assessor_feedback_for_retry=feedback,
+        assessment=retry_assessment,
         current_retries=state.current_retries + 1,
     )
 
@@ -332,11 +359,17 @@ def _build_max_retries_reached_state(
         f"{assessment.notes_for_final_report}"
     )
 
+    # Create final assessment marking as achieved to stop retry loop
+    final_assessment = replace(
+        assessment,
+        is_objective_achieved=True,  # Stop the retry loop
+        notes_for_final_report=final_notes,
+        feedback_for_retry=None,
+    )
+
     return replace(
         state,
-        objective_achieved_assessment=True,  # Stop the retry loop
-        assessor_notes_for_final_report=final_notes,
-        assessor_feedback_for_retry=None,
+        assessment=final_assessment,
     )
 
 
@@ -385,11 +418,15 @@ def _build_error_retry_state(
     """
     logger.debug("🔄 Error occurred, but retries available")
 
+    error_assessment = AssessmentOutput(
+        is_objective_achieved=False,
+        notes_for_final_report=f"Assessment encountered an error: {error}. Will attempt retry.",
+        feedback_for_retry="An unexpected error occurred during assessment. Please try a different approach.",
+    )
+
     return replace(
         state,
-        objective_achieved_assessment=False,
-        assessor_notes_for_final_report=f"Assessment encountered an error: {error}. Will attempt retry.",
-        assessor_feedback_for_retry="An unexpected error occurred during assessment. Please try a different approach.",
+        assessment=error_assessment,
         current_retries=state.current_retries + 1,
     )
 
@@ -409,230 +446,117 @@ def _build_error_final_state(
     """
     logger.debug("🚫 Error occurred with no retries remaining")
 
+    final_error_assessment = AssessmentOutput(
+        is_objective_achieved=True,  # Force completion
+        notes_for_final_report=f"Assessment error after maximum attempts: {error}. Process concluded.",
+        feedback_for_retry=None,
+    )
+
     return replace(
         state,
-        objective_achieved_assessment=True,  # Force completion
-        assessor_notes_for_final_report=f"Assessment error after maximum attempts: {error}. Process concluded.",
-        assessor_feedback_for_retry=None,
+        assessment=final_error_assessment,
     )
 
 
-def _assess_individual_investigations(
-    state: GraphState,
-) -> List[Investigation]:
+def _add_execution_results_to_builder(
+    builder: MarkdownBuilder, execution_results
+) -> None:
     """
-    Assess the completeness of individual investigations.
+    Add execution results to the markdown builder.
 
     Args:
-        state: Current GraphState with investigations
-
-    Returns:
-        List of investigations with updated assessment status
+        builder: Markdown builder instance
+        execution_results: List of execution results
     """
-    logger.debug(
-        "🔍 Assessing %d individual investigations", len(state.investigations)
-    )
+    if execution_results:
+        builder.add_bold_text(
+            "Execution Results:",
+            f"{len(execution_results)} tool calls executed",
+        )
+        for j, result in enumerate(execution_results, 1):
+            builder.add_bold_text(f"Tool Call {j}:", result.function)
+            builder.add_bullet(f"Parameters: {result.params}")
+            builder.add_bullet(f"Error: {result.error or 'None'}")
 
-    # For now, we'll use a simple heuristic based on investigation status
-    # In the future, this could involve individual LLM assessment for each investigation
-    assessed_investigations = []
+            # Add the full result content as JSON if available
+            if result.result:
+                builder.add_bold_text("Result:")
+                builder.add_code_block(str(result))
+            else:
+                builder.add_bullet("Result: Not available")
 
-    for investigation in state.investigations:
-        # Simple assessment: if investigation has execution results and no error, consider it assessed
-        if (
-            investigation.status == InvestigationStatus.COMPLETED
-            and investigation.execution_results
-        ):
-            # Investigation completed successfully
-            assessed_investigation = investigation
-        elif investigation.status == InvestigationStatus.FAILED:
-            # Investigation failed - leave as is
-            assessed_investigation = investigation
-        else:
-            # Investigation pending or in progress - leave as is
-            assessed_investigation = investigation
-
-        assessed_investigations.append(assessed_investigation)
-
-    logger.debug("✅ Individual investigation assessment completed")
-    return assessed_investigations
-
-
-def _assess_overall_objective(
-    state: GraphState, assessed_investigations: List[Investigation]
-) -> MultiInvestigationAssessmentOutput:
-    """
-    Assess overall objective achievement across all investigations.
-
-    Args:
-        state: Current GraphState
-        assessed_investigations: List of assessed investigations
-
-    Returns:
-        MultiInvestigationAssessmentOutput with overall assessment
-    """
-    logger.debug("🎯 Assessing overall objective achievement")
-
-    # Prepare assessment data
-    investigation_summary = _prepare_investigation_summary(
-        assessed_investigations
-    )
-    investigation_details = _prepare_investigation_details(
-        assessed_investigations
-    )
-    session_context = _prepare_session_context(state.workflow_session)
-
-    # Build assessment prompt
-    assessment_data = {
-        "user_query": state.user_query,
-        "investigation_summary": investigation_summary,
-        "investigation_details": investigation_details,
-        "session_context": session_context,
-    }
-
-    # Execute assessment with LLM
-    model = _setup_assessment_model()
-    formatted_prompt = MULTI_INVESTIGATION_ASSESSOR_PROMPT.format(
-        **assessment_data
-    )
-
-    ai_response = model.with_structured_output(
-        schema=MultiInvestigationAssessmentOutput
-    ).invoke(input=[SystemMessage(content=formatted_prompt)])
-
-    logger.debug("📋 Structured output captured: %s", ai_response)
-
-    # Ensure proper response format
-    if isinstance(ai_response, MultiInvestigationAssessmentOutput):
-        assessment = ai_response
+            builder.add_empty_line()
     else:
-        # Fallback for unexpected response format
-        logger.warning(
-            "⚠️ Unexpected response format from LLM, using default assessment"
-        )
-        assessment = MultiInvestigationAssessmentOutput(
-            overall_objective_achieved=True,
-            investigation_success_rate=0.5,
-            notes_for_final_report="Assessment completed with default values due to response format issue",
+        builder.add_bold_text(
+            "Execution Results:", "No execution results available"
         )
 
-    logger.debug(
-        "📊 Overall assessment: achieved=%s, success_rate=%.2f",
-        assessment.overall_objective_achieved,
-        assessment.investigation_success_rate,
-    )
 
-    return assessment
-
-
-def _prepare_investigation_summary(investigations: List[Investigation]) -> str:
-    """Prepare a summary of investigation results."""
-    total = len(investigations)
-    completed = sum(
-        1
-        for inv in investigations
-        if inv.status == InvestigationStatus.COMPLETED
-    )
-    failed = sum(
-        1 for inv in investigations if inv.status == InvestigationStatus.FAILED
-    )
-    pending = sum(
-        1
-        for inv in investigations
-        if inv.status == InvestigationStatus.PENDING
-    )
-
-    return f"Total: {total}, Completed: {completed}, Failed: {failed}, Pending: {pending}"
-
-
-def _prepare_investigation_details(investigations: List[Investigation]) -> str:
-    """Prepare detailed investigation information for assessment."""
-    details = []
-    for inv in investigations:
-        detail = f"Device: {inv.device_name}, Status: {inv.status.value}, Results: {len(inv.execution_results)} steps"
-        if inv.error_details:
-            detail += f", Error: {inv.error_details}"
-        details.append(detail)
-
-    return "\\n".join(details)
-
-
-def _prepare_session_context(workflow_session) -> str:
-    """Prepare session context information."""
-    if not workflow_session:
-        return "No session context available"
-
-    return f"Session: {workflow_session.session_id}, Patterns: {len(workflow_session.learned_patterns)}"
-
-
-def _apply_multi_assessment_to_workflow(
-    state: GraphState,
-    assessed_investigations: List[Investigation],
-    overall_assessment: MultiInvestigationAssessmentOutput,
-) -> GraphState:
+def _add_previous_reports_to_builder(
+    builder: MarkdownBuilder, previous_reports
+) -> None:
     """
-    Apply multi-investigation assessment results to workflow state.
+    Add previous reports to the markdown builder.
 
     Args:
-        state: Current GraphState
-        assessed_investigations: List of assessed investigations
-        overall_assessment: Overall assessment results
-
-    Returns:
-        Updated GraphState with assessment results
+        builder: Markdown builder instance
+        previous_reports: List of previous reports
     """
-    logger.debug("🏗️ Applying multi-assessment to workflow")
-
-    # Update workflow session with learned patterns
-    updated_session = state.workflow_session
-    if updated_session and overall_assessment.learned_patterns:
-        updated_session = replace(
-            updated_session,
-            learned_patterns={
-                **updated_session.learned_patterns,
-                **overall_assessment.learned_patterns,
-            },
+    if previous_reports:
+        builder.add_bold_text(
+            "Previous Reports:", f"{len(previous_reports)} available"
+        )
+        for i, report in enumerate(previous_reports, 1):
+            builder.add_bold_text(f"Report {i}:")
+            builder.add_code_block(report)
+    else:
+        builder.add_bold_text(
+            "Previous Reports:", "No previous reports available"
         )
 
-    # Determine if retry is needed
-    retry_needed = (
-        not overall_assessment.overall_objective_achieved
-        and state.current_retries < state.max_retries
-    )
 
-    return replace(
-        state,
-        investigations=assessed_investigations,
-        workflow_session=updated_session,
-        overall_objective_achieved=overall_assessment.overall_objective_achieved,
-        assessor_notes_for_final_report=overall_assessment.notes_for_final_report,
-        assessor_feedback_for_retry=(
-            overall_assessment.feedback_for_retry if retry_needed else None
-        ),
-        current_retries=state.current_retries + (1 if retry_needed else 0),
-    )
-
-
-def _handle_multi_assessment_error(
-    state: GraphState, error: Exception
-) -> GraphState:
+def _add_learned_patterns_to_builder(
+    builder: MarkdownBuilder, learned_patterns
+) -> None:
     """
-    Handle errors during multi-investigation assessment.
+    Add learned patterns to the markdown builder.
 
     Args:
-        state: Current GraphState
-        error: Exception that occurred
-
-    Returns:
-        Updated GraphState with error handling
+        builder: Markdown builder instance
+        learned_patterns: Dictionary of learned patterns
     """
-    logger.debug("🚨 Handling multi-assessment error: %s", error)
+    if learned_patterns:
+        builder.add_bold_text(
+            "Learned Patterns:", f"{len(learned_patterns)} patterns available"
+        )
+        for pattern_name, pattern_data in learned_patterns.items():
+            builder.add_bullet(f"**{pattern_name}:** {pattern_data}")
+        builder.add_empty_line()
+    else:
+        builder.add_bold_text(
+            "Learned Patterns:", "No learned patterns available"
+        )
 
-    # For multi-investigation, we're more tolerant of assessment errors
-    # Mark as complete with notes about the error
-    return replace(
-        state,
-        overall_objective_achieved=True,  # Force completion to avoid endless loops
-        assessor_notes_for_final_report=f"Multi-investigation assessment encountered an error: {error}. Results may be incomplete but workflow concluded.",
-        assessor_feedback_for_retry=None,
-    )
+
+def _add_device_relationships_to_builder(
+    builder: MarkdownBuilder, device_relationships
+) -> None:
+    """
+    Add device relationships to the markdown builder.
+
+    Args:
+        builder: Markdown builder instance
+        device_relationships: Dictionary of device relationships
+    """
+    if device_relationships:
+        builder.add_bold_text(
+            "Device Relationships:",
+            f"{len(device_relationships)} relationships available",
+        )
+        for device, relationships in device_relationships.items():
+            builder.add_bullet(f"**{device}:** {', '.join(relationships)}")
+        builder.add_empty_line()
+    else:
+        builder.add_bold_text(
+            "Device Relationships:", "No device relationships available"
+        )

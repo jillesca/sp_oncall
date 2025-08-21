@@ -4,10 +4,7 @@ Provides a single import location for all dataclass schemas used
 throughout the application (graph state, planner output, assessor output, etc.).
 """
 
-from .assessment_schema import (
-    AssessmentOutput,
-    MultiInvestigationAssessmentOutput,
-)
+from .assessment_schema import AssessmentOutput
 from .state import (
     GraphState,
     ExecutedToolCall,
@@ -18,7 +15,6 @@ from .state import (
 __all__ = [
     "GraphState",
     "AssessmentOutput",
-    "MultiInvestigationAssessmentOutput",
     "ExecutedToolCall",
     "Investigation",
     "InvestigationStatus",
