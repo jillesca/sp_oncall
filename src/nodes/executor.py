@@ -1,20 +1,18 @@
 import asyncio
-from dataclasses import replace
 from typing import List, Tuple
+from dataclasses import replace
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-from mcp_client import mcp_node
-from util.llm import load_chat_model
-from configuration import Configuration
 from schemas import (
     GraphState,
     ExecutedToolCall,
     Investigation,
     InvestigationStatus,
 )
+from mcp_client import mcp_node
+from src.logging import get_logger, log_node_execution
 from prompts.network_executor import NETWORK_EXECUTOR_PROMPT
 
-from src.logging import get_logger, log_node_execution
 
 logger = get_logger(__name__)
 
@@ -41,7 +39,6 @@ def llm_network_executor(state: GraphState) -> GraphState:
     _log_incoming_state(state)
 
     try:
-        # Get investigations ready for execution
         ready_investigations = state.get_ready_investigations()
 
         if not ready_investigations:
@@ -53,12 +50,10 @@ def llm_network_executor(state: GraphState) -> GraphState:
             len(ready_investigations),
         )
 
-        # Execute all investigations concurrently
         updated_investigations = asyncio.run(
             _execute_investigations_concurrently(ready_investigations, state)
         )
 
-        # Update state with completed investigations
         return _update_state_with_investigations(state, updated_investigations)
 
     except Exception as e:
@@ -100,14 +95,6 @@ def _log_incoming_state(state: GraphState) -> None:
             "🔄 Retry execution #%s for workflow",
             state.current_retries,
         )
-
-
-def _load_model():
-    """Setup and return the LLM model for plan selection."""
-    configuration = Configuration.from_context()
-    model = load_chat_model(configuration.model)
-    logger.debug("🤖 Using model: %s", configuration.model)
-    return model
 
 
 async def _execute_investigations_concurrently(
@@ -180,16 +167,13 @@ async def _execute_single_investigation(
     )
 
     try:
-        # Build context for this investigation
         context = _build_investigation_context(investigation, state)
         message = HumanMessage(content=context)
 
         logger.debug(
             "📤 Sending to MCP agent for device %s", investigation.device_name
         )
-        logger.debug("  context length: %s characters", len(context))
 
-        # Execute via MCP agent
         mcp_response = await mcp_node(
             message=message,
             system_prompt=NETWORK_EXECUTOR_PROMPT,
@@ -199,14 +183,12 @@ async def _execute_single_investigation(
             "📨 MCP agent response received for %s", investigation.device_name
         )
 
-        # Process the response
         llm_analysis, executed_tool_calls = _extract_response_content(
             mcp_response
         )
 
         _log_processed_data(llm_analysis, executed_tool_calls)
 
-        # Update investigation with results
         updated_investigation = replace(
             investigation,
             status=InvestigationStatus.COMPLETED,
@@ -305,11 +287,9 @@ def _update_state_with_investigations(
         inv.device_name: inv for inv in updated_investigations
     }
 
-    # Update the investigations list
     updated_investigation_list = []
     for investigation in state.investigations:
         if investigation.device_name in investigation_map:
-            # Use the updated investigation
             updated_investigation_list.append(
                 investigation_map[investigation.device_name]
             )
