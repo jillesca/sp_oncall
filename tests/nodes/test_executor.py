@@ -85,11 +85,11 @@ class TestBuildInvestigationContext:
         result = _build_investigation_context(investigation, state)
 
         assert isinstance(result, str)
-        assert f"User query: {state.user_query}" in result
-        assert f"device_name: {investigation.device_name}" in result
-        assert f"device_profile: {investigation.device_profile}" in result
-        assert f"role: {investigation.role}" in result
-        assert f"objective: {investigation.objective}" in result
+        assert f"**User Query:** {state.user_query}" in result
+        assert f"**Device Name:** {investigation.device_name}" in result
+        assert investigation.device_profile in result
+        assert f"**Role:** {investigation.role}" in result
+        assert f"**Objective:** {investigation.objective}" in result
 
     def test_build_investigation_context_with_workflow_session(self):
         """Test context building includes workflow session data."""
@@ -112,9 +112,9 @@ class TestBuildInvestigationContext:
             investigation, state_with_session
         )
 
-        assert "PREVIOUS INVESTIGATION CONTEXT" in result
-        assert "Total investigation sessions: 1" in result
-        assert "Recent investigation report:" in result
+        assert "Previous Investigation Context" in result
+        assert "**Total Investigation Sessions:** 1" in result
+        assert "Recent Investigation Report" in result
 
     def test_build_investigation_context_with_retry(self):
         """Test context building includes retry information."""
@@ -133,8 +133,8 @@ class TestBuildInvestigationContext:
 
         result = _build_investigation_context(investigation, retry_state)
 
-        assert "RETRY CONTEXT" in result
-        assert "This is retry #2 of 3" in result
+        assert "Retry Context" in result
+        assert "**Retry Number:** #2 of 3" in result
         assert "Try different approach" in result
 
     def test_build_investigation_context_returns_valid_string(self):

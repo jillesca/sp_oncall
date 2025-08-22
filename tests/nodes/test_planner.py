@@ -99,7 +99,7 @@ class TestExtractInvestigationsSummary:
         lines = result.split("\n")
         assert any(line.startswith("##") for line in lines)
         assert any(line.startswith("###") for line in lines)
-        assert any("```json" in line for line in lines)
+        assert any("```" in line for line in lines)
 
     def test_extract_investigations_summary_includes_device_profiles(self):
         """Test that device profiles are included in the summary."""

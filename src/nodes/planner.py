@@ -9,6 +9,7 @@ from configuration import Configuration
 from prompts.planner import PLANNER_PROMPT
 from schemas.state import Investigation, GraphState
 from src.logging import get_logger, log_node_execution
+from nodes.markdown_builder import MarkdownBuilder
 
 logger = get_logger(__name__)
 
@@ -197,29 +198,29 @@ def _extract_investigations_summary(
         Markdown-formatted string containing device names and profiles for each investigation
     """
     if not investigations:
-        return "## Investigations\n\nNo investigations defined."
+        return (
+            MarkdownBuilder()
+            .add_section("Investigations")
+            .add_text("No investigations defined.")
+            .build()
+        )
 
-    summary_lines = ["## Devices"]
-    summary_lines.append("")  # Empty line after header
+    builder = MarkdownBuilder().add_section("Devices")
 
     for i, investigation in enumerate(investigations, 1):
         # Device header with numbering
-        summary_lines.append(f"### {i}. Device: `{investigation.device_name}`")
-        summary_lines.append("")  # Empty line after device header
+        builder.add_subsection(f"{i}. Device: `{investigation.device_name}`")
 
         # Device profile section
-        summary_lines.append("**Device Profile:**")
-        summary_lines.append(f"**Role:** {investigation.role}")
-        summary_lines.append(f"```json")
-        summary_lines.append(investigation.device_profile)
-        summary_lines.append("```")
-        summary_lines.append("")  # Empty line between devices
+        builder.add_bold_text("Device Profile:")
+        builder.add_bold_text("Role:", investigation.role)
+        builder.add_code_block(investigation.device_profile)
 
     logger.debug(
         "📊 Extracted markdown summary for %s devices",
         len(investigations),
     )
-    return "\n".join(summary_lines)
+    return builder.build()
 
 
 def _build_successful_planning_state(

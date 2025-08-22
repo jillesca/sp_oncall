@@ -12,6 +12,7 @@ from schemas import (
 from mcp_client import mcp_node
 from src.logging import get_logger, log_node_execution
 from prompts.network_executor import NETWORK_EXECUTOR_PROMPT
+from nodes.markdown_builder import MarkdownBuilder
 
 
 logger = get_logger(__name__)
@@ -224,70 +225,87 @@ def _build_investigation_context(
     investigation: Investigation, state: GraphState
 ) -> str:
     """
-    Build context string for a specific investigation.
+    Build context string for a specific investigation in markdown format.
 
     Args:
         investigation: Investigation to build context for
         state: Current GraphState for workflow context
 
     Returns:
-        Formatted context string for the MCP agent
+        Formatted context string in markdown for the MCP agent
     """
-    context_parts = [
-        f"User query: {state.user_query}",
-        f"device_name: {investigation.device_name}",
-        f"device_profile: {investigation.device_profile}",
-        f"role: {investigation.role}",
-        f"objective: {investigation.objective}",
-        f"working_plan_steps: {investigation.working_plan_steps}",
-    ]
+    builder = MarkdownBuilder()
+
+    # Main investigation details
+    builder.add_header("Investigation Context")
+    builder.add_bold_text("User Query:", state.user_query)
+    builder.add_bold_text("Device Name:", investigation.device_name)
+    builder.add_bold_text("Role:", investigation.role)
+    builder.add_bold_text(
+        "Objective:", investigation.objective or "Not specified"
+    )
+
+    builder.add_section("Device Profile")
+    builder.add_code_block(investigation.device_profile)
+
+    builder.add_section("Working Plan Steps")
+    builder.add_text(
+        investigation.working_plan_steps or "No plan steps defined"
+    )
 
     # Add workflow session context if available
     if state.workflow_session and len(state.workflow_session) > 0:
-        context_parts.append("\n--- PREVIOUS INVESTIGATION CONTEXT ---")
-        context_parts.append(
-            f"Total investigation sessions: {len(state.workflow_session)}"
+        builder.add_separator()
+        builder.add_section("Previous Investigation Context")
+        builder.add_bold_text(
+            "Total Investigation Sessions:", str(len(state.workflow_session))
         )
 
         # Use the most recent session for context
         latest_session = state.workflow_session[-1]
         if latest_session.previous_report:
-            context_parts.append("Recent investigation report:")
-            context_parts.append(
-                f"Report: {latest_session.previous_report[:200]}..."
-            )  # Truncate for context
+            builder.add_subsection("Recent Investigation Report")
+            # Truncate for context
+            report_preview = (
+                latest_session.previous_report[:200] + "..."
+                if len(latest_session.previous_report) > 200
+                else latest_session.previous_report
+            )
+            builder.add_text(report_preview)
 
         if latest_session.learned_patterns:
-            context_parts.append("Learned patterns from recent session:")
+            builder.add_subsection("Learned Patterns from Recent Session")
             # Show preview of patterns (first 300 characters)
             patterns_preview = (
                 latest_session.learned_patterns[:300] + "..."
                 if len(latest_session.learned_patterns) > 300
                 else latest_session.learned_patterns
             )
-            context_parts.append(patterns_preview)
+            builder.add_text(patterns_preview)
 
         if latest_session.device_relationships:
-            context_parts.append("Device relationships from recent session:")
+            builder.add_subsection("Device Relationships from Recent Session")
             # Show preview of relationships (first 300 characters)
             relationships_preview = (
                 latest_session.device_relationships[:300] + "..."
                 if len(latest_session.device_relationships) > 300
                 else latest_session.device_relationships
             )
-            context_parts.append(relationships_preview)
+            builder.add_text(relationships_preview)
 
         # If multiple sessions, mention historical patterns
         if len(state.workflow_session) > 1:
-            context_parts.append(
-                f"Historical context: {len(state.workflow_session)-1} previous sessions available for correlation"
+            builder.add_subsection("Historical Context")
+            builder.add_text(
+                f"{len(state.workflow_session)-1} previous sessions available for correlation"
             )
 
     # Add retry context if this is a retry
     if state.current_retries > 0:
-        context_parts.append("\n--- RETRY CONTEXT ---")
-        context_parts.append(
-            f"This is retry #{state.current_retries} of {state.max_retries}"
+        builder.add_separator()
+        builder.add_section("Retry Context")
+        builder.add_bold_text(
+            "Retry Number:", f"#{state.current_retries} of {state.max_retries}"
         )
 
         feedback = (
@@ -295,9 +313,10 @@ def _build_investigation_context(
             if state.assessment and state.assessment.feedback_for_retry
             else "No specific feedback provided from assessor"
         )
-        context_parts.append(f"Previous execution feedback: {feedback}")
+        builder.add_subsection("Previous Execution Feedback")
+        builder.add_text(feedback)
 
-    return "\n".join(context_parts)
+    return builder.build()
 
 
 def _update_state_with_investigations(
