@@ -43,7 +43,7 @@ SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS = GraphState(
             error_details=None,
         ),
     ],
-    workflow_session=[],
+    historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,

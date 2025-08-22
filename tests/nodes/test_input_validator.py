@@ -319,7 +319,9 @@ class TestBuildFailedState:
 
         assert result.max_retries == SAMPLE_GRAPH_STATE.max_retries
         assert result.current_retries == SAMPLE_GRAPH_STATE.current_retries
-        assert result.workflow_session == SAMPLE_GRAPH_STATE.workflow_session
+        assert (
+            result.historical_context == SAMPLE_GRAPH_STATE.historical_context
+        )
 
     def test_build_failed_state_with_existing_investigations(self):
         """Test failed state building when original state has investigations."""
@@ -332,7 +334,7 @@ class TestBuildFailedState:
                     role="PE",
                 )
             ],
-            workflow_session=[],
+            historical_context=[],
             max_retries=3,
             current_retries=0,
             assessment=None,

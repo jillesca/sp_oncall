@@ -28,7 +28,7 @@ You will receive the following information to guide your investigation:
 - **objective**: Specific investigation objective defined by the planning agent
 - **working_plan_steps**: Recommended execution steps (you may improve upon this)
 - **Previous investigation context** (if available):
-  - Previous investigation reports from workflow session
+  - Previous investigation reports from historical context
   - Learned patterns from historical investigations  
   - Device relationships and dependencies
   - **Note:** This information comes from previous investigation sessions and provides historical context to inform your current analysis

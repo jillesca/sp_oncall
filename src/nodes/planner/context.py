@@ -3,7 +3,7 @@
 from typing import List
 from schemas.state import Investigation, GraphState
 from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_session_context_to_builder
+from nodes.common.session_context import add_historical_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -50,7 +50,7 @@ def build_planning_context(state: GraphState) -> str:
     Build comprehensive planning context including investigations and session context.
 
     Args:
-        state: Current GraphState with investigations and workflow sessions
+        state: Current GraphState with investigations and historical context
 
     Returns:
         Markdown-formatted string containing complete planning context
@@ -69,8 +69,7 @@ def build_planning_context(state: GraphState) -> str:
     )
     builder.add_text(investigations_content)
 
-    # Add session context for historical awareness
-    add_session_context_to_builder(
+    add_historical_context_to_builder(
         builder, state, section_title="Historical Context for Planning"
     )
 

@@ -7,7 +7,7 @@ for MCP agent execution.
 
 from schemas import GraphState, Investigation
 from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_session_context_to_builder
+from nodes.common.session_context import add_historical_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -29,7 +29,7 @@ def build_investigation_context(
     builder = MarkdownBuilder()
 
     _add_investigation_details(builder, investigation, state)
-    _add_workflow_session_context(builder, state)
+    _add_historical_context_section(builder, state)
     _add_retry_context(builder, state)
 
     return builder.build()
@@ -56,11 +56,11 @@ def _add_investigation_details(
     )
 
 
-def _add_workflow_session_context(
+def _add_historical_context_section(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
-    """Add workflow session context using the common session context module."""
-    add_session_context_to_builder(
+    """Add historical context using the common historical context module."""
+    add_historical_context_to_builder(
         builder, state, section_title="Previous Investigation Context"
     )
 

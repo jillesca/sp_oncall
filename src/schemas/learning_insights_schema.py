@@ -2,7 +2,7 @@
 Schema for learning insights extracted from network investigations.
 
 This schema defines the structure for LLM-generated learning insights
-that will be stored in WorkflowSession for future investigation context.
+that will be stored in HistoricalContext for future investigation context.
 """
 
 import json

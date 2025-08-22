@@ -1,4 +1,4 @@
-"""Workflow session management for reporter."""
+"""Historical context management for reporter."""
 
 import uuid
 from typing import List
@@ -6,7 +6,7 @@ from typing import List
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from schemas import GraphState, LearningInsights
-from schemas.state import WorkflowSession, InvestigationStatus
+from schemas.state import HistoricalContext, InvestigationStatus
 from nodes.markdown_builder import MarkdownBuilder
 from prompts.learning_insights import LEARNING_INSIGHTS_PROMPT
 from src.logging import get_logger
@@ -14,55 +14,57 @@ from src.logging import get_logger
 logger = get_logger(__name__)
 
 
-def update_workflow_session(
+def update_historical_context(
     state: GraphState, final_report: str
-) -> List[WorkflowSession]:
+) -> List[HistoricalContext]:
     """
-    Create a new workflow session with LLM-generated learned patterns and findings from investigations.
+    Create a new historical context entry with LLM-generated learned patterns and findings from investigations.
 
     Args:
         state: Current GraphState with investigation results
-        final_report: The generated final report to store in previous_reports
+        final_report: The generated final report to store as historical data
 
     Returns:
-        Updated list of WorkflowSessions with new session appended
+        Updated list of HistoricalContext entries with new entry appended
     """
     logger.debug(
-        "📚 Creating new workflow session with investigation learnings"
+        "📚 Creating new historical context entry with investigation learnings"
     )
 
     # Create new session for this investigation
     session_id = str(uuid.uuid4())[:8]
-    logger.info("🆕 Creating new workflow session: %s", session_id)
+    logger.info("🆕 Creating new historical context entry: %s", session_id)
 
     # Generate learning insights using LLM
     learning_insights = _generate_learning_insights_with_llm(state)
 
-    # Create new session with current report (single string, not list)
-    new_session = WorkflowSession(
+    # Create new historical context entry with current report
+    new_context = HistoricalContext(
         session_id=session_id,
         previous_report=final_report if final_report else "",
         learned_patterns=learning_insights.learned_patterns,
         device_relationships=learning_insights.device_relationships,
     )
 
-    # Append to existing sessions list
-    existing_sessions = (
-        state.workflow_session if state.workflow_session is not None else []
+    # Append to existing historical context list
+    existing_contexts = (
+        state.historical_context
+        if state.historical_context is not None
+        else []
     )
-    updated_sessions = list(existing_sessions) + [new_session]
+    updated_contexts = list(existing_contexts) + [new_context]
 
-    # Keep only last 20 sessions to avoid unlimited growth
-    updated_sessions = updated_sessions[-20:]
+    # Keep only last 20 entries to avoid unlimited growth
+    updated_contexts = updated_contexts[-20:]
 
     logger.debug(
-        "📈 Created new session with patterns (%d chars), relationships (%d chars), report (%d chars)",
+        "📈 Created new historical context entry with patterns (%d chars), relationships (%d chars), report (%d chars)",
         len(learning_insights.learned_patterns),
         len(learning_insights.device_relationships),
         len(final_report) if final_report else 0,
     )
 
-    return updated_sessions
+    return updated_contexts
 
 
 def _generate_learning_insights_with_llm(

@@ -10,21 +10,21 @@ from unittest.mock import Mock
 from dataclasses import replace
 
 from src.nodes.executor import (
-    _log_incoming_state,
-    _build_investigation_context,
-    _update_state_with_investigations,
-    _update_state_with_global_error,
-    _extract_response_content,
-    _extract_last_ai_message,
-    _extract_tool_messages,
-    _convert_tool_message_to_executed_call,
-    _log_processed_data,
+    log_incoming_state,
+    build_investigation_context,
+    update_state_with_investigations,
+    update_state_with_global_error,
+    extract_response_content,
+    extract_last_ai_message,
+    extract_tool_messages,
+    convert_tool_message_to_executed_call,
 )
 from schemas.state import (
     GraphState,
     Investigation,
     InvestigationStatus,
     ExecutedToolCall,
+    HistoricalContext,
 )
 from langchain_core.messages import AIMessage, ToolMessage
 from tests.data.executor_data import (
@@ -47,7 +47,7 @@ class TestLogIncomingState:
         caplog.clear()
 
         # Call the function
-        _log_incoming_state(SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS)
+        log_incoming_state(SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS)
 
         # Check that logging occurred (we can't easily test the exact content
         # since it uses lazy logging, but we can verify the function runs)
@@ -60,7 +60,7 @@ class TestLogIncomingState:
         )
 
         caplog.clear()
-        _log_incoming_state(empty_state)
+        log_incoming_state(empty_state)
         assert True  # Function should complete without error
 
     def test_log_incoming_state_with_retries(self, caplog):
@@ -70,19 +70,19 @@ class TestLogIncomingState:
         )
 
         caplog.clear()
-        _log_incoming_state(retry_state)
+        log_incoming_state(retry_state)
         assert True  # Function should complete without error
 
 
 class TestBuildInvestigationContext:
-    """Test cases for _build_investigation_context function."""
+    """Test cases for build_investigation_context function."""
 
-    def test_build_investigation_context_basic(self):
+    def testbuild_investigation_context_basic(self):
         """Test basic investigation context building."""
         state = SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS
         investigation = state.investigations[0]
 
-        result = _build_investigation_context(investigation, state)
+        result = build_investigation_context(investigation, state)
 
         assert isinstance(result, str)
         assert f"**User Query:** {state.user_query}" in result
@@ -91,32 +91,29 @@ class TestBuildInvestigationContext:
         assert f"**Role:** {investigation.role}" in result
         assert f"**Objective:** {investigation.objective}" in result
 
-    def test_build_investigation_context_with_workflow_session(self):
-        """Test context building includes workflow session data."""
-        from schemas.state import WorkflowSession
+    def testbuild_investigation_context_with_historical_context(self):
+        """Test context building includes historical context data."""
 
-        session = WorkflowSession(
+        context = HistoricalContext(
             session_id="test-session",
             previous_report="Previous investigation report",
             learned_patterns="Pattern 1: Test pattern",
             device_relationships="device1 -> device2",
         )
 
-        state_with_session = replace(
+        state_with_context = replace(
             SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS,
-            workflow_session=[session],
+            historical_context=[context],
         )
-        investigation = state_with_session.investigations[0]
+        investigation = state_with_context.investigations[0]
 
-        result = _build_investigation_context(
-            investigation, state_with_session
-        )
+        result = build_investigation_context(investigation, state_with_context)
 
         assert "Previous Investigation Context" in result
         assert "**Total Previous Sessions:** 1" in result
         assert "Previous Investigation Report" in result
 
-    def test_build_investigation_context_with_retry(self):
+    def testbuild_investigation_context_with_retry(self):
         """Test context building includes retry information."""
         from schemas.assessment_schema import AssessmentOutput
 
@@ -131,15 +128,15 @@ class TestBuildInvestigationContext:
         )
         investigation = retry_state.investigations[0]
 
-        result = _build_investigation_context(investigation, retry_state)
+        result = build_investigation_context(investigation, retry_state)
 
         assert "Retry Context" in result
         assert "**Retry Number:** #2 of 3" in result
         assert "Try different approach" in result
 
-    def test_build_investigation_context_returns_valid_string(self):
+    def testbuild_investigation_context_returns_valid_string(self):
         """Test that context building returns a valid non-empty string."""
-        result = _build_investigation_context(
+        result = build_investigation_context(
             SAMPLE_INVESTIGATION, SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS
         )
 
@@ -149,14 +146,14 @@ class TestBuildInvestigationContext:
 
 
 class TestUpdateStateWithInvestigations:
-    """Test cases for _update_state_with_investigations function."""
+    """Test cases for update_state_with_investigations function."""
 
-    def test_update_state_with_investigations_success(self):
+    def testupdate_state_with_investigations_success(self):
         """Test successful state update with investigations."""
         original_state = SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS
         updated_investigations = SAMPLE_UPDATED_INVESTIGATIONS
 
-        result = _update_state_with_investigations(
+        result = update_state_with_investigations(
             original_state, updated_investigations
         )
 
@@ -179,7 +176,7 @@ class TestUpdateStateWithInvestigations:
         # Only update one investigation
         partial_update = [SAMPLE_UPDATED_INVESTIGATIONS[0]]
 
-        result = _update_state_with_investigations(
+        result = update_state_with_investigations(
             original_state, partial_update
         )
 
@@ -209,19 +206,19 @@ class TestUpdateStateWithInvestigations:
         """Test state update with empty updates list."""
         original_state = SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS
 
-        result = _update_state_with_investigations(original_state, [])
+        result = update_state_with_investigations(original_state, [])
 
         assert result == original_state  # Should be unchanged
 
 
 class TestUpdateStateWithGlobalError:
-    """Test cases for _update_state_with_global_error function."""
+    """Test cases for update_state_with_global_error function."""
 
-    def test_update_state_with_global_error_marks_pending_as_failed(self):
+    def testupdate_state_with_global_error_marks_pending_as_failed(self):
         """Test that global error marks pending investigations as failed."""
         error = RuntimeError("Global error occurred")
 
-        result = _update_state_with_global_error(
+        result = update_state_with_global_error(
             SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS, error
         )
 
@@ -237,11 +234,11 @@ class TestUpdateStateWithGlobalError:
         assert first_inv.status == InvestigationStatus.FAILED
         assert "Global error occurred" in first_inv.error_details
 
-    def test_update_state_with_global_error_preserves_completed(self):
+    def testupdate_state_with_global_error_preserves_completed(self):
         """Test that global error preserves completed investigations."""
         error = RuntimeError("Global error occurred")
 
-        result = _update_state_with_global_error(
+        result = update_state_with_global_error(
             SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS, error
         )
 
@@ -262,11 +259,11 @@ class TestUpdateStateWithGlobalError:
 
 
 class TestExtractResponseContent:
-    """Test cases for _extract_response_content function."""
+    """Test cases for extract_response_content function."""
 
-    def test_extract_response_content_success(self):
+    def testextract_response_content_success(self):
         """Test successful extraction from MCP response."""
-        llm_analysis, tool_calls = _extract_response_content(
+        llm_analysis, tool_calls = extract_response_content(
             SAMPLE_MCP_RESPONSE
         )
 
@@ -275,19 +272,19 @@ class TestExtractResponseContent:
         assert len(llm_analysis) > 0
         assert len(tool_calls) >= 0
 
-    def test_extract_response_content_with_empty_messages(self):
+    def testextract_response_content_with_empty_messages(self):
         """Test extraction fails with empty messages."""
         with pytest.raises(ValueError, match="No messages found"):
-            _extract_response_content(EMPTY_MCP_RESPONSE)
+            extract_response_content(EMPTY_MCP_RESPONSE)
 
-    def test_extract_response_content_with_invalid_structure(self):
+    def testextract_response_content_with_invalid_structure(self):
         """Test extraction fails with invalid response structure."""
         with pytest.raises(ValueError, match="No messages found"):
-            _extract_response_content(INVALID_MCP_RESPONSE)
+            extract_response_content(INVALID_MCP_RESPONSE)
 
-    def test_extract_response_content_returns_correct_types(self):
+    def testextract_response_content_returns_correct_types(self):
         """Test that extraction returns correct data types."""
-        llm_analysis, tool_calls = _extract_response_content(
+        llm_analysis, tool_calls = extract_response_content(
             SAMPLE_MCP_RESPONSE
         )
 
@@ -300,17 +297,17 @@ class TestExtractResponseContent:
 
 
 class TestExtractLastAiMessage:
-    """Test cases for _extract_last_ai_message function."""
+    """Test cases for extract_last_ai_message function."""
 
-    def test_extract_last_ai_message_success(self):
+    def testextract_last_ai_message_success(self):
         """Test successful extraction of last AI message."""
         messages = SAMPLE_MCP_RESPONSE["messages"]
-        result = _extract_last_ai_message(messages)
+        result = extract_last_ai_message(messages)
 
         assert isinstance(result, str)
         assert len(result) > 0
 
-    def test_extract_last_ai_message_with_no_ai_messages(self):
+    def testextract_last_ai_message_with_no_ai_messages(self):
         """Test extraction fails when no AI messages present."""
         messages = [
             ToolMessage(
@@ -322,9 +319,9 @@ class TestExtractLastAiMessage:
         ]
 
         with pytest.raises(ValueError, match="No AIMessage found"):
-            _extract_last_ai_message(messages)
+            extract_last_ai_message(messages)
 
-    def test_extract_last_ai_message_with_multiple_ai_messages(self):
+    def testextract_last_ai_message_with_multiple_ai_messages(self):
         """Test extraction gets the last AI message when multiple exist."""
         messages = [
             AIMessage(content="First AI message", id="msg-1"),
@@ -337,56 +334,56 @@ class TestExtractLastAiMessage:
             AIMessage(content="Last AI message", id="msg-3"),
         ]
 
-        result = _extract_last_ai_message(messages)
+        result = extract_last_ai_message(messages)
         assert "Last AI message" in result
 
-    def test_extract_last_ai_message_handles_list_content(self):
+    def testextract_last_ai_message_handles_list_content(self):
         """Test extraction handles list content in AI messages."""
         messages = [
             AIMessage(content=["Part 1", "Part 2"], id="msg-1"),
         ]
 
-        result = _extract_last_ai_message(messages)
+        result = extract_last_ai_message(messages)
         assert isinstance(result, str)
         assert "Part 1" in result and "Part 2" in result
 
 
 class TestExtractToolMessages:
-    """Test cases for _extract_tool_messages function."""
+    """Test cases for extract_tool_messages function."""
 
-    def test_extract_tool_messages_success(self):
+    def testextract_tool_messages_success(self):
         """Test successful extraction of tool messages."""
         messages = SAMPLE_MCP_RESPONSE["messages"]
-        result = _extract_tool_messages(messages)
+        result = extract_tool_messages(messages)
 
         assert isinstance(result, list)
         if result:
             assert all(isinstance(call, ExecutedToolCall) for call in result)
 
-    def test_extract_tool_messages_with_no_tool_messages(self):
+    def testextract_tool_messages_with_no_tool_messages(self):
         """Test extraction with no tool messages returns empty list."""
         messages = [
             AIMessage(content="Only AI message", id="msg-1"),
         ]
 
-        result = _extract_tool_messages(messages)
+        result = extract_tool_messages(messages)
         assert result == []
 
-    def test_extract_tool_messages_handles_conversion_errors(self):
+    def testextract_tool_messages_handles_conversion_errors(self):
         """Test extraction handles tool message conversion errors gracefully."""
         # Create a mock ToolMessage that will cause conversion issues
         mock_tool_msg = Mock(spec=ToolMessage)
         mock_tool_msg.name = "test_tool"
         mock_tool_msg.content = None  # This might cause issues
 
-        result = _extract_tool_messages([mock_tool_msg])
+        result = extract_tool_messages([mock_tool_msg])
 
         # Should handle the error and still return a list
         assert isinstance(result, list)
 
 
 class TestConvertToolMessageToExecutedCall:
-    """Test cases for _convert_tool_message_to_executed_call function."""
+    """Test cases for convert_tool_message_to_executed_call function."""
 
     def test_convert_tool_message_success(self):
         """Test successful conversion of tool message."""
@@ -397,7 +394,7 @@ class TestConvertToolMessageToExecutedCall:
             id="msg-1",
         )
 
-        result = _convert_tool_message_to_executed_call(tool_msg)
+        result = convert_tool_message_to_executed_call(tool_msg)
 
         assert isinstance(result, ExecutedToolCall)
         assert result.function == "test_function"
@@ -413,7 +410,7 @@ class TestConvertToolMessageToExecutedCall:
             id="msg-1",
         )
 
-        result = _convert_tool_message_to_executed_call(tool_msg)
+        result = convert_tool_message_to_executed_call(tool_msg)
 
         assert isinstance(result, ExecutedToolCall)
         assert result.function == "test_function"
@@ -428,7 +425,7 @@ class TestConvertToolMessageToExecutedCall:
             id="msg-1",
         )
 
-        result = _convert_tool_message_to_executed_call(tool_msg)
+        result = convert_tool_message_to_executed_call(tool_msg)
 
         assert isinstance(result, ExecutedToolCall)
         assert result.function == "test_function"
@@ -442,41 +439,7 @@ class TestConvertToolMessageToExecutedCall:
             id="msg-1",
         )
 
-        result = _convert_tool_message_to_executed_call(tool_msg)
+        result = convert_tool_message_to_executed_call(tool_msg)
 
         assert isinstance(result, ExecutedToolCall)
         assert result.function == "unknown"
-
-
-class TestLogProcessedData:
-    """Test cases for _log_processed_data function."""
-
-    def test_log_processed_data_with_data(self, caplog):
-        """Test logging of processed data with actual data."""
-        investigation_report = "Test investigation report"
-        executed_calls = SAMPLE_EXECUTED_TOOL_CALLS
-
-        caplog.clear()
-        _log_processed_data(investigation_report, executed_calls)
-
-        # Function should complete without error
-        assert True
-
-    def test_log_processed_data_with_empty_data(self, caplog):
-        """Test logging of processed data with empty data."""
-        caplog.clear()
-        _log_processed_data("", [])
-
-        # Function should complete without error
-        assert True
-
-    def test_log_processed_data_with_none_values(self, caplog):
-        """Test logging handles None values gracefully."""
-        caplog.clear()
-        # Should handle None values without crashing
-        try:
-            _log_processed_data(None, None)
-            assert False, "Should have raised an error"
-        except (TypeError, AttributeError):
-            # Expected to fail with None values
-            assert True

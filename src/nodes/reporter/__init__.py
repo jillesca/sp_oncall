@@ -2,7 +2,7 @@
 Investigation Reporter Node.
 
 This module orchestrates the complete report generation workflow including
-learning insights generation and workflow session management.
+learning insights generation and historical context management.
 """
 
 # Import the main node function from core
@@ -20,7 +20,7 @@ from .context import (
 )
 from .generation import generate_report, _extract_report_content
 from .session import (
-    update_workflow_session,
+    update_historical_context,
     _build_learning_insights_context,
     _generate_learning_insights_with_llm,
 )

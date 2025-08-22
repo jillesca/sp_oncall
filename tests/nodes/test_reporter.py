@@ -21,15 +21,15 @@ from src.nodes.reporter.context import (
 )
 from src.nodes.reporter.generation import _extract_report_content
 from src.nodes.reporter.session import (
-    update_workflow_session,
+    update_historical_context,
     _build_learning_insights_context,
 )
 from src.nodes.markdown_builder import MarkdownBuilder
-from schemas.state import GraphState, WorkflowSession, InvestigationStatus
+from schemas.state import GraphState, HistoricalContext, InvestigationStatus
 from tests.data.reporter_data import (
     SAMPLE_GRAPH_STATE_FOR_REPORTING,
     EMPTY_GRAPH_STATE_FOR_REPORTING,
-    SAMPLE_WORKFLOW_SESSIONS,
+    SAMPLE_HISTORICAL_CONTEXTS,
     SAMPLE_AI_RESPONSE,
     SAMPLE_AI_RESPONSE_LIST,
     SAMPLE_FINAL_REPORT,
@@ -169,13 +169,13 @@ class TestAddSessionContext:
     """Test cases for _add_session_context function."""
 
     def test_add_session_context_with_sessions(self):
-        """Test adding session context with workflow sessions."""
+        """Test adding session context with historical contexts."""
         builder = MarkdownBuilder()
 
         from schemas.state import GraphState
 
         mock_state = GraphState(
-            user_query="test", workflow_session=SAMPLE_WORKFLOW_SESSIONS
+            user_query="test", historical_context=SAMPLE_HISTORICAL_CONTEXTS
         )
         _add_historical_context(builder, mock_state)
         result = builder.build()
@@ -190,12 +190,12 @@ class TestAddSessionContext:
 
         from schemas.state import GraphState
 
-        mock_state = GraphState(user_query="test", workflow_session=[])
+        mock_state = GraphState(user_query="test", historical_context=[])
         _add_historical_context(builder, mock_state)
         result = builder.build()
 
         assert "## Historical Context" in result
-        assert "**No previous session context available.**" in result
+        assert "**No previous historical context available.**" in result
         assert "first investigation session" in result
 
     def test_add_session_context_includes_session_details(self):
@@ -205,7 +205,7 @@ class TestAddSessionContext:
         from schemas.state import GraphState
 
         mock_state = GraphState(
-            user_query="test", workflow_session=SAMPLE_WORKFLOW_SESSIONS
+            user_query="test", historical_context=SAMPLE_HISTORICAL_CONTEXTS
         )
         _add_historical_context(builder, mock_state)
         result = builder.build()
@@ -218,14 +218,14 @@ class TestAddSessionContext:
     def test_add_session_context_limits_recent_sessions(self):
         """Test that session context limits to recent sessions."""
         # Create more than 3 sessions
-        many_sessions = SAMPLE_WORKFLOW_SESSIONS + [
-            WorkflowSession(
+        many_sessions = SAMPLE_HISTORICAL_CONTEXTS + [
+            HistoricalContext(
                 session_id="session-3",
                 previous_report="Report 3",
                 learned_patterns="Pattern 3",
                 device_relationships="device3 -> device4",
             ),
-            WorkflowSession(
+            HistoricalContext(
                 session_id="session-4",
                 previous_report="Report 4",
                 learned_patterns="Pattern 4",
@@ -237,7 +237,7 @@ class TestAddSessionContext:
         from schemas.state import GraphState
 
         mock_state = GraphState(
-            user_query="test", workflow_session=many_sessions
+            user_query="test", historical_context=many_sessions
         )
         _add_historical_context(builder, mock_state)
         result = builder.build()
@@ -282,14 +282,14 @@ class TestExtractReportContent:
         assert "key" in result or "value" in result
 
 
-class TestUpdateWorkflowSession:
-    """Test cases for _update_workflow_session function."""
+class TestUpdateHistoricalContext:
+    """Test cases for update_historical_context function."""
 
     @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
-    def test_update_workflow_session_creates_new_session(
+    def test_update_historical_context_creates_new_entry(
         self, mock_generate_insights
     ):
-        """Test that function creates a new workflow session."""
+        """Test that function creates a new historical context entry."""
         from schemas.learning_insights_schema import LearningInsights
 
         mock_generate_insights.return_value = LearningInsights(
@@ -297,7 +297,7 @@ class TestUpdateWorkflowSession:
             device_relationships="Test relationships",
         )
 
-        result = update_workflow_session(
+        result = update_historical_context(
             SAMPLE_GRAPH_STATE_FOR_REPORTING, SAMPLE_FINAL_REPORT
         )
 
@@ -311,7 +311,7 @@ class TestUpdateWorkflowSession:
         assert new_session.device_relationships == "Test relationships"
 
     @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
-    def test_update_workflow_session_with_empty_state(
+    def test_update_historical_context_with_empty_state(
         self, mock_generate_insights
     ):
         """Test session update with empty state."""
@@ -321,7 +321,7 @@ class TestUpdateWorkflowSession:
             learned_patterns="", device_relationships=""
         )
 
-        result = update_workflow_session(
+        result = update_historical_context(
             EMPTY_GRAPH_STATE_FOR_REPORTING, SAMPLE_FINAL_REPORT
         )
 
@@ -332,7 +332,7 @@ class TestUpdateWorkflowSession:
         assert new_session.previous_report == SAMPLE_FINAL_REPORT
 
     @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
-    def test_update_workflow_session_limits_session_count(
+    def test_update_historical_context_limits_entry_count(
         self, mock_generate_insights
     ):
         """Test that session update limits total session count."""
@@ -344,7 +344,7 @@ class TestUpdateWorkflowSession:
 
         # Create state with many existing sessions
         many_sessions = [
-            WorkflowSession(
+            HistoricalContext(
                 session_id=f"session-{i}",
                 previous_report=f"Report {i}",
                 learned_patterns="Pattern",
@@ -353,12 +353,12 @@ class TestUpdateWorkflowSession:
             for i in range(25)  # More than the 20 limit
         ]
 
-        state_with_many_sessions = replace(
-            SAMPLE_GRAPH_STATE_FOR_REPORTING, workflow_session=many_sessions
+        state_with_many_contexts = replace(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING, historical_context=many_sessions
         )
 
-        result = update_workflow_session(
-            state_with_many_sessions, SAMPLE_FINAL_REPORT
+        result = update_historical_context(
+            state_with_many_contexts, SAMPLE_FINAL_REPORT
         )
 
         # Should be limited to 20 sessions
@@ -459,7 +459,7 @@ class TestBuildResetStateWithReport:
 
     def test_build_reset_state_with_report_creates_fresh_state(self):
         """Test that function creates a fresh GraphState."""
-        updated_sessions = SAMPLE_WORKFLOW_SESSIONS
+        updated_sessions = SAMPLE_HISTORICAL_CONTEXTS
 
         result = _build_reset_state_with_report(
             SAMPLE_GRAPH_STATE_FOR_REPORTING,
@@ -470,14 +470,14 @@ class TestBuildResetStateWithReport:
         assert isinstance(result, GraphState)
         assert result.user_query == SAMPLE_GRAPH_STATE_FOR_REPORTING.user_query
         assert result.final_report == SAMPLE_FINAL_REPORT
-        assert result.workflow_session == updated_sessions
+        assert result.historical_context == updated_sessions
 
     def test_build_reset_state_with_report_resets_other_fields(self):
         """Test that function resets other state fields to defaults."""
         result = _build_reset_state_with_report(
             SAMPLE_GRAPH_STATE_FOR_REPORTING,
             SAMPLE_FINAL_REPORT,
-            SAMPLE_WORKFLOW_SESSIONS,
+            SAMPLE_HISTORICAL_CONTEXTS,
         )
 
         # These should be reset to defaults
@@ -490,13 +490,13 @@ class TestBuildResetStateWithReport:
         result = _build_reset_state_with_report(
             SAMPLE_GRAPH_STATE_FOR_REPORTING,
             SAMPLE_FINAL_REPORT,
-            SAMPLE_WORKFLOW_SESSIONS,
+            SAMPLE_HISTORICAL_CONTEXTS,
         )
 
         # These should be preserved
         assert result.user_query == SAMPLE_GRAPH_STATE_FOR_REPORTING.user_query
         assert result.final_report == SAMPLE_FINAL_REPORT
-        assert result.workflow_session == SAMPLE_WORKFLOW_SESSIONS
+        assert result.historical_context == SAMPLE_HISTORICAL_CONTEXTS
         assert result.max_retries == 3  # Default value
 
     def test_build_reset_state_with_report_with_empty_inputs(self):
@@ -507,4 +507,4 @@ class TestBuildResetStateWithReport:
 
         assert isinstance(result, GraphState)
         assert result.final_report == ""
-        assert result.workflow_session == []
+        assert result.historical_context == []

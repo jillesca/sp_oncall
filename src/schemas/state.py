@@ -19,7 +19,7 @@ class GraphState:
     Attributes:
         user_query: Original user question or task description.
         investigations: Collection of device-specific investigations.
-        workflow_session: Historical context and learned patterns.
+        historical_context: Historical context and learned patterns from previous investigations.
 
         # Global workflow control
         max_retries: Maximum retry attempts per investigation.
@@ -35,7 +35,7 @@ class GraphState:
 
     user_query: str
     investigations: List[Investigation] = field(default_factory=list)
-    workflow_session: List[WorkflowSession] = field(default_factory=list)
+    historical_context: List[HistoricalContext] = field(default_factory=list)
 
     # Global workflow control
     max_retries: int = 3
@@ -99,14 +99,17 @@ class GraphState:
 
 
 @dataclass
-class WorkflowSession:
-    """Represents the context and history from a single workflow session.
+class HistoricalContext:
+    """Represents historical context and learnings from a previous investigation session.
+
+    This class stores valuable insights from past investigations that can be used
+    to provide context to LLMs for improved decision-making in current investigations.
 
     Attributes:
-        session_id: Unique identifier for this workflow session.
-        previous_report: Investigation report from this session.
-        learned_patterns: Patterns discovered from this investigation (markdown formatted).
-        device_relationships: Known relationships between devices (markdown formatted).
+        session_id: Unique identifier for the historical investigation session.
+        previous_report: Investigation report from the historical session.
+        learned_patterns: Patterns discovered from the historical investigation (markdown formatted).
+        device_relationships: Known relationships between devices discovered historically (markdown formatted).
     """
 
     session_id: str
@@ -115,7 +118,7 @@ class WorkflowSession:
     device_relationships: str = ""
 
     def __str__(self) -> str:
-        """Return a JSON representation of the workflow session."""
+        """Return a JSON representation of the historical context."""
         return json.dumps(asdict(self), indent=2, default=str)
 
 

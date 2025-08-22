@@ -34,14 +34,16 @@ def log_incoming_state(state: GraphState) -> None:
                 investigation.objective or "Not specified",
             )
 
-    if state.workflow_session and len(state.workflow_session) > 0:
-        sessions_with_reports = sum(
-            1 for session in state.workflow_session if session.previous_report
+    if state.historical_context and len(state.historical_context) > 0:
+        contexts_with_reports = sum(
+            1
+            for context in state.historical_context
+            if context.previous_report
         )
         logger.debug(
-            "📚 Workflow session context available: %d sessions, %d sessions with reports",
-            len(state.workflow_session),
-            sessions_with_reports,
+            "📚 Historical context available: %d entries, %d entries with reports",
+            len(state.historical_context),
+            contexts_with_reports,
         )
 
     if state.current_retries > 0:

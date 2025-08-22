@@ -7,7 +7,7 @@ investigations and workflow state for LLM evaluation.
 
 from schemas.state import GraphState, Investigation
 from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_session_context_to_builder
+from nodes.common.session_context import add_historical_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -125,9 +125,9 @@ def _add_investigation_details(
 def _add_session_context_section(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
-    """Add workflow session context section using common session context module."""
-    add_session_context_to_builder(
-        builder, state, section_title="Workflow Session Context"
+    """Add historical context section using common historical context module."""
+    add_historical_context_to_builder(
+        builder, state, section_title="Historical Context"
     )
 
 

@@ -42,7 +42,7 @@ SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS = GraphState(
             error_details=None,
         ),
     ],
-    workflow_session=[],
+    historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,
@@ -67,7 +67,7 @@ SAMPLE_ASSESSMENT_DICT = {
 EMPTY_GRAPH_STATE = GraphState(
     user_query="test query",
     investigations=[],
-    workflow_session=[],
+    historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,
@@ -78,7 +78,7 @@ EMPTY_GRAPH_STATE = GraphState(
 RETRY_GRAPH_STATE = GraphState(
     user_query="test query with retry",
     investigations=[],
-    workflow_session=[],
+    historical_context=[],
     max_retries=3,
     current_retries=1,
     assessment=AssessmentOutput(

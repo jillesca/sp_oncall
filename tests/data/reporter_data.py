@@ -8,7 +8,7 @@ from schemas.state import (
     Investigation,
     InvestigationStatus,
     InvestigationPriority,
-    WorkflowSession,
+    HistoricalContext,
 )
 from schemas.assessment_schema import AssessmentOutput
 from langchain_core.messages import AIMessage
@@ -44,8 +44,8 @@ SAMPLE_GRAPH_STATE_FOR_REPORTING = GraphState(
             error_details="Connection timeout",
         ),
     ],
-    workflow_session=[
-        WorkflowSession(
+    historical_context=[
+        HistoricalContext(
             session_id="session-1",
             previous_report="Previous investigation report",
             learned_patterns="Pattern 1: Network issues",
@@ -66,28 +66,29 @@ SAMPLE_GRAPH_STATE_FOR_REPORTING = GraphState(
 EMPTY_GRAPH_STATE_FOR_REPORTING = GraphState(
     user_query="test query",
     investigations=[],
-    workflow_session=[],
+    historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,
     final_report=None,
 )
 
-# Sample workflow sessions for testing
-SAMPLE_WORKFLOW_SESSIONS = [
-    WorkflowSession(
+# Sample historical contexts for testing
+SAMPLE_HISTORICAL_CONTEXTS = [
+    HistoricalContext(
         session_id="session-1",
         previous_report="Report from session 1",
         learned_patterns="Pattern 1: Test pattern",
         device_relationships="device1 -> device2",
     ),
-    WorkflowSession(
+    HistoricalContext(
         session_id="session-2",
         previous_report="Report from session 2",
         learned_patterns="Pattern 2: Another pattern",
         device_relationships="device2 -> device3",
     ),
 ]
+
 
 # Sample AIMessage response for testing
 SAMPLE_AI_RESPONSE = AIMessage(

@@ -13,7 +13,7 @@ from prompts.investigation_planning import INVESTIGATION_PLANNING_PROMPT
 from mcp_client import mcp_node
 from schemas.state import GraphState
 from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_session_context_to_builder
+from nodes.common.session_context import add_historical_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -26,7 +26,7 @@ def execute_investigation_planning(
     Execute investigation planning via MCP agent with session context.
 
     Args:
-        state: Current GraphState containing user query and workflow session context
+        state: Current GraphState containing user query and historical context
         response_format: Optional response format specification
 
     Returns:
@@ -55,7 +55,7 @@ def build_investigation_planning_context(state: GraphState) -> str:
     Build comprehensive context for investigation planning including session history.
 
     Args:
-        state: Current GraphState with user query and workflow sessions
+        state: Current GraphState with user query and historical context
 
     Returns:
         Markdown-formatted context string for the MCP agent
@@ -69,8 +69,8 @@ def build_investigation_planning_context(state: GraphState) -> str:
     builder.add_section("User Query")
     builder.add_text(state.user_query)
 
-    # Add session context for historical awareness
-    add_session_context_to_builder(
+    # Add historical context for historical awareness
+    add_historical_context_to_builder(
         builder, state, section_title="Historical Context for Device Discovery"
     )
 

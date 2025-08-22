@@ -3,7 +3,7 @@
 from schemas import GraphState
 from schemas.state import Investigation, InvestigationStatus
 from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_session_context_to_builder
+from nodes.common.session_context import add_historical_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -156,7 +156,7 @@ def _add_assessment_results(
 def _add_historical_context(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
-    """Add historical context from workflow sessions using common session context module."""
-    add_session_context_to_builder(
+    """Add historical context from previous sessions using common historical context module."""
+    add_historical_context_to_builder(
         builder, state, section_title="Historical Context"
     )

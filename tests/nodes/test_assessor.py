@@ -51,7 +51,7 @@ class TestBuildAssessmentContext:
         assert "# Network Investigation Assessment Context" in result
         assert "## User Query" in result
         assert "## Device Investigations" in result
-        assert "## Workflow Session Context" in result
+        assert "## Historical Context" in result
 
         # Check user query is included
         assert "how are my routers PE doing?" in result

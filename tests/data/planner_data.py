@@ -42,7 +42,7 @@ SAMPLE_GRAPH_STATE_FOR_PLANNING = GraphState(
             error_details=None,
         ),
     ],
-    workflow_session=[],
+    historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,
@@ -74,7 +74,7 @@ EMPTY_PLANNING_RESPONSE = PlanningResponse(plan=[])
 EMPTY_GRAPH_STATE_FOR_PLANNING = GraphState(
     user_query="test query",
     investigations=[],
-    workflow_session=[],
+    historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,

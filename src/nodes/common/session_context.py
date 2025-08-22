@@ -1,51 +1,56 @@
 """
-Common session context handling for WorkflowSession objects.
+Common historical context handling for HistoricalContext objects.
 
-This module provides centralized logic for converting WorkflowSession objects
+This module provides centralized logic for converting HistoricalContext objects
 to markdown format, following DRY principles and ensuring consistent
 formatting across all nodes.
 """
 
 from typing import List
 
-from schemas.state import GraphState, WorkflowSession
+from schemas.state import GraphState, HistoricalContext
 from nodes.markdown_builder import MarkdownBuilder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def add_session_context_to_builder(
+def add_historical_context_to_builder(
     builder: MarkdownBuilder,
     state: GraphState,
-    section_title: str = "Previous Session Context",
+    section_title: str = "Previous Historical Context",
 ) -> None:
     """
-    Add WorkflowSession context to a MarkdownBuilder instance.
+    Add HistoricalContext to a MarkdownBuilder instance.
 
-    This function provides a consistent way to add session context across all nodes.
-    It handles empty session lists gracefully and provides informative context
+    This function provides a consistent way to add historical context across all nodes.
+    It handles empty context lists gracefully and provides informative context
     about previous investigations, learned patterns, and device relationships.
 
     Args:
         builder: MarkdownBuilder instance to add content to
-        state: GraphState containing workflow_session data
+        state: GraphState containing historical_context data
         section_title: Title for the section (allows customization per node)
     """
-    sessions = (
-        state.workflow_session if state.workflow_session is not None else []
+    historical_contexts = (
+        state.historical_context
+        if state.historical_context is not None
+        else []
     )
 
-    if not sessions:
-        logger.debug("No workflow sessions available for context")
+    if not historical_contexts:
+        logger.debug("No historical contexts available")
         builder.add_section(section_title)
         builder.add_text(
-            "**No previous session context available.** "
+            "**No previous historical context available.** "
             "This is the first investigation session."
         )
         return
 
-    logger.debug("Adding session context for %d sessions", len(sessions))
+    logger.debug(
+        "Adding historical context for %d previous sessions",
+        len(historical_contexts),
+    )
 
     builder.add_section(section_title)
     builder.add_text(
@@ -54,21 +59,23 @@ def add_session_context_to_builder(
     )
     builder.add_empty_line()
 
-    builder.add_bold_text("Total Previous Sessions:", str(len(sessions)))
-
-    # Show the most recent session in detail
-    latest_session = sessions[-1]
-    builder.add_subsection(f"Latest Session: {latest_session.session_id}")
-
-    _add_session_report_context(builder, latest_session.previous_report)
-    _add_learned_patterns_context(builder, latest_session.learned_patterns)
-    _add_device_relationships_context(
-        builder, latest_session.device_relationships
+    builder.add_bold_text(
+        "Total Previous Sessions:", str(len(historical_contexts))
     )
 
-    # If there are multiple sessions, show historical summary
-    if len(sessions) > 1:
-        _add_historical_sessions_summary(builder, sessions[:-1])
+    # Show the most recent context in detail
+    latest_context = historical_contexts[-1]
+    builder.add_subsection(f"Latest Session: {latest_context.session_id}")
+
+    _add_session_report_context(builder, latest_context.previous_report)
+    _add_learned_patterns_context(builder, latest_context.learned_patterns)
+    _add_device_relationships_context(
+        builder, latest_context.device_relationships
+    )
+
+    # If there are multiple contexts, show historical summary
+    if len(historical_contexts) > 1:
+        _add_historical_contexts_summary(builder, historical_contexts[:-1])
 
 
 def _add_session_report_context(
@@ -115,38 +122,38 @@ def _add_device_relationships_context(
         )
 
 
-def _add_historical_sessions_summary(
-    builder: MarkdownBuilder, historical_sessions: List[WorkflowSession]
+def _add_historical_contexts_summary(
+    builder: MarkdownBuilder, historical_contexts: List[HistoricalContext]
 ) -> None:
-    """Add summary of historical sessions for broader context."""
+    """Add summary of historical contexts for broader context."""
     builder.add_subsection("Historical Sessions Summary")
     builder.add_text(
-        f"**{len(historical_sessions)} previous sessions** provide additional context:"
+        f"**{len(historical_contexts)} previous sessions** provide additional context:"
     )
 
-    # Show last 3 historical sessions for context
-    recent_historical = historical_sessions[-3:]
+    # Show last 3 historical contexts for context
+    recent_historical = historical_contexts[-3:]
 
-    for session in recent_historical:
+    for context in recent_historical:
         session_summary = []
 
-        if session.previous_report:
+        if context.previous_report:
             session_summary.append(
-                f"report ({len(session.previous_report)} chars)"
+                f"report ({len(context.previous_report)} chars)"
             )
-        if session.learned_patterns:
+        if context.learned_patterns:
             session_summary.append(
-                f"patterns ({len(session.learned_patterns)} chars)"
+                f"patterns ({len(context.learned_patterns)} chars)"
             )
-        if session.device_relationships:
+        if context.device_relationships:
             session_summary.append(
-                f"relationships ({len(session.device_relationships)} chars)"
+                f"relationships ({len(context.device_relationships)} chars)"
             )
 
         summary_text = (
             ", ".join(session_summary) if session_summary else "minimal data"
         )
-        builder.add_bullet(f"Session {session.session_id}: {summary_text}")
+        builder.add_bullet(f"Session {context.session_id}: {summary_text}")
 
 
 def _get_text_preview(text: str, max_length: int) -> str:
@@ -156,36 +163,37 @@ def _get_text_preview(text: str, max_length: int) -> str:
     return text[:max_length] + "..."
 
 
-def build_session_context_string(
-    state: GraphState, section_title: str = "Previous Session Context"
+def build_historical_context_string(
+    state: GraphState, section_title: str = "Previous Historical Context"
 ) -> str:
     """
-    Build a standalone session context string in markdown format.
+    Build a standalone historical context string in markdown format.
 
-    This is useful when you only need session context without other content.
+    This is useful when you only need historical context without other content.
 
     Args:
-        state: GraphState containing workflow_session data
+        state: GraphState containing historical_context data
         section_title: Title for the section
 
     Returns:
-        Markdown-formatted string containing session context
+        Markdown-formatted string containing historical context
     """
     builder = MarkdownBuilder()
-    add_session_context_to_builder(builder, state, section_title)
+    add_historical_context_to_builder(builder, state, section_title)
     return builder.build()
 
 
-def has_session_context(state: GraphState) -> bool:
+def has_historical_context(state: GraphState) -> bool:
     """
-    Check if the state has any workflow session context available.
+    Check if the state has any historical context available.
 
     Args:
         state: GraphState to check
 
     Returns:
-        True if session context is available, False otherwise
+        True if historical context is available, False otherwise
     """
     return (
-        state.workflow_session is not None and len(state.workflow_session) > 0
+        state.historical_context is not None
+        and len(state.historical_context) > 0
     )
