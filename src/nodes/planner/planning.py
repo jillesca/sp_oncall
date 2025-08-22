@@ -42,17 +42,17 @@ def execute_plan_selection(
     model: BaseChatModel,
     user_query: str,
     available_plans: str,
-    investigations_summary: str,
+    planning_context: str,
     system_prompt: str,
 ) -> BaseMessage:
-    """Execute plan selection using the LLM."""
+    """Execute plan selection using the LLM with comprehensive context."""
     logger.debug("🚀 Invoking LLM for plan selection")
 
     messages = [
         SystemMessage(content=system_prompt),
         HumanMessage(content=f"request: {user_query}"),
         HumanMessage(content=f"#available_plans:\n{available_plans}"),
-        HumanMessage(content=f"#investigations:\n{investigations_summary}"),
+        HumanMessage(content=f"#context:\n{planning_context}"),
     ]
     response = model.invoke(input=messages)
 

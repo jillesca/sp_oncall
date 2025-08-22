@@ -7,6 +7,7 @@ for MCP agent execution.
 
 from schemas import GraphState, Investigation
 from nodes.markdown_builder import MarkdownBuilder
+from nodes.common.session_context import add_session_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -58,79 +59,10 @@ def _add_investigation_details(
 def _add_workflow_session_context(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
-    """Add workflow session context if available."""
-    if not state.workflow_session or len(state.workflow_session) == 0:
-        return
-
-    builder.add_separator()
-    builder.add_section("Previous Investigation Context")
-    builder.add_bold_text(
-        "Total Investigation Sessions:", str(len(state.workflow_session))
+    """Add workflow session context using the common session context module."""
+    add_session_context_to_builder(
+        builder, state, section_title="Previous Investigation Context"
     )
-
-    # Use the most recent session for context
-    latest_session = state.workflow_session[-1]
-
-    _add_session_report(builder, latest_session.previous_report)
-    _add_session_patterns(builder, latest_session.learned_patterns)
-    _add_session_relationships(builder, latest_session.device_relationships)
-    _add_historical_context(builder, state.workflow_session)
-
-
-def _add_session_report(
-    builder: MarkdownBuilder, previous_report: str
-) -> None:
-    """Add previous session report context."""
-    if previous_report:
-        builder.add_subsection("Recent Investigation Report")
-        # Truncate for context
-        report_preview = (
-            previous_report[:200] + "..."
-            if len(previous_report) > 200
-            else previous_report
-        )
-        builder.add_text(report_preview)
-
-
-def _add_session_patterns(
-    builder: MarkdownBuilder, learned_patterns: str
-) -> None:
-    """Add learned patterns from recent session."""
-    if learned_patterns:
-        builder.add_subsection("Learned Patterns from Recent Session")
-        # Show preview of patterns (first 300 characters)
-        patterns_preview = (
-            learned_patterns[:300] + "..."
-            if len(learned_patterns) > 300
-            else learned_patterns
-        )
-        builder.add_text(patterns_preview)
-
-
-def _add_session_relationships(
-    builder: MarkdownBuilder, device_relationships: str
-) -> None:
-    """Add device relationships from recent session."""
-    if device_relationships:
-        builder.add_subsection("Device Relationships from Recent Session")
-        # Show preview of relationships (first 300 characters)
-        relationships_preview = (
-            device_relationships[:300] + "..."
-            if len(device_relationships) > 300
-            else device_relationships
-        )
-        builder.add_text(relationships_preview)
-
-
-def _add_historical_context(
-    builder: MarkdownBuilder, workflow_sessions
-) -> None:
-    """Add historical context if multiple sessions exist."""
-    if len(workflow_sessions) > 1:
-        builder.add_subsection("Historical Context")
-        builder.add_text(
-            f"{len(workflow_sessions)-1} previous sessions available for correlation"
-        )
 
 
 def _add_retry_context(builder: MarkdownBuilder, state: GraphState) -> None:

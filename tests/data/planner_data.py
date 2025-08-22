@@ -9,7 +9,7 @@ from schemas.state import (
     InvestigationStatus,
     InvestigationPriority,
 )
-from src.nodes.planner import DevicePlan, PlanningResponse
+from src.nodes.planner.planning import DevicePlan, PlanningResponse
 
 # Sample GraphState with investigations for planning
 SAMPLE_GRAPH_STATE_FOR_PLANNING = GraphState(

@@ -5,8 +5,6 @@ This module contains the main entry point for the planning workflow that loads p
 selects appropriate plans, and updates investigations with planning results.
 """
 
-from dataclasses import replace
-
 from schemas.state import GraphState
 from src.logging import get_logger, log_node_execution
 from nodes.common import load_model
@@ -17,7 +15,7 @@ from .planning import (
     execute_plan_selection,
     process_planning_response,
 )
-from .context import extract_investigations_summary
+from .context import build_planning_context
 from .state import build_successful_planning_state, build_failed_planning_state
 
 logger = get_logger(__name__)
@@ -47,14 +45,12 @@ def planner_node(state: GraphState) -> GraphState:
     try:
         available_plans = load_available_plans()
         model = load_model()
-        investigations_summary = extract_investigations_summary(
-            state.investigations
-        )
+        planning_context = build_planning_context(state)
         response = execute_plan_selection(
             model,
             user_query,
             available_plans,
-            investigations_summary,
+            planning_context,
             PLANNER_PROMPT,
         )
         planning_response = process_planning_response(

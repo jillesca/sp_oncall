@@ -11,19 +11,22 @@ from typing import Any
 from langchain_core.messages import HumanMessage, AIMessage
 from prompts.investigation_planning import INVESTIGATION_PLANNING_PROMPT
 from mcp_client import mcp_node
+from schemas.state import GraphState
+from nodes.markdown_builder import MarkdownBuilder
+from nodes.common.session_context import add_session_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 def execute_investigation_planning(
-    user_query: str, response_format: Any = None
+    state: GraphState, response_format: Any = None
 ) -> dict:
     """
-    Execute investigation planning via MCP agent.
+    Execute investigation planning via MCP agent with session context.
 
     Args:
-        user_query: The user's query that needs investigation planning
+        state: Current GraphState containing user query and workflow session context
         response_format: Optional response format specification
 
     Returns:
@@ -31,10 +34,12 @@ def execute_investigation_planning(
     """
     logger.debug(
         "🔗 Executing investigation planning via MCP agent. User query: %s",
-        user_query,
+        state.user_query,
     )
 
-    message = HumanMessage(content=f"User query: {user_query}")
+    # Build comprehensive context including session history
+    context = build_investigation_planning_context(state)
+    message = HumanMessage(content=context)
 
     return asyncio.run(
         mcp_node(
@@ -43,6 +48,38 @@ def execute_investigation_planning(
             response_format=response_format,
         )
     )
+
+
+def build_investigation_planning_context(state: GraphState) -> str:
+    """
+    Build comprehensive context for investigation planning including session history.
+
+    Args:
+        state: Current GraphState with user query and workflow sessions
+
+    Returns:
+        Markdown-formatted context string for the MCP agent
+    """
+    logger.debug("📋 Building investigation planning context")
+
+    builder = MarkdownBuilder()
+    builder.add_header("Investigation Planning Context")
+
+    # Add user query
+    builder.add_section("User Query")
+    builder.add_text(state.user_query)
+
+    # Add session context for historical awareness
+    add_session_context_to_builder(
+        builder, state, section_title="Historical Context for Device Discovery"
+    )
+
+    context_string = builder.build()
+    logger.debug(
+        "📤 Investigation planning context prepared (%d characters)",
+        len(context_string),
+    )
+    return context_string
 
 
 def extract_mcp_response_content(mcp_response: Any) -> Any:

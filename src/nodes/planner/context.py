@@ -1,8 +1,9 @@
 """Context building for planner investigations."""
 
 from typing import List
-from schemas.state import Investigation
+from schemas.state import Investigation, GraphState
 from nodes.markdown_builder import MarkdownBuilder
+from nodes.common.session_context import add_session_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -42,3 +43,39 @@ def extract_investigations_summary(investigations: List[Investigation]) -> str:
         len(investigations),
     )
     return builder.build()
+
+
+def build_planning_context(state: GraphState) -> str:
+    """
+    Build comprehensive planning context including investigations and session context.
+
+    Args:
+        state: Current GraphState with investigations and workflow sessions
+
+    Returns:
+        Markdown-formatted string containing complete planning context
+    """
+    logger.debug(
+        "📋 Building planning context for %d investigations",
+        len(state.investigations),
+    )
+
+    builder = MarkdownBuilder()
+    builder.add_header("Planning Context")
+
+    # Add investigations summary
+    investigations_content = extract_investigations_summary(
+        state.investigations
+    )
+    builder.add_text(investigations_content)
+
+    # Add session context for historical awareness
+    add_session_context_to_builder(
+        builder, state, section_title="Historical Context for Planning"
+    )
+
+    context_string = builder.build()
+    logger.debug(
+        "📤 Planning context prepared (%d characters)", len(context_string)
+    )
+    return context_string

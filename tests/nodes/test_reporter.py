@@ -9,15 +9,20 @@ import pytest
 from unittest.mock import Mock, patch
 from dataclasses import replace
 
-from src.nodes.reporter import (
-    _build_report_context,
-    _add_investigation_details,
-    _add_session_context,
-    _extract_report_content,
-    _update_workflow_session,
-    _build_learning_insights_context,
+from src.nodes.reporter.core import (
+    investigation_report_node,
     _log_successful_report_generation,
     _build_reset_state_with_report,
+)
+from src.nodes.reporter.context import (
+    build_report_context,
+    _add_single_investigation_details,
+    _add_historical_context,
+)
+from src.nodes.reporter.generation import _extract_report_content
+from src.nodes.reporter.session import (
+    update_workflow_session,
+    _build_learning_insights_context,
 )
 from src.nodes.markdown_builder import MarkdownBuilder
 from schemas.state import GraphState, WorkflowSession, InvestigationStatus
@@ -36,7 +41,7 @@ class TestBuildReportContext:
 
     def test_build_report_context_structure(self):
         """Test that report context builds proper markdown structure."""
-        result = _build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
 
         assert isinstance(result, str)
         assert "# Network Investigation Report Context" in result
@@ -48,13 +53,13 @@ class TestBuildReportContext:
 
     def test_build_report_context_includes_user_query(self):
         """Test that context includes the user query."""
-        result = _build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
 
         assert SAMPLE_GRAPH_STATE_FOR_REPORTING.user_query in result
 
     def test_build_report_context_includes_investigation_overview(self):
         """Test that context includes investigation overview statistics."""
-        result = _build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
 
         assert "Total devices investigated: 2" in result
         assert "Successfully completed: 1" in result
@@ -63,14 +68,14 @@ class TestBuildReportContext:
 
     def test_build_report_context_with_empty_investigations(self):
         """Test context building with no investigations."""
-        result = _build_report_context(EMPTY_GRAPH_STATE_FOR_REPORTING)
+        result = build_report_context(EMPTY_GRAPH_STATE_FOR_REPORTING)
 
         assert "No device investigations found." in result
         assert "Total devices investigated: 0" in result
 
     def test_build_report_context_includes_assessment(self):
         """Test that context includes assessment information."""
-        result = _build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
 
         assert "## Assessment Results" in result
         assert "Objective achieved: True" in result
@@ -81,13 +86,13 @@ class TestBuildReportContext:
         state_no_assessment = replace(
             SAMPLE_GRAPH_STATE_FOR_REPORTING, assessment=None
         )
-        result = _build_report_context(state_no_assessment)
+        result = build_report_context(state_no_assessment)
 
         assert "No assessment results available." in result
 
     def test_build_report_context_returns_string(self):
         """Test that function returns a non-empty string."""
-        result = _build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
 
         assert isinstance(result, str)
         assert len(result) > 0
@@ -101,7 +106,7 @@ class TestAddInvestigationDetails:
         builder = MarkdownBuilder()
         investigation = SAMPLE_GRAPH_STATE_FOR_REPORTING.investigations[0]
 
-        _add_investigation_details(builder, investigation, 1)
+        _add_single_investigation_details(builder, investigation, 1)
         result = builder.build()
 
         assert "### Investigation 1: xrd-1" in result
@@ -117,7 +122,7 @@ class TestAddInvestigationDetails:
             0
         ]  # Completed
 
-        _add_investigation_details(builder, investigation, 1)
+        _add_single_investigation_details(builder, investigation, 1)
         result = builder.build()
 
         assert "✅" in result  # Completed status icon
@@ -129,7 +134,7 @@ class TestAddInvestigationDetails:
             1
         ]  # Failed
 
-        _add_investigation_details(builder, investigation, 2)
+        _add_single_investigation_details(builder, investigation, 2)
         result = builder.build()
 
         assert "❌" in result  # Failed status icon
@@ -140,7 +145,7 @@ class TestAddInvestigationDetails:
         builder = MarkdownBuilder()
         investigation = SAMPLE_GRAPH_STATE_FOR_REPORTING.investigations[0]
 
-        _add_investigation_details(builder, investigation, 1)
+        _add_single_investigation_details(builder, investigation, 1)
         result = builder.build()
 
         assert "**Investigation Report:**" in result
@@ -154,7 +159,7 @@ class TestAddInvestigationDetails:
             dependencies=["device1", "device2"],
         )
 
-        _add_investigation_details(builder, investigation, 1)
+        _add_single_investigation_details(builder, investigation, 1)
         result = builder.build()
 
         assert "Dependencies: device1, device2" in result
@@ -167,35 +172,48 @@ class TestAddSessionContext:
         """Test adding session context with workflow sessions."""
         builder = MarkdownBuilder()
 
-        _add_session_context(builder, SAMPLE_WORKFLOW_SESSIONS)
+        from schemas.state import GraphState
+
+        mock_state = GraphState(
+            user_query="test", workflow_session=SAMPLE_WORKFLOW_SESSIONS
+        )
+        _add_historical_context(builder, mock_state)
         result = builder.build()
 
         assert "## Historical Context" in result
-        assert "Total investigation sessions: 2" in result
-        assert "**Recent Sessions (2):**" in result
+        assert "**Total Previous Sessions:** 2" in result
+        assert "**1 previous sessions**" in result
 
     def test_add_session_context_with_empty_sessions(self):
         """Test adding session context with no sessions."""
         builder = MarkdownBuilder()
 
-        _add_session_context(builder, [])
+        from schemas.state import GraphState
+
+        mock_state = GraphState(user_query="test", workflow_session=[])
+        _add_historical_context(builder, mock_state)
         result = builder.build()
 
         assert "## Historical Context" in result
-        assert "**No historical context available.**" in result
+        assert "**No previous session context available.**" in result
         assert "first investigation session" in result
 
     def test_add_session_context_includes_session_details(self):
         """Test that session context includes session details."""
         builder = MarkdownBuilder()
 
-        _add_session_context(builder, SAMPLE_WORKFLOW_SESSIONS)
+        from schemas.state import GraphState
+
+        mock_state = GraphState(
+            user_query="test", workflow_session=SAMPLE_WORKFLOW_SESSIONS
+        )
+        _add_historical_context(builder, mock_state)
         result = builder.build()
 
         assert "Session session-1:" in result
-        assert "Session session-2:" in result
-        assert "Report preview:" in result
-        assert "Learned patterns:" in result
+        assert "Latest Session: session-2" in result
+        assert "Previous Investigation Report" in result
+        assert "Learned Patterns from Previous Sessions" in result
 
     def test_add_session_context_limits_recent_sessions(self):
         """Test that session context limits to recent sessions."""
@@ -216,11 +234,16 @@ class TestAddSessionContext:
         ]
 
         builder = MarkdownBuilder()
-        _add_session_context(builder, many_sessions)
+        from schemas.state import GraphState
+
+        mock_state = GraphState(
+            user_query="test", workflow_session=many_sessions
+        )
+        _add_historical_context(builder, mock_state)
         result = builder.build()
 
-        # Should show only last 3 sessions
-        assert "**Recent Sessions (3):**" in result
+        # Should show only last 3 sessions in historical summary
+        assert "**3 previous sessions**" in result
 
 
 class TestExtractReportContent:
@@ -274,7 +297,7 @@ class TestUpdateWorkflowSession:
             device_relationships="Test relationships",
         )
 
-        result = _update_workflow_session(
+        result = update_workflow_session(
             SAMPLE_GRAPH_STATE_FOR_REPORTING, SAMPLE_FINAL_REPORT
         )
 
@@ -298,7 +321,7 @@ class TestUpdateWorkflowSession:
             learned_patterns="", device_relationships=""
         )
 
-        result = _update_workflow_session(
+        result = update_workflow_session(
             EMPTY_GRAPH_STATE_FOR_REPORTING, SAMPLE_FINAL_REPORT
         )
 
@@ -334,7 +357,7 @@ class TestUpdateWorkflowSession:
             SAMPLE_GRAPH_STATE_FOR_REPORTING, workflow_session=many_sessions
         )
 
-        result = _update_workflow_session(
+        result = update_workflow_session(
             state_with_many_sessions, SAMPLE_FINAL_REPORT
         )
 

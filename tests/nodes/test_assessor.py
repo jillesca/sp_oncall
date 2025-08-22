@@ -9,24 +9,23 @@ import pytest
 from unittest.mock import Mock
 from dataclasses import replace
 
-from src.nodes.assessor import (
-    _build_assessment_context,
-    _add_investigation_to_builder,
-    _add_session_context_to_builder,
-    _ensure_proper_assessment_format,
-    _apply_assessment_to_workflow,
+from src.nodes.assessor.core import objective_assessor_node
+from src.nodes.assessor.context import (
+    build_assessment_context,
+    _add_investigation_details as _add_investigation_to_builder,
+    _add_execution_results_to_builder,
+)
+from src.nodes.assessor.assessment import ensure_proper_assessment_format
+from src.nodes.assessor.state import (
+    apply_assessment_to_workflow,
     _build_successful_assessment_state,
     _build_retry_or_failed_assessment_state,
     _build_retry_state,
     _build_max_retries_reached_state,
     _get_encouraging_retry_guidance,
-    _handle_assessment_error,
+    handle_assessment_error,
     _build_error_retry_state,
     _build_error_final_state,
-    _add_execution_results_to_builder,
-    _add_previous_report_to_builder,
-    _add_learned_patterns_to_builder,
-    _add_device_relationships_to_builder,
 )
 from src.nodes.markdown_builder import MarkdownBuilder
 from schemas.assessment_schema import AssessmentOutput
@@ -44,7 +43,7 @@ class TestBuildAssessmentContext:
 
     def test_build_assessment_context_structure(self):
         """Test that assessment context builds proper markdown structure."""
-        result = _build_assessment_context(
+        result = build_assessment_context(
             SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS
         )
 
@@ -59,7 +58,7 @@ class TestBuildAssessmentContext:
 
     def test_build_assessment_context_with_investigations(self):
         """Test context building with investigations."""
-        result = _build_assessment_context(
+        result = build_assessment_context(
             SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS
         )
 
@@ -72,14 +71,14 @@ class TestBuildAssessmentContext:
 
     def test_build_assessment_context_with_empty_investigations(self):
         """Test context building with no investigations."""
-        result = _build_assessment_context(EMPTY_GRAPH_STATE)
+        result = build_assessment_context(EMPTY_GRAPH_STATE)
 
         assert "No device investigations found." in result
         assert "## Device Investigations" in result
 
     def test_build_assessment_context_with_retry_info(self):
         """Test context building includes retry information when applicable."""
-        result = _build_assessment_context(RETRY_GRAPH_STATE)
+        result = build_assessment_context(RETRY_GRAPH_STATE)
 
         assert "## Retry Information" in result
         assert "Current attempt: 1 of 3" in result
@@ -87,7 +86,7 @@ class TestBuildAssessmentContext:
 
     def test_build_assessment_context_returns_string(self):
         """Test that function returns a string."""
-        result = _build_assessment_context(
+        result = build_assessment_context(
             SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS
         )
 
@@ -168,7 +167,7 @@ class TestEnsureProperAssessmentFormat:
 
     def test_ensure_format_with_assessment_output(self):
         """Test function handles AssessmentOutput objects correctly."""
-        result = _ensure_proper_assessment_format(SAMPLE_ASSESSMENT_OUTPUT)
+        result = ensure_proper_assessment_format(SAMPLE_ASSESSMENT_OUTPUT)
 
         assert isinstance(result, AssessmentOutput)
         assert result.is_objective_achieved == True
@@ -179,7 +178,7 @@ class TestEnsureProperAssessmentFormat:
 
     def test_ensure_format_with_dict_input(self):
         """Test function converts dict to AssessmentOutput."""
-        result = _ensure_proper_assessment_format(SAMPLE_ASSESSMENT_DICT)
+        result = ensure_proper_assessment_format(SAMPLE_ASSESSMENT_DICT)
 
         assert isinstance(result, AssessmentOutput)
         assert result.is_objective_achieved == True
@@ -191,7 +190,7 @@ class TestEnsureProperAssessmentFormat:
     def test_ensure_format_with_incomplete_dict(self):
         """Test function handles incomplete dict gracefully."""
         incomplete_dict = {"is_objective_achieved": True}
-        result = _ensure_proper_assessment_format(incomplete_dict)
+        result = ensure_proper_assessment_format(incomplete_dict)
 
         assert isinstance(result, AssessmentOutput)
         assert result.is_objective_achieved == True
@@ -199,7 +198,7 @@ class TestEnsureProperAssessmentFormat:
 
     def test_ensure_format_with_unexpected_type(self):
         """Test function handles unexpected input types."""
-        result = _ensure_proper_assessment_format("unexpected string")
+        result = ensure_proper_assessment_format("unexpected string")
 
         assert isinstance(result, AssessmentOutput)
         assert result.is_objective_achieved == False
@@ -212,7 +211,7 @@ class TestEnsureProperAssessmentFormat:
             "notes_for_final_report": "Custom notes",
             "feedback_for_retry": "Custom feedback",
         }
-        result = _ensure_proper_assessment_format(test_dict)
+        result = ensure_proper_assessment_format(test_dict)
 
         assert result.is_objective_achieved == False
         assert result.notes_for_final_report == "Custom notes"
@@ -227,7 +226,7 @@ class TestApplyAssessmentToWorkflow:
         assessment = replace(
             SAMPLE_ASSESSMENT_OUTPUT, is_objective_achieved=True
         )
-        result = _apply_assessment_to_workflow(EMPTY_GRAPH_STATE, assessment)
+        result = apply_assessment_to_workflow(EMPTY_GRAPH_STATE, assessment)
 
         assert result.assessment == assessment
         assert result.assessment.is_objective_achieved == True
@@ -237,7 +236,7 @@ class TestApplyAssessmentToWorkflow:
         assessment = replace(
             SAMPLE_ASSESSMENT_OUTPUT, is_objective_achieved=False
         )
-        result = _apply_assessment_to_workflow(EMPTY_GRAPH_STATE, assessment)
+        result = apply_assessment_to_workflow(EMPTY_GRAPH_STATE, assessment)
 
         # The function may modify the assessment (e.g., add retry feedback)
         assert result.assessment.is_objective_achieved == False
@@ -246,7 +245,7 @@ class TestApplyAssessmentToWorkflow:
     def test_apply_assessment_preserves_state(self):
         """Test that applying assessment preserves other state fields."""
         assessment = SAMPLE_ASSESSMENT_OUTPUT
-        result = _apply_assessment_to_workflow(
+        result = apply_assessment_to_workflow(
             SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS, assessment
         )
 
@@ -330,7 +329,7 @@ class TestErrorHandling:
     def test_handle_assessment_error_with_retries_available(self):
         """Test error handling when retries are available."""
         error = ValueError("Test error")
-        result = _handle_assessment_error(EMPTY_GRAPH_STATE, error)
+        result = handle_assessment_error(EMPTY_GRAPH_STATE, error)
 
         assert result.current_retries == 1
         assert result.assessment.is_objective_achieved == False
@@ -342,7 +341,7 @@ class TestErrorHandling:
         state_at_max = replace(
             EMPTY_GRAPH_STATE, current_retries=3, max_retries=3
         )
-        result = _handle_assessment_error(state_at_max, error)
+        result = handle_assessment_error(state_at_max, error)
 
         assert (
             result.assessment.is_objective_achieved == True
@@ -410,70 +409,4 @@ class TestMarkdownBuilderHelpers:
 
         assert (
             "**Execution Results:** No execution results available" in result
-        )
-
-    def test_add_previous_report_to_builder_with_report(self):
-        """Test adding previous report to builder."""
-        builder = MarkdownBuilder()
-
-        _add_previous_report_to_builder(
-            builder, "Previous investigation report"
-        )
-        result = builder.build()
-
-        assert "**Previous Report:**" in result
-        assert "Previous investigation report" in result
-
-    def test_add_previous_report_to_builder_empty(self):
-        """Test adding previous report with empty report."""
-        builder = MarkdownBuilder()
-
-        _add_previous_report_to_builder(builder, "")
-        result = builder.build()
-
-        assert "**Previous Report:** No previous report available" in result
-
-    def test_add_learned_patterns_to_builder_with_patterns(self):
-        """Test adding learned patterns to builder."""
-        builder = MarkdownBuilder()
-        patterns = "Pattern 1: Test pattern\nPattern 2: Another pattern"
-
-        _add_learned_patterns_to_builder(builder, patterns)
-        result = builder.build()
-
-        assert "**Learned Patterns:**" in result
-        assert "Pattern 1: Test pattern" in result
-
-    def test_add_learned_patterns_to_builder_empty(self):
-        """Test adding learned patterns with empty patterns."""
-        builder = MarkdownBuilder()
-
-        _add_learned_patterns_to_builder(builder, "")
-        result = builder.build()
-
-        assert "**Learned Patterns:** No learned patterns available" in result
-
-    def test_add_device_relationships_to_builder_with_relationships(self):
-        """Test adding device relationships to builder."""
-        builder = MarkdownBuilder()
-        relationships = "## Device Relationships\n\n- device1: connects to device2\n- device2: connects to device3"
-
-        _add_device_relationships_to_builder(builder, relationships)
-        result = builder.build()
-
-        assert "**Device Relationships:**" in result
-        assert "characters available" in result
-        assert "device1: connects to device2" in result
-        assert "device2: connects to device3" in result
-
-    def test_add_device_relationships_to_builder_empty(self):
-        """Test adding device relationships with empty string."""
-        builder = MarkdownBuilder()
-
-        _add_device_relationships_to_builder(builder, "")
-        result = builder.build()
-
-        assert (
-            "**Device Relationships:** No device relationships available"
-            in result
         )

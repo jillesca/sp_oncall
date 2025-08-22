@@ -9,13 +9,21 @@ import pytest
 from unittest.mock import Mock, patch
 from dataclasses import replace
 
-from src.nodes.planner import (
-    _load_available_plans,
-    _extract_investigations_summary,
-    _build_successful_planning_state,
-    _build_failed_planning_state,
+from src.nodes.planner.core import planner_node
+from src.nodes.planner.planning import (
+    load_available_plans,
+    execute_plan_selection,
+    process_planning_response,
     DevicePlan,
     PlanningResponse,
+)
+from src.nodes.planner.context import (
+    extract_investigations_summary,
+    build_planning_context,
+)
+from src.nodes.planner.state import (
+    build_successful_planning_state,
+    build_failed_planning_state,
 )
 from schemas.state import GraphState, Investigation
 from tests.data.planner_data import (
@@ -42,7 +50,7 @@ class TestLoadAvailablePlans:
             "Plan 1: Description\nPlan 2: Description"
         )
 
-        result = _load_available_plans()
+        result = load_available_plans()
 
         assert isinstance(result, str)
         assert len(result) > 0
@@ -58,7 +66,7 @@ class TestLoadAvailablePlans:
         mock_load_plans.return_value = []
         mock_plans_to_string.return_value = ""
 
-        result = _load_available_plans()
+        result = load_available_plans()
 
         assert isinstance(result, str)
         mock_load_plans.assert_called_once()
@@ -72,7 +80,7 @@ class TestExtractInvestigationsSummary:
         """Test extraction with investigations present."""
         investigations = SAMPLE_GRAPH_STATE_FOR_PLANNING.investigations
 
-        result = _extract_investigations_summary(investigations)
+        result = extract_investigations_summary(investigations)
 
         assert isinstance(result, str)
         assert "## Devices" in result
@@ -83,7 +91,7 @@ class TestExtractInvestigationsSummary:
 
     def test_extract_investigations_summary_with_empty_investigations(self):
         """Test extraction with no investigations."""
-        result = _extract_investigations_summary([])
+        result = extract_investigations_summary([])
 
         assert isinstance(result, str)
         assert "## Investigations" in result
@@ -93,7 +101,7 @@ class TestExtractInvestigationsSummary:
         """Test that summary has proper markdown structure."""
         investigations = SAMPLE_GRAPH_STATE_FOR_PLANNING.investigations
 
-        result = _extract_investigations_summary(investigations)
+        result = extract_investigations_summary(investigations)
 
         # Should have proper markdown headers
         lines = result.split("\n")
@@ -105,7 +113,7 @@ class TestExtractInvestigationsSummary:
         """Test that device profiles are included in the summary."""
         investigations = SAMPLE_GRAPH_STATE_FOR_PLANNING.investigations
 
-        result = _extract_investigations_summary(investigations)
+        result = extract_investigations_summary(investigations)
 
         # Check that device profiles are included
         for investigation in investigations:
@@ -115,7 +123,7 @@ class TestExtractInvestigationsSummary:
         """Test that device roles are included in the summary."""
         investigations = SAMPLE_GRAPH_STATE_FOR_PLANNING.investigations
 
-        result = _extract_investigations_summary(investigations)
+        result = extract_investigations_summary(investigations)
 
         # Check that roles are included
         for investigation in investigations:
@@ -127,7 +135,7 @@ class TestBuildSuccessfulPlanningState:
 
     def test_build_successful_planning_state_updates_investigations(self):
         """Test that successful planning updates investigations with plan data."""
-        result = _build_successful_planning_state(
+        result = build_successful_planning_state(
             SAMPLE_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_RESPONSE
         )
 
@@ -159,7 +167,7 @@ class TestBuildSuccessfulPlanningState:
 
     def test_build_successful_planning_state_preserves_other_fields(self):
         """Test that successful planning preserves other state fields."""
-        result = _build_successful_planning_state(
+        result = build_successful_planning_state(
             SAMPLE_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_RESPONSE
         )
 
@@ -186,7 +194,7 @@ class TestBuildSuccessfulPlanningState:
             ]
         )
 
-        result = _build_successful_planning_state(
+        result = build_successful_planning_state(
             SAMPLE_GRAPH_STATE_FOR_PLANNING, partial_planning_response
         )
 
@@ -204,7 +212,7 @@ class TestBuildSuccessfulPlanningState:
 
     def test_build_successful_planning_state_with_empty_plans(self):
         """Test planning with empty planning response."""
-        result = _build_successful_planning_state(
+        result = build_successful_planning_state(
             SAMPLE_GRAPH_STATE_FOR_PLANNING, EMPTY_PLANNING_RESPONSE
         )
 
@@ -220,7 +228,7 @@ class TestBuildSuccessfulPlanningState:
         self,
     ):
         """Test that planning preserves existing investigation fields."""
-        result = _build_successful_planning_state(
+        result = build_successful_planning_state(
             SAMPLE_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_RESPONSE
         )
 
@@ -240,7 +248,7 @@ class TestBuildFailedPlanningState:
 
     def test_build_failed_planning_state_sets_error_info(self):
         """Test that failed planning sets error information on investigations."""
-        result = _build_failed_planning_state(
+        result = build_failed_planning_state(
             SAMPLE_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_ERROR
         )
 
@@ -259,7 +267,7 @@ class TestBuildFailedPlanningState:
 
     def test_build_failed_planning_state_preserves_other_fields(self):
         """Test that failed planning preserves other state fields."""
-        result = _build_failed_planning_state(
+        result = build_failed_planning_state(
             SAMPLE_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_ERROR
         )
 
@@ -274,7 +282,7 @@ class TestBuildFailedPlanningState:
 
     def test_build_failed_planning_state_with_empty_investigations(self):
         """Test failed planning with empty investigations list."""
-        result = _build_failed_planning_state(
+        result = build_failed_planning_state(
             EMPTY_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_ERROR
         )
 
@@ -284,7 +292,7 @@ class TestBuildFailedPlanningState:
         self,
     ):
         """Test that failed planning preserves investigation structure."""
-        result = _build_failed_planning_state(
+        result = build_failed_planning_state(
             SAMPLE_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_ERROR
         )
 

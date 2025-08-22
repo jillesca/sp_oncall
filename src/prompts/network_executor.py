@@ -29,8 +29,9 @@ You will receive the following information to guide your investigation:
 - **working_plan_steps**: Recommended execution steps (you may improve upon this)
 - **Previous investigation context** (if available):
   - Previous investigation reports from workflow session
-  - Learned patterns from historical investigations
+  - Learned patterns from historical investigations  
   - Device relationships and dependencies
+  - **Note:** This information comes from previous investigation sessions and provides historical context to inform your current analysis
 - **Retry context** (if applicable):
   - Assessor feedback from previous attempts
   - Specific areas that need improvement

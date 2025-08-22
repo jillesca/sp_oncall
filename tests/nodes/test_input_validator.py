@@ -9,14 +9,22 @@ import pytest
 import json
 from unittest.mock import Mock
 
-from src.nodes.input_validator import (
-    _extract_mcp_response_content,
-    _normalize_device_profile,
+from src.nodes.input_validator.core import (
+    input_validator_node,
     _log_successful_investigation_planning,
-    _create_investigations_from_response,
     _build_failed_state,
+)
+from src.nodes.input_validator.extraction import (
+    execute_investigation_planning,
+    extract_mcp_response_content,
+    build_investigation_planning_context,
+)
+from src.nodes.input_validator.processing import (
+    process_investigation_planning_response,
+    create_investigations_from_response,
     DeviceToInvestigate,
     InvestigationPlanningResponse,
+    _normalize_device_profile,
 )
 from schemas.state import GraphState, Investigation
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
@@ -39,7 +47,7 @@ class TestExtractMcpResponseContent:
 
     def test_extract_mcp_response_content_success(self):
         """Test successful extraction from valid MCP response."""
-        result = _extract_mcp_response_content(
+        result = extract_mcp_response_content(
             SAMPLE_MCP_RESPONSE_FOR_EXTRACTION
         )
 
@@ -53,22 +61,22 @@ class TestExtractMcpResponseContent:
         with pytest.raises(
             ValueError, match="'messages' is not a list or is empty"
         ):
-            _extract_mcp_response_content(EMPTY_MCP_RESPONSE)
+            extract_mcp_response_content(EMPTY_MCP_RESPONSE)
 
     def test_extract_mcp_response_content_with_invalid_structure(self):
         """Test extraction fails with invalid response structure."""
         with pytest.raises(ValueError, match="missing 'messages' key"):
-            _extract_mcp_response_content(INVALID_MCP_RESPONSE)
+            extract_mcp_response_content(INVALID_MCP_RESPONSE)
 
     def test_extract_mcp_response_content_with_no_ai_messages(self):
         """Test extraction fails when no AI messages are present."""
         with pytest.raises(ValueError, match="No AIMessage found"):
-            _extract_mcp_response_content(NO_AI_MESSAGE_RESPONSE)
+            extract_mcp_response_content(NO_AI_MESSAGE_RESPONSE)
 
     def test_extract_mcp_response_content_with_non_dict_input(self):
         """Test extraction fails with non-dict input."""
         with pytest.raises(ValueError, match="missing 'messages' key"):
-            _extract_mcp_response_content("not a dict")
+            extract_mcp_response_content("not a dict")
 
     def test_extract_mcp_response_content_finds_last_ai_message(self):
         """Test that extraction finds the last AI message when multiple exist."""
@@ -85,7 +93,7 @@ class TestExtractMcpResponseContent:
             ]
         }
 
-        result = _extract_mcp_response_content(response_with_multiple_ai)
+        result = extract_mcp_response_content(response_with_multiple_ai)
         assert "Last AI message" in result.content
 
     def test_extract_mcp_response_content_handles_list_content(self):
@@ -96,7 +104,7 @@ class TestExtractMcpResponseContent:
             ]
         }
 
-        result = _extract_mcp_response_content(response_with_list_content)
+        result = extract_mcp_response_content(response_with_list_content)
         assert isinstance(result, AIMessage)
         # Content should be preserved as-is when it's a list
         assert isinstance(result.content, list) or isinstance(
@@ -215,7 +223,7 @@ class TestCreateInvestigationsFromResponse:
 
     def test_create_investigations_from_response_success(self):
         """Test successful creation of investigations from response."""
-        result = _create_investigations_from_response(
+        result = create_investigations_from_response(
             SAMPLE_INVESTIGATION_PLANNING_RESPONSE
         )
 
@@ -232,7 +240,7 @@ class TestCreateInvestigationsFromResponse:
 
     def test_create_investigations_from_response_preserves_device_info(self):
         """Test that device information is preserved in investigations."""
-        result = _create_investigations_from_response(
+        result = create_investigations_from_response(
             SAMPLE_INVESTIGATION_PLANNING_RESPONSE
         )
 
@@ -248,7 +256,7 @@ class TestCreateInvestigationsFromResponse:
 
     def test_create_investigations_from_response_with_empty_list(self):
         """Test creation with empty devices list."""
-        result = _create_investigations_from_response(
+        result = create_investigations_from_response(
             EMPTY_INVESTIGATION_PLANNING_RESPONSE
         )
 
@@ -257,7 +265,7 @@ class TestCreateInvestigationsFromResponse:
 
     def test_create_investigations_from_response_sets_default_values(self):
         """Test that investigations have appropriate default values."""
-        result = _create_investigations_from_response(
+        result = create_investigations_from_response(
             SAMPLE_INVESTIGATION_PLANNING_RESPONSE
         )
 
@@ -281,7 +289,7 @@ class TestCreateInvestigationsFromResponse:
             ]
         )
 
-        result = _create_investigations_from_response(minimal_response)
+        result = create_investigations_from_response(minimal_response)
 
         assert len(result) == 1
         investigation = result[0]

@@ -1,9 +1,9 @@
 """Context building for report generation."""
 
-from typing import List
 from schemas import GraphState
-from schemas.state import Investigation, InvestigationStatus, WorkflowSession
+from schemas.state import Investigation, InvestigationStatus
 from nodes.markdown_builder import MarkdownBuilder
+from nodes.common.session_context import add_session_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -156,70 +156,7 @@ def _add_assessment_results(
 def _add_historical_context(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
-    """Add historical context from workflow sessions."""
-    sessions = (
-        state.workflow_session if state.workflow_session is not None else []
+    """Add historical context from workflow sessions using common session context module."""
+    add_session_context_to_builder(
+        builder, state, section_title="Historical Context"
     )
-    _add_session_context(builder, sessions)
-
-
-def _add_session_context(
-    builder: MarkdownBuilder, workflow_sessions: List[WorkflowSession]
-) -> None:
-    """Add workflow session context to the markdown builder."""
-    builder.add_section("Historical Context")
-
-    if not workflow_sessions:
-        builder.add_text(
-            "**No historical context available.** This is the first investigation session."
-        )
-        return
-
-    # Show summary of all sessions
-    builder.add_bullet(
-        f"Total investigation sessions: {len(workflow_sessions)}"
-    )
-
-    # Show recent sessions (last 3)
-    recent_sessions = workflow_sessions[-3:]
-    builder.add_text(f"**Recent Sessions ({len(recent_sessions)}):**")
-
-    for session in recent_sessions:
-        builder.add_bullet(f"Session {session.session_id}:")
-
-        # Previous Report from this session
-        if session.previous_report:
-            preview = (
-                session.previous_report[:100] + "..."
-                if len(session.previous_report) > 100
-                else session.previous_report
-            )
-            builder.add_text(f"  - Report preview: {preview}")
-
-        # Learned Patterns from this session
-        if session.learned_patterns:
-            builder.add_text(
-                f"  - Learned patterns: {len(session.learned_patterns)} characters"
-            )
-            # Show preview of patterns
-            patterns_preview = (
-                session.learned_patterns[:200] + "..."
-                if len(session.learned_patterns) > 200
-                else session.learned_patterns
-            )
-            builder.add_text(f"    Preview: {patterns_preview}")
-
-        # Device Relationships from this session
-        if session.device_relationships:
-            builder.add_text(
-                f"  - Device relationships: {len(session.device_relationships)} characters"
-            )
-            # Show preview of relationships
-            relationships_preview = (
-                session.device_relationships[:200] + "..."
-                if len(session.device_relationships) > 200
-                else session.device_relationships
-            )
-            builder.add_text(f"    Preview: {relationships_preview}")
-
-    builder.add_empty_line()

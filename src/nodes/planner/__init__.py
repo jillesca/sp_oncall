@@ -17,15 +17,6 @@ from .planning import (
     DevicePlan,
 )
 from util.plans import plans_to_string, load_plans
-from .context import extract_investigations_summary
+from .context import extract_investigations_summary, build_planning_context
 from .state import build_successful_planning_state, build_failed_planning_state
 from nodes.common import load_model
-
-# Aliases for backwards compatibility with tests
-_load_available_plans = load_available_plans
-_load_model = lambda: load_model()
-_execute_plan_selection = execute_plan_selection
-_process_planning_response = process_planning_response
-_extract_investigations_summary = extract_investigations_summary
-_build_successful_planning_state = build_successful_planning_state
-_build_failed_planning_state = build_failed_planning_state

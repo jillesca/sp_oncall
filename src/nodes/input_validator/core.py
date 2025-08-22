@@ -41,12 +41,11 @@ def input_validator_node(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with investigations list populated, or error state
     """
-    user_query = state.user_query
 
     try:
         logger.info("🔍 Starting multi-device investigation setup")
         model = load_model()
-        mcp_response = execute_investigation_planning(user_query)
+        mcp_response = execute_investigation_planning(state)
         response_content = extract_mcp_response_content(mcp_response)
         investigation_list = process_investigation_planning_response(
             response_content, model=model

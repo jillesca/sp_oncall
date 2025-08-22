@@ -7,6 +7,7 @@ investigations and workflow state for LLM evaluation.
 
 from schemas.state import GraphState, Investigation
 from nodes.markdown_builder import MarkdownBuilder
+from nodes.common.session_context import add_session_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -124,53 +125,10 @@ def _add_investigation_details(
 def _add_session_context_section(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
-    """Add workflow session context section."""
-    sessions = (
-        state.workflow_session if state.workflow_session is not None else []
+    """Add workflow session context section using common session context module."""
+    add_session_context_to_builder(
+        builder, state, section_title="Workflow Session Context"
     )
-    _add_session_context_to_builder(builder, sessions)
-
-
-def _add_session_context_to_builder(
-    builder: MarkdownBuilder, workflow_sessions
-) -> None:
-    """
-    Add workflow session context to the markdown builder.
-
-    Args:
-        builder: Markdown builder instance
-        workflow_sessions: List of WorkflowSession objects
-    """
-    builder.add_section("Workflow Session Context")
-
-    if not workflow_sessions:
-        builder.add_text("No previous workflow session context available.")
-        return
-
-    builder.add_bold_text("Total Sessions:", str(len(workflow_sessions)))
-
-    # Show the most recent session for assessment context
-    latest_session = workflow_sessions[-1]
-    builder.add_bold_text("Latest Session ID:", latest_session.session_id)
-
-    _add_previous_report_to_builder(builder, latest_session.previous_report)
-    _add_learned_patterns_to_builder(builder, latest_session.learned_patterns)
-    _add_device_relationships_to_builder(
-        builder, latest_session.device_relationships
-    )
-
-    # If there are multiple sessions, show summary of historical patterns
-    if len(workflow_sessions) > 1:
-        builder.add_text("\n**Historical Patterns from Previous Sessions:**")
-        for session in workflow_sessions[-3:-1]:  # Show 2 previous sessions
-            if session.learned_patterns:
-                builder.add_text(
-                    f"Session {session.session_id}: learned patterns ({len(session.learned_patterns)} characters)"
-                )
-            if session.device_relationships:
-                builder.add_text(
-                    f"Session {session.session_id}: device relationships ({len(session.device_relationships)} characters)"
-                )
 
 
 def _add_execution_results_to_builder(
@@ -204,72 +162,4 @@ def _add_execution_results_to_builder(
     else:
         builder.add_bold_text(
             "Execution Results:", "No execution results available"
-        )
-
-
-def _add_previous_report_to_builder(
-    builder: MarkdownBuilder, previous_report: str
-) -> None:
-    """
-    Add previous report to the markdown builder.
-
-    Args:
-        builder: Markdown builder instance
-        previous_report: Previous report from this session
-    """
-    if previous_report:
-        builder.add_bold_text(
-            "Previous Report:", "Available from this session"
-        )
-        builder.add_code_block(previous_report)
-    else:
-        builder.add_bold_text(
-            "Previous Report:",
-            "No previous report available from this session",
-        )
-
-
-def _add_learned_patterns_to_builder(
-    builder: MarkdownBuilder, learned_patterns: str
-) -> None:
-    """
-    Add learned patterns to the markdown builder.
-
-    Args:
-        builder: Markdown builder instance
-        learned_patterns: Markdown-formatted string of learned patterns
-    """
-    if learned_patterns:
-        builder.add_bold_text(
-            "Learned Patterns:",
-            f"{len(learned_patterns)} characters available",
-        )
-        builder.add_text(learned_patterns)
-        builder.add_empty_line()
-    else:
-        builder.add_bold_text(
-            "Learned Patterns:", "No learned patterns available"
-        )
-
-
-def _add_device_relationships_to_builder(
-    builder: MarkdownBuilder, device_relationships: str
-) -> None:
-    """
-    Add device relationships to the markdown builder.
-
-    Args:
-        builder: Markdown builder instance
-        device_relationships: Markdown-formatted string of device relationships
-    """
-    if device_relationships:
-        builder.add_bold_text(
-            "Device Relationships:",
-            f"{len(device_relationships)} characters available",
-        )
-        builder.add_text(device_relationships)
-        builder.add_empty_line()
-    else:
-        builder.add_bold_text(
-            "Device Relationships:", "No device relationships available"
         )

@@ -113,8 +113,8 @@ class TestBuildInvestigationContext:
         )
 
         assert "Previous Investigation Context" in result
-        assert "**Total Investigation Sessions:** 1" in result
-        assert "Recent Investigation Report" in result
+        assert "**Total Previous Sessions:** 1" in result
+        assert "Previous Investigation Report" in result
 
     def test_build_investigation_context_with_retry(self):
         """Test context building includes retry information."""

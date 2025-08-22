@@ -9,7 +9,7 @@ from schemas.state import (
     InvestigationStatus,
     InvestigationPriority,
 )
-from src.nodes.input_validator import (
+from src.nodes.input_validator.processing import (
     DeviceToInvestigate,
     InvestigationPlanningResponse,
 )

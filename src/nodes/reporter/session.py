@@ -46,7 +46,7 @@ def update_workflow_session(
         device_relationships=learning_insights.device_relationships,
     )
 
-    # Append to existing sessions list (handle None case for backward compatibility)
+    # Append to existing sessions list
     existing_sessions = (
         state.workflow_session if state.workflow_session is not None else []
     )
