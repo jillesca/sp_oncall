@@ -13,12 +13,12 @@ from .input_validator import input_validator_node
 from .planner import planner_node
 from .executor import llm_network_executor
 from .assessor import objective_assessor_node
-from .reporter import multi_investigation_report_node
+from .reporter import investigation_report_node
 
 __all__ = [
     "input_validator_node",
     "planner_node",
     "llm_network_executor",
     "objective_assessor_node",
-    "multi_investigation_report_node",
+    "investigation_report_node",
 ]

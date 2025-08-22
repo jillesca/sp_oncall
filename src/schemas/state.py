@@ -35,7 +35,7 @@ class GraphState:
 
     user_query: str
     investigations: List[Investigation] = field(default_factory=list)
-    workflow_session: Optional[WorkflowSession] = None
+    workflow_session: List[WorkflowSession] = field(default_factory=list)
 
     # Global workflow control
     max_retries: int = 3
@@ -100,19 +100,19 @@ class GraphState:
 
 @dataclass
 class WorkflowSession:
-    """Represents the context and history from previous workflow sessions.
+    """Represents the context and history from a single workflow session.
 
     Attributes:
         session_id: Unique identifier for this workflow session.
-        previous_reports: Historical investigation reports for context.
-        learned_patterns: Patterns discovered from previous investigations.
-        device_relationships: Known relationships between devices.
+        previous_report: Investigation report from this session.
+        learned_patterns: Patterns discovered from this investigation (markdown formatted).
+        device_relationships: Known relationships between devices (markdown formatted).
     """
 
     session_id: str
-    previous_reports: List[str] = field(default_factory=list)
-    learned_patterns: Dict[str, Any] = field(default_factory=dict)
-    device_relationships: Dict[str, List[str]] = field(default_factory=dict)
+    previous_report: str = ""
+    learned_patterns: str = ""
+    device_relationships: str = ""
 
     def __str__(self) -> str:
         """Return a JSON representation of the workflow session."""

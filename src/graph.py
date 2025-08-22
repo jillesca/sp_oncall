@@ -5,7 +5,7 @@ from nodes import (
     llm_network_executor,
     input_validator_node,
     objective_assessor_node,
-    multi_investigation_report_node,
+    investigation_report_node,
 )
 from schemas import GraphState
 from configuration import Configuration
@@ -58,7 +58,7 @@ orchestrator.add_node(
     node="objective_assessor", action=objective_assessor_node
 )
 orchestrator.add_node(
-    node="report_generator", action=multi_investigation_report_node
+    node="report_generator", action=investigation_report_node
 )
 
 orchestrator.set_entry_point(key="input_validator_node")

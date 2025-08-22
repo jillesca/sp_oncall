@@ -1,16 +1,13 @@
-from typing import Dict, List
-from dataclasses import replace
-from langchain_core.messages import SystemMessage
+from typing import List
+from langchain_core.messages import SystemMessage, HumanMessage
 
-from schemas import GraphState
-from schemas.state import Investigation, InvestigationStatus
+from schemas import GraphState, LearningInsights
+from schemas.state import Investigation, InvestigationStatus, WorkflowSession
 from util.llm import load_chat_model
-from util.utils import serialize_for_prompt
 from configuration import Configuration
-from prompts.report_generator import (
-    REPORT_GENERATOR_PROMPT_TEMPLATE,
-    MULTI_INVESTIGATION_REPORT_TEMPLATE,
-)
+from prompts.report_generator import REPORT_GENERATOR_PROMPT
+from prompts.learning_insights import LEARNING_INSIGHTS_PROMPT
+from .markdown_builder import MarkdownBuilder
 
 # Add logging
 from src.logging import get_logger, log_node_execution
@@ -18,108 +15,256 @@ from src.logging import get_logger, log_node_execution
 logger = get_logger(__name__)
 
 
-@log_node_execution("Multi-Investigation Reporter")
-def multi_investigation_report_node(state: GraphState) -> GraphState:
+@log_node_execution("Investigation Reporter")
+def investigation_report_node(state: GraphState) -> GraphState:
     """
-    Generate a comprehensive multi-device investigation report using an LLM.
+    Generate a comprehensive investigation report and reset workflow state.
 
-    This function orchestrates the multi-investigation report generation by:
-    1. Synthesizing findings from all completed investigations
-    2. Incorporating assessor notes and historical context
-    3. Updating workflow session with learned patterns
-    4. Handling partial success scenarios
-    5. Generating a comprehensive final report
+    This function orchestrates the complete report generation workflow by:
+    1. Building comprehensive context from all investigations
+    2. Setting up the LLM model for report generation
+    3. Generating the final report using the LLM
+    4. Updating workflow session with learned patterns and findings
+    5. Resetting GraphState to initial state while preserving WorkflowSession
 
     Args:
         state: The current GraphState with all investigation results
 
     Returns:
-        Updated GraphState with final_report populated
+        Reset GraphState with updated WorkflowSession and final_report populated
     """
-    logger.info("📄 Generating comprehensive multi-investigation report")
+    logger.info(
+        "📄 Generating comprehensive investigation report for %d devices",
+        len(state.investigations),
+    )
 
     try:
-        report_input = _prepare_multi_investigation_report_input(state)
-        model = _setup_report_generation_model()
-        comprehensive_report = _generate_multi_investigation_report(
-            model, report_input
+        report_context = _build_report_context(state)
+        model = _setup_report_model()
+        final_report = _generate_report(model, report_context)
+
+        # Update workflow session with the generated final report
+        updated_session = _update_workflow_session(state, final_report)
+
+        _log_successful_report_generation(final_report)
+        return _build_reset_state_with_report(
+            state, final_report, updated_session
         )
 
-        # Update workflow session with learned patterns
-        updated_state = _update_workflow_session_patterns(state, report_input)
-
-        _log_successful_multi_report_generation(comprehensive_report)
-        return _build_multi_report_state(updated_state, comprehensive_report)
-
     except Exception as e:
-        logger.error("❌ Multi-investigation report generation failed: %s", e)
-        error_report = f"Error generating comprehensive report. Details: {e}"
-        return _build_multi_report_state(state, error_report)
+        logger.error("❌ Investigation report generation failed: %s", e)
+        error_report = f"Error generating investigation report. Details: {e}"
+        # Update workflow session even in error case to preserve learning
+        error_sessions = _update_workflow_session(state, error_report)
+        return _build_reset_state_with_report(
+            state, error_report, error_sessions
+        )
 
 
-@log_node_execution("Report Generator")
-def generate_llm_report_node(state: GraphState) -> GraphState:
+def _build_report_context(state: GraphState) -> str:
     """
-    Generate a comprehensive summary report using an LLM.
-
-    This function orchestrates the report generation workflow by:
-    1. Preparing report input data from the current state
-    2. Setting up the LLM model for report generation
-    3. Generating the summary using the LLM
-    4. Processing and validating the generated summary
-    5. Updating the state with the final report
+    Build comprehensive report context from all investigations in markdown format.
 
     Args:
-        state: The current GraphState containing all necessary information.
+        state: Current workflow state with investigations and assessment
 
     Returns:
-        An updated GraphState with the 'summary' field populated by the LLM.
+        Markdown-formatted context string for the LLM
     """
-    logger.info("📄 Generating final summary report")
-
-    try:
-        prompt_input = _prepare_report_input(state)
-        model = _setup_report_generation_model()
-        llm_summary = _generate_llm_summary(model, prompt_input)
-
-        _log_successful_report_generation(llm_summary)
-        return _build_report_state(state, llm_summary)
-
-    except Exception as e:
-        logger.error("❌ Report generation failed: %s", e)
-        error_summary = f"Error generating LLM summary. Details: {e}"
-        return _build_report_state(state, error_summary)
-
-
-def _prepare_report_input(state: GraphState) -> Dict[str, str]:
-    """
-    Extract and prepare data from the state for the report generator.
-
-    Args:
-        state: The current graph state
-
-    Returns:
-        Dictionary with formatted input for the prompt template
-    """
-    logger.debug("📋 Preparing report input data")
-
-    context = {
-        "user_query": state.user_query or "N/A",
-        "device_name": state.device_name or "N/A",
-        "objective": state.objective or "N/A",
-        "working_plan_steps": serialize_for_prompt(state.working_plan_steps),
-        "execution_results": serialize_for_prompt(state.execution_results),
-        "assessor_notes_for_final_report": state.assessor_notes_for_final_report
-        or "None",
-    }
-
     logger.debug(
-        "📤 Report input prepared for device: %s", context["device_name"]
+        "📋 Building report context for %d investigations",
+        len(state.investigations),
     )
-    return context
+
+    builder = MarkdownBuilder()
+    builder.add_header("Network Investigation Report Context")
+
+    # User Query Section
+    builder.add_section("Original User Query")
+    builder.add_text(state.user_query)
+
+    # Investigation Overview
+    builder.add_section("Investigation Overview")
+    total_investigations = len(state.investigations)
+    completed_investigations = [
+        inv
+        for inv in state.investigations
+        if inv.status == InvestigationStatus.COMPLETED
+    ]
+    success_rate = (
+        len(completed_investigations) / total_investigations
+        if total_investigations > 0
+        else 0.0
+    )
+
+    builder.add_bullet(f"Total devices investigated: {total_investigations}")
+    builder.add_bullet(
+        f"Successfully completed: {len(completed_investigations)}"
+    )
+    builder.add_bullet(f"Success rate: {success_rate:.1%}")
+    builder.add_bullet(
+        f"Retry attempts: {state.current_retries}/{state.max_retries}"
+    )
+
+    # Individual Investigation Results
+    builder.add_section("Device Investigation Results")
+    if not state.investigations:
+        builder.add_text("No device investigations found.")
+    else:
+        for i, investigation in enumerate(state.investigations, 1):
+            _add_investigation_details(builder, investigation, i)
+
+    # Assessment Results
+    builder.add_section("Assessment Results")
+    if state.assessment:
+        builder.add_bullet(
+            f"Objective achieved: {state.assessment.is_objective_achieved}"
+        )
+        builder.add_text(
+            f"**Assessment Notes:** {state.assessment.notes_for_final_report}"
+        )
+        if state.assessment.feedback_for_retry:
+            builder.add_text(
+                f"**Feedback for retry:** {state.assessment.feedback_for_retry}"
+            )
+    else:
+        builder.add_text("No assessment results available.")
+
+    # Historical Context from WorkflowSession
+    sessions = (
+        state.workflow_session if state.workflow_session is not None else []
+    )
+    _add_session_context(builder, sessions)
+
+    context_string = builder.build()
+    logger.debug(
+        "📤 Report context prepared (%d characters)", len(context_string)
+    )
+    return context_string
 
 
-def _setup_report_generation_model():
+def _add_investigation_details(
+    builder: MarkdownBuilder, investigation: Investigation, index: int
+) -> None:
+    """
+    Add individual investigation details to the markdown builder.
+
+    Args:
+        builder: Markdown builder instance
+        investigation: Investigation object to format
+        index: Investigation number for display
+    """
+    status_icon = {
+        InvestigationStatus.COMPLETED: "✅",
+        InvestigationStatus.FAILED: "❌",
+        InvestigationStatus.IN_PROGRESS: "🔄",
+        InvestigationStatus.PENDING: "⏳",
+        InvestigationStatus.SKIPPED: "⏭️",
+    }.get(investigation.status, "❓")
+
+    builder.add_subsection(
+        f"Investigation {index}: {investigation.device_name}"
+    )
+    builder.add_bullet(f"Status: {status_icon} {investigation.status.value}")
+    builder.add_bullet(f"Device Profile: {investigation.device_profile}")
+    builder.add_bullet(f"Role: {investigation.role}")
+    builder.add_bullet(f"Priority: {investigation.priority}")
+
+    if investigation.objective:
+        builder.add_bullet(f"Objective: {investigation.objective}")
+
+    if investigation.dependencies:
+        builder.add_bullet(
+            f"Dependencies: {', '.join(investigation.dependencies)}"
+        )
+
+    builder.add_bullet(
+        f"Execution steps: {len(investigation.execution_results)}"
+    )
+
+    if investigation.error_details:
+        builder.add_text(f"**Error Details:** {investigation.error_details}")
+
+    if investigation.report:
+        builder.add_text("**Investigation Report:**")
+        builder.add_text(investigation.report)
+
+    if investigation.working_plan_steps:
+        builder.add_text("**Working Plan:**")
+        builder.add_text(investigation.working_plan_steps)
+
+    builder.add_empty_line()
+
+
+def _add_session_context(
+    builder: MarkdownBuilder, workflow_sessions: List[WorkflowSession]
+) -> None:
+    """
+    Add workflow session context to the markdown builder.
+
+    Args:
+        builder: Markdown builder instance
+        workflow_sessions: List of workflow sessions with historical data
+    """
+    builder.add_section("Historical Context")
+
+    if not workflow_sessions:
+        builder.add_text(
+            "**No historical context available.** This is the first investigation session."
+        )
+        return
+
+    # Show summary of all sessions
+    builder.add_bullet(
+        f"Total investigation sessions: {len(workflow_sessions)}"
+    )
+
+    # Show recent sessions (last 3)
+    recent_sessions = workflow_sessions[-3:]
+    builder.add_text(f"**Recent Sessions ({len(recent_sessions)}):**")
+
+    for session in recent_sessions:
+        builder.add_bullet(f"Session {session.session_id}:")
+
+        # Previous Report from this session
+        if session.previous_report:
+            preview = (
+                session.previous_report[:100] + "..."
+                if len(session.previous_report) > 100
+                else session.previous_report
+            )
+            builder.add_text(f"  - Report preview: {preview}")
+
+        # Learned Patterns from this session
+        if session.learned_patterns:
+            builder.add_text(
+                f"  - Learned patterns: {len(session.learned_patterns)} characters"
+            )
+            # Show preview of patterns
+            patterns_preview = (
+                session.learned_patterns[:200] + "..."
+                if len(session.learned_patterns) > 200
+                else session.learned_patterns
+            )
+            builder.add_text(f"    Preview: {patterns_preview}")
+
+        # Device Relationships from this session
+        if session.device_relationships:
+            builder.add_text(
+                f"  - Device relationships: {len(session.device_relationships)} characters"
+            )
+            # Show preview of relationships
+            relationships_preview = (
+                session.device_relationships[:200] + "..."
+                if len(session.device_relationships) > 200
+                else session.device_relationships
+            )
+            builder.add_text(f"    Preview: {relationships_preview}")
+
+    builder.add_empty_line()
+
+
+def _setup_report_model():
     """Setup and return the LLM model for report generation."""
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
@@ -129,24 +274,25 @@ def _setup_report_generation_model():
     return model
 
 
-def _generate_llm_summary(model, prompt_input: Dict[str, str]) -> str:
+def _generate_report(model, report_context: str) -> str:
     """
-    Generate a summary using the LLM based on provided input.
+    Generate the final investigation report using the LLM.
 
     Args:
         model: LLM model for report generation
-        prompt_input: Dictionary with formatted data for the prompt
+        report_context: Prepared report context
 
     Returns:
-        Generated summary string
-
-    Raises:
-        Exception: If report generation fails
+        Generated report string
     """
-    logger.debug("🚀 Generating report from LLM")
+    logger.debug("🚀 Generating final report from LLM")
 
-    system_message = REPORT_GENERATOR_PROMPT_TEMPLATE.format(**prompt_input)
-    response = model.invoke([SystemMessage(content=system_message)])
+    messages = [
+        SystemMessage(content=REPORT_GENERATOR_PROMPT),
+        HumanMessage(content=report_context),
+    ]
+
+    response = model.invoke(messages)
 
     return _extract_report_content(response)
 
@@ -174,253 +320,300 @@ def _extract_report_content(response) -> str:
         return str(response)
 
 
-def _log_successful_report_generation(summary: str) -> None:
-    """Log successful report generation details."""
-    logger.info(
-        "✅ Report generation complete, length: %s characters", len(summary)
-    )
-    logger.debug("📊 Generated report length: %s characters", len(summary))
-
-
-def _build_report_state(state: GraphState, summary: str) -> GraphState:
+def _update_workflow_session(
+    state: GraphState, final_report: str
+) -> List[WorkflowSession]:
     """
-    Build the final state with the generated report.
+    Create a new workflow session with LLM-generated learned patterns and findings from investigations.
 
     Args:
-        state: Current GraphState
-        summary: Generated summary report
+        state: Current GraphState with investigation results
+        final_report: The generated final report to store in previous_reports
 
     Returns:
-        Updated GraphState with summary
+        Updated list of WorkflowSessions with new session appended
     """
-    logger.debug("🏗️ Building final report state")
-
-    return replace(state, summary=summary)
-
-
-def _prepare_multi_investigation_report_input(
-    state: GraphState,
-) -> Dict[str, str]:
-    """
-    Extract and prepare data from multi-investigation state for the report generator.
-
-    Args:
-        state: The current graph state with investigations
-
-    Returns:
-        Dictionary with formatted input for the multi-investigation report template
-    """
-    logger.debug("📋 Preparing multi-investigation report input data")
-
-    # Calculate investigation statistics
-    total_investigations = len(state.investigations)
-    completed_investigations = [
-        inv
-        for inv in state.investigations
-        if inv.status == InvestigationStatus.COMPLETED
-    ]
-    success_rate = (
-        len(completed_investigations) / total_investigations
-        if total_investigations > 0
-        else 0.0
+    logger.debug(
+        "📚 Creating new workflow session with investigation learnings"
     )
 
-    # Prepare investigation summaries
-    investigation_summaries = _format_investigation_summaries(
-        state.investigations
+    import uuid
+
+    # Create new session for this investigation
+    session_id = str(uuid.uuid4())[:8]
+    logger.info("🆕 Creating new workflow session: %s", session_id)
+
+    # Generate learning insights using LLM
+    learning_insights = _generate_learning_insights_with_llm(state)
+
+    # Create new session with current report (single string, not list)
+    new_session = WorkflowSession(
+        session_id=session_id,
+        previous_report=final_report if final_report else "",
+        learned_patterns=learning_insights.learned_patterns,
+        device_relationships=learning_insights.device_relationships,
     )
 
-    # Prepare cross-device analysis
-    cross_device_analysis = _prepare_cross_device_analysis(
-        completed_investigations
+    # Append to existing sessions list (handle None case for backward compatibility)
+    existing_sessions = (
+        state.workflow_session if state.workflow_session is not None else []
     )
+    updated_sessions = list(existing_sessions) + [new_session]
 
-    # Prepare session context
-    session_context = _format_session_context(state.workflow_session)
-
-    context = {
-        "user_query": state.user_query or "N/A",
-        "investigation_scope": "Multi-device network investigation",
-        "total_investigations": str(total_investigations),
-        "success_rate": f"{success_rate:.1%}",
-        "investigation_summaries": investigation_summaries,
-        "cross_device_analysis": cross_device_analysis,
-        "assessor_notes": (
-            state.assessment.notes_for_final_report
-            if state.assessment
-            else "No assessment notes available"
-        ),
-        "session_context": session_context,
-    }
+    # Keep only last 20 sessions to avoid unlimited growth
+    updated_sessions = updated_sessions[-20:]
 
     logger.debug(
-        "📤 Multi-investigation report input prepared for %d devices",
-        total_investigations,
+        "📈 Created new session with patterns (%d chars), relationships (%d chars), report (%d chars)",
+        len(learning_insights.learned_patterns),
+        len(learning_insights.device_relationships),
+        len(final_report) if final_report else 0,
     )
-    return context
+
+    return updated_sessions
 
 
-def _format_investigation_summaries(
-    investigations: List[Investigation],
-) -> str:
-    """Format individual investigation summaries for the report."""
-    summaries = []
+def _generate_learning_insights_with_llm(
+    state: GraphState,
+) -> LearningInsights:
+    """
+    Generate learning insights using LLM analysis of investigation results.
 
-    for investigation in investigations:
-        status_icon = (
-            "✅"
-            if investigation.status == InvestigationStatus.COMPLETED
-            else "❌"
+    Args:
+        state: Current GraphState with investigation results
+
+    Returns:
+        LearningInsights object with learned patterns and device relationships
+    """
+    logger.debug("🧠 Generating learning insights using LLM analysis")
+
+    try:
+        # Build context for learning insights extraction
+        insights_context = _build_learning_insights_context(state)
+
+        # Setup model for learning insights generation
+        model = _setup_report_model()
+
+        # Use structured output for consistency with other nodes
+        structured_model = model.with_structured_output(LearningInsights)
+
+        messages = [
+            SystemMessage(content=LEARNING_INSIGHTS_PROMPT),
+            HumanMessage(content=insights_context),
+        ]
+
+        # Get structured response from LLM
+        response = structured_model.invoke(messages)
+
+        # Handle response based on type - sometimes structured_output returns dict
+        if isinstance(response, dict):
+            logger.debug(
+                "🔄 Converting dict response to LearningInsights object using from_dict()"
+            )
+            learning_insights = LearningInsights.from_dict(response)
+        elif isinstance(response, LearningInsights):
+            logger.debug(
+                "✅ Received properly structured LearningInsights object"
+            )
+            learning_insights = response
+        else:
+            logger.warning(
+                "⚠️ Unexpected response type: %s", type(response).__name__
+            )
+            logger.debug("Response content: %s", str(response)[:200])
+            # Try to extract and parse as JSON fallback
+            raw_content = _extract_report_content(response)
+            learning_insights = LearningInsights.from_json_string(raw_content)
+
+        logger.info(
+            "✅ Generated learning insights: patterns (%d chars), relationships (%d chars)",
+            len(learning_insights.learned_patterns),
+            len(learning_insights.device_relationships),
         )
-        summary = f"{status_icon} **{investigation.device_name}** ({investigation.device_profile})\n"
-        summary += f"   - Status: {investigation.status.value}\n"
-        summary += f"   - Objective: {investigation.objective or 'N/A'}\n"
-        summary += f"   - Results: {len(investigation.execution_results)} execution steps\n"
+
+        return learning_insights
+
+    except Exception as e:
+        logger.warning(
+            "⚠️ Failed to generate learning insights with LLM: %s", e
+        )
+        logger.debug("Falling back to empty learning insights")
+
+        # Log additional debug information for troubleshooting
+        if "response" in locals():
+            logger.debug("LLM response type: %s", type(response).__name__)
+            logger.debug("LLM response object: %s", str(response)[:200])
+
+            # If it's a dict, show the structure for debugging
+            if isinstance(response, dict):
+                logger.debug("Response keys: %s", list(response.keys()))
+                if "learned_patterns" in response:
+                    patterns_data = response.get("learned_patterns", {})
+                    if isinstance(patterns_data, dict):
+                        logger.debug(
+                            "Learned patterns count: %d", len(patterns_data)
+                        )
+                    else:
+                        logger.debug(
+                            "Learned patterns length: %d chars",
+                            len(str(patterns_data)),
+                        )
+                if "device_relationships" in response:
+                    relationships_data = response.get(
+                        "device_relationships", {}
+                    )
+                    if isinstance(relationships_data, dict):
+                        logger.debug(
+                            "Device relationships count: %d",
+                            len(relationships_data),
+                        )
+                    else:
+                        logger.debug(
+                            "Device relationships length: %d chars",
+                            len(str(relationships_data)),
+                        )
+
+        if "raw_content" in locals():
+            logger.debug("Raw content type: %s", type(raw_content).__name__)
+            logger.debug(
+                "Raw content preview: %s",
+                (
+                    raw_content[:300] + "..."
+                    if len(raw_content) > 300
+                    else raw_content
+                ),
+            )
+
+        # Return empty insights on failure using factory method
+        return LearningInsights.empty()
+
+
+def _build_learning_insights_context(state: GraphState) -> str:
+    """
+    Build context for learning insights extraction from investigation results.
+
+    Args:
+        state: Current GraphState with investigation results
+
+    Returns:
+        Formatted context string for LLM analysis
+    """
+    builder = MarkdownBuilder()
+    builder.add_header("Investigation Data for Learning Insights Extraction")
+
+    # Original user query
+    builder.add_section("Original User Query")
+    builder.add_text(state.user_query)
+
+    # Investigation results summary
+    builder.add_section("Investigation Results Summary")
+    builder.add_bullet(f"Total investigations: {len(state.investigations)}")
+
+    completed_count = len(
+        [
+            inv
+            for inv in state.investigations
+            if inv.status == InvestigationStatus.COMPLETED
+        ]
+    )
+    builder.add_bullet(f"Completed investigations: {completed_count}")
+
+    # Detailed investigation data
+    builder.add_section("Detailed Investigation Data")
+
+    for i, investigation in enumerate(state.investigations, 1):
+        builder.add_subsection(
+            f"Investigation {i}: {investigation.device_name}"
+        )
+        builder.add_bullet(f"Status: {investigation.status.value}")
+        builder.add_bullet(f"Device Profile: {investigation.device_profile}")
+        builder.add_bullet(f"Role: {investigation.role}")
+        builder.add_bullet(f"Priority: {investigation.priority}")
+
+        if investigation.objective:
+            builder.add_bullet(f"Objective: {investigation.objective}")
+
+        if investigation.dependencies:
+            builder.add_bullet(
+                f"Dependencies: {', '.join(investigation.dependencies)}"
+            )
+
+        builder.add_bullet(
+            f"Execution Steps: {len(investigation.execution_results)}"
+        )
 
         if investigation.error_details:
-            summary += f"   - Error: {investigation.error_details}\n"
+            builder.add_text(
+                f"**Error Details:** {investigation.error_details}"
+            )
 
         if investigation.report:
-            # Truncate report if too long
+            builder.add_text("**Investigation Report:**")
+            # Truncate very long reports for context
             report_preview = (
-                investigation.report[:200] + "..."
-                if len(investigation.report) > 200
+                investigation.report[:500] + "..."
+                if len(investigation.report) > 500
                 else investigation.report
             )
-            summary += f"   - Findings: {report_preview}\n"
+            builder.add_text(report_preview)
 
-        summaries.append(summary)
+        builder.add_empty_line()
 
-    return "\n".join(summaries)
-
-
-def _prepare_cross_device_analysis(
-    completed_investigations: List[Investigation],
-) -> str:
-    """Prepare cross-device analysis for completed investigations."""
-    if len(completed_investigations) < 2:
-        return (
-            "Insufficient completed investigations for cross-device analysis."
+    # Assessment results if available
+    if state.assessment:
+        builder.add_section("Assessment Results")
+        builder.add_bullet(
+            f"Objective Achieved: {state.assessment.is_objective_achieved}"
         )
+        if state.assessment.notes_for_final_report:
+            builder.add_text(
+                f"**Assessment Notes:** {state.assessment.notes_for_final_report}"
+            )
 
-    # Simple pattern analysis
-    device_profiles = [inv.device_profile for inv in completed_investigations]
-    profile_counts = {}
-    for profile in device_profiles:
-        profile_counts[profile] = profile_counts.get(profile, 0) + 1
-
-    analysis = f"Investigated {len(completed_investigations)} devices across {len(profile_counts)} device types:\n"
-    for profile, count in profile_counts.items():
-        analysis += f"- {profile}: {count} device(s)\n"
-
-    return analysis
+    return builder.build()
 
 
-def _format_session_context(workflow_session) -> str:
-    """Format workflow session context for the report."""
-    if not workflow_session:
-        return "No session context available."
-
-    context = f"Session ID: {workflow_session.session_id}\n"
-    context += (
-        f"Historical Reports: {len(workflow_session.previous_reports)}\n"
-    )
-    context += f"Learned Patterns: {len(workflow_session.learned_patterns)}\n"
-    context += (
-        f"Device Relationships: {len(workflow_session.device_relationships)}"
-    )
-
-    return context
-
-
-def _generate_multi_investigation_report(
-    model, report_input: Dict[str, str]
-) -> str:
-    """
-    Generate a comprehensive multi-investigation report using the LLM.
-
-    Args:
-        model: LLM model for report generation
-        report_input: Dictionary with formatted data for the prompt
-
-    Returns:
-        Generated comprehensive report string
-    """
-    logger.debug(
-        "🚀 Generating comprehensive multi-investigation report from LLM"
-    )
-
-    system_message = MULTI_INVESTIGATION_REPORT_TEMPLATE.format(**report_input)
-    response = model.invoke([SystemMessage(content=system_message)])
-
-    return _extract_report_content(response)
-
-
-def _update_workflow_session_patterns(
-    state: GraphState,
-    report_input: Dict[str, str],  # pylint: disable=unused-argument
-) -> GraphState:
-    """
-    Update workflow session with learned patterns from this investigation.
-
-    Args:
-        state: Current GraphState
-        report_input: Report input data containing investigation insights (reserved for future use)
-
-    Returns:
-        Updated GraphState with enhanced workflow session
-    """
-    if not state.workflow_session:
-        return state
-
-    # Extract patterns from successful investigations
-    patterns = {}
-    for investigation in state.investigations:
-        if investigation.status == InvestigationStatus.COMPLETED:
-            pattern_key = f"{investigation.device_profile}_investigation"
-            patterns[pattern_key] = {
-                "device_profile": investigation.device_profile,
-                "steps_count": len(investigation.working_plan_steps),
-                "success": True,
-                "timestamp": "current",  # In real implementation, use actual timestamp
-            }
-
-    # Update session with new patterns
-    updated_session = replace(
-        state.workflow_session,
-        learned_patterns={
-            **state.workflow_session.learned_patterns,
-            **patterns,
-        },
-    )
-
-    return replace(state, workflow_session=updated_session)
-
-
-def _log_successful_multi_report_generation(report: str) -> None:
-    """Log successful multi-investigation report generation details."""
+def _log_successful_report_generation(report: str) -> None:
+    """Log successful report generation details."""
     logger.info(
-        "✅ Multi-investigation report generation complete, length: %s characters",
+        "✅ Investigation report generation complete, length: %s characters",
         len(report),
     )
-    logger.debug(
-        "📊 Generated comprehensive report length: %s characters", len(report)
-    )
+    logger.debug("📊 Generated report length: %s characters", len(report))
 
 
-def _build_multi_report_state(
-    state: GraphState, comprehensive_report: str
+def _build_reset_state_with_report(
+    state: GraphState,
+    final_report: str,
+    updated_sessions: List[WorkflowSession],
 ) -> GraphState:
     """
-    Build the final state with the generated multi-investigation report.
+    Build a reset GraphState with only the final report and updated WorkflowSessions.
+
+    This function implements the requirement to reset the GraphState to its initial state
+    while preserving the WorkflowSession list with learned patterns and the final report.
 
     Args:
-        state: Current GraphState
-        comprehensive_report: Generated comprehensive report
+        state: Current GraphState (used only for user_query to create fresh state)
+        final_report: Generated final report
+        updated_sessions: Updated list of WorkflowSessions with new session appended
 
     Returns:
-        Updated GraphState with final_report
+        Reset GraphState with final_report and workflow_session populated
     """
-    logger.debug("🏗️ Building final multi-investigation report state")
+    logger.debug("🔄 Building reset state with final report")
 
-    return replace(state, final_report=comprehensive_report)
+    # Create a fresh GraphState with only essential information preserved
+    reset_state = GraphState(
+        user_query=state.user_query,  # Keep original query for reference
+        final_report=final_report,
+        workflow_session=updated_sessions,
+    )
+
+    logger.info(
+        "✅ GraphState reset complete. Preserved: final_report (%d chars), %d workflow_sessions",
+        len(final_report),
+        len(updated_sessions),
+    )
+
+    return reset_state

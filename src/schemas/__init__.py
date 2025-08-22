@@ -11,6 +11,7 @@ from .state import (
     Investigation,
     InvestigationStatus,
 )
+from .learning_insights_schema import LearningInsights
 
 __all__ = [
     "GraphState",
@@ -18,4 +19,5 @@ __all__ = [
     "ExecutedToolCall",
     "Investigation",
     "InvestigationStatus",
+    "LearningInsights",
 ]

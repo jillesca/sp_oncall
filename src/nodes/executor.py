@@ -84,10 +84,14 @@ def _log_incoming_state(state: GraphState) -> None:
                 investigation.objective or "Not specified",
             )
 
-    if state.workflow_session:
+    if state.workflow_session and len(state.workflow_session) > 0:
+        sessions_with_reports = sum(
+            1 for session in state.workflow_session if session.previous_report
+        )
         logger.debug(
-            "📚 Workflow session context available: %s previous reports",
-            len(state.workflow_session.previous_reports),
+            "📚 Workflow session context available: %d sessions, %d sessions with reports",
+            len(state.workflow_session),
+            sessions_with_reports,
         )
 
     if state.current_retries > 0:
@@ -239,23 +243,44 @@ def _build_investigation_context(
     ]
 
     # Add workflow session context if available
-    if state.workflow_session:
+    if state.workflow_session and len(state.workflow_session) > 0:
         context_parts.append("\n--- PREVIOUS INVESTIGATION CONTEXT ---")
-        if state.workflow_session.previous_reports:
-            context_parts.append("Previous investigation reports:")
-            for i, report in enumerate(
-                state.workflow_session.previous_reports, 1
-            ):
-                context_parts.append(f"Report {i}: {report}")
+        context_parts.append(
+            f"Total investigation sessions: {len(state.workflow_session)}"
+        )
 
-        if state.workflow_session.learned_patterns:
+        # Use the most recent session for context
+        latest_session = state.workflow_session[-1]
+        if latest_session.previous_report:
+            context_parts.append("Recent investigation report:")
             context_parts.append(
-                f"Learned patterns: {state.workflow_session.learned_patterns}"
+                f"Report: {latest_session.previous_report[:200]}..."
+            )  # Truncate for context
+
+        if latest_session.learned_patterns:
+            context_parts.append("Learned patterns from recent session:")
+            # Show preview of patterns (first 300 characters)
+            patterns_preview = (
+                latest_session.learned_patterns[:300] + "..."
+                if len(latest_session.learned_patterns) > 300
+                else latest_session.learned_patterns
             )
+            context_parts.append(patterns_preview)
 
-        if state.workflow_session.device_relationships:
+        if latest_session.device_relationships:
+            context_parts.append("Device relationships from recent session:")
+            # Show preview of relationships (first 300 characters)
+            relationships_preview = (
+                latest_session.device_relationships[:300] + "..."
+                if len(latest_session.device_relationships) > 300
+                else latest_session.device_relationships
+            )
+            context_parts.append(relationships_preview)
+
+        # If multiple sessions, mention historical patterns
+        if len(state.workflow_session) > 1:
             context_parts.append(
-                f"Device relationships: {state.workflow_session.device_relationships}"
+                f"Historical context: {len(state.workflow_session)-1} previous sessions available for correlation"
             )
 
     # Add retry context if this is a retry
