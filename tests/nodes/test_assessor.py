@@ -456,23 +456,21 @@ class TestMarkdownBuilderHelpers:
     def test_add_device_relationships_to_builder_with_relationships(self):
         """Test adding device relationships to builder."""
         builder = MarkdownBuilder()
-        relationships = {
-            "device1": "connects to device2",
-            "device2": "connects to device3",
-        }
+        relationships = "## Device Relationships\n\n- device1: connects to device2\n- device2: connects to device3"
 
         _add_device_relationships_to_builder(builder, relationships)
         result = builder.build()
 
         assert "**Device Relationships:**" in result
-        assert "**device1:** connects to device2" in result
-        assert "**device2:** connects to device3" in result
+        assert "characters available" in result
+        assert "device1: connects to device2" in result
+        assert "device2: connects to device3" in result
 
     def test_add_device_relationships_to_builder_empty(self):
-        """Test adding device relationships with empty dict."""
+        """Test adding device relationships with empty string."""
         builder = MarkdownBuilder()
 
-        _add_device_relationships_to_builder(builder, {})
+        _add_device_relationships_to_builder(builder, "")
         result = builder.build()
 
         assert (

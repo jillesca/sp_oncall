@@ -253,22 +253,21 @@ def _add_learned_patterns_to_builder(
 
 
 def _add_device_relationships_to_builder(
-    builder: MarkdownBuilder, device_relationships
+    builder: MarkdownBuilder, device_relationships: str
 ) -> None:
     """
     Add device relationships to the markdown builder.
 
     Args:
         builder: Markdown builder instance
-        device_relationships: Dictionary of device relationships
+        device_relationships: Markdown-formatted string of device relationships
     """
     if device_relationships:
         builder.add_bold_text(
             "Device Relationships:",
-            f"{len(device_relationships)} relationships available",
+            f"{len(device_relationships)} characters available",
         )
-        for device, relationship in device_relationships.items():
-            builder.add_bullet(f"**{device}:** {relationship}")
+        builder.add_text(device_relationships)
         builder.add_empty_line()
     else:
         builder.add_bold_text(
