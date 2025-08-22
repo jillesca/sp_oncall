@@ -262,7 +262,7 @@ class TestExtractReportContent:
 class TestUpdateWorkflowSession:
     """Test cases for _update_workflow_session function."""
 
-    @patch("src.nodes.reporter._generate_learning_insights_with_llm")
+    @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
     def test_update_workflow_session_creates_new_session(
         self, mock_generate_insights
     ):
@@ -287,7 +287,7 @@ class TestUpdateWorkflowSession:
         assert new_session.learned_patterns == "Test patterns"
         assert new_session.device_relationships == "Test relationships"
 
-    @patch("src.nodes.reporter._generate_learning_insights_with_llm")
+    @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
     def test_update_workflow_session_with_empty_state(
         self, mock_generate_insights
     ):
@@ -308,7 +308,7 @@ class TestUpdateWorkflowSession:
         new_session = result[0]
         assert new_session.previous_report == SAMPLE_FINAL_REPORT
 
-    @patch("src.nodes.reporter._generate_learning_insights_with_llm")
+    @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
     def test_update_workflow_session_limits_session_count(
         self, mock_generate_insights
     ):

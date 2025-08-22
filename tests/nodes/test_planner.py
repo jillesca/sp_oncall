@@ -30,8 +30,8 @@ from tests.data.planner_data import (
 class TestLoadAvailablePlans:
     """Test cases for _load_available_plans function."""
 
-    @patch("src.nodes.planner.load_plans")
-    @patch("src.nodes.planner.plans_to_string")
+    @patch("src.nodes.planner.planning.load_plans")
+    @patch("src.nodes.planner.planning.plans_to_string")
     def test_load_available_plans_success(
         self, mock_plans_to_string, mock_load_plans
     ):
@@ -49,8 +49,8 @@ class TestLoadAvailablePlans:
         mock_load_plans.assert_called_once()
         mock_plans_to_string.assert_called_once()
 
-    @patch("src.nodes.planner.load_plans")
-    @patch("src.nodes.planner.plans_to_string")
+    @patch("src.nodes.planner.planning.load_plans")
+    @patch("src.nodes.planner.planning.plans_to_string")
     def test_load_available_plans_empty(
         self, mock_plans_to_string, mock_load_plans
     ):

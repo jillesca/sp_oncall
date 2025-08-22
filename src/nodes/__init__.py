@@ -7,6 +7,8 @@ This package contains all the node implementations that form the graph workflow:
 - executor: Executes network operations using MCP tools
 - assessor: Evaluates if objectives have been met
 - reporter: Generates final reports
+- markdown_builder: Utility for building markdown content
+- common: Shared utilities across all nodes
 """
 
 from .input_validator import input_validator_node
