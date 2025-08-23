@@ -7,7 +7,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Annotated
+
+from langchain_core.messages import AnyMessage, HumanMessage
+from langgraph.graph.message import add_messages
 
 from .assessment_schema import AssessmentOutput
 
@@ -17,7 +20,8 @@ class GraphState:
     """Enhanced workflow state supporting multi-device investigations.
 
     Attributes:
-        user_query: Original user question or task description.
+        messages: Conversation history between user and LLM using LangChain message format.
+                 Supports proper integration with LangChain tools and maintains conversation context.
         investigations: Collection of device-specific investigations.
         historical_context: Historical context and learned patterns from previous investigations.
 
@@ -29,11 +33,13 @@ class GraphState:
         assessment: Assessment results from the objective assessor node.
                    Contains is_objective_achieved, notes_for_final_report, and feedback_for_retry.
 
-        # Final output
-        final_report: Comprehensive report combining all investigations.
     """
 
-    user_query: str
+    # LangChain messages for proper tool integration and conversation history
+    messages: Annotated[List[AnyMessage], add_messages] = field(
+        default_factory=list
+    )
+
     investigations: List[Investigation] = field(default_factory=list)
     historical_context: List[HistoricalContext] = field(default_factory=list)
 
@@ -43,8 +49,46 @@ class GraphState:
 
     assessment: Optional[AssessmentOutput] = None
 
-    # Final output
-    final_report: Optional[str] = None
+    @property
+    def current_user_request(self) -> str:
+        """Extract the most recent user request content.
+
+        Returns the content of the most recent human message, which represents
+        the current user request being processed by the investigation workflow.
+
+        Handles both string content and structured content (list of content blocks).
+
+        Returns:
+            The content of the most recent human message, or empty string if none found.
+        """
+        # Find the most recent human message
+        for message in reversed(self.messages):
+            if isinstance(message, HumanMessage):
+                content = message.content
+
+                # Handle structured content (list of content blocks)
+                if isinstance(content, list):
+                    # Extract text from content blocks
+                    text_parts = []
+                    for block in content:
+                        if (
+                            isinstance(block, dict)
+                            and block.get("type") == "text"
+                        ):
+                            text_parts.append(block.get("text", ""))
+                        elif isinstance(block, str):
+                            text_parts.append(block)
+                    return " ".join(text_parts)
+
+                # Handle simple string content
+                elif isinstance(content, str):
+                    return content
+
+                # Fallback for other content types
+                else:
+                    return str(content)
+
+        return ""
 
     def get_investigation_by_device(
         self, device_name: str

@@ -305,7 +305,10 @@ class TestBuildFailedState:
         result = _build_failed_state(SAMPLE_GRAPH_STATE)
 
         assert isinstance(result, GraphState)
-        assert result.user_query == SAMPLE_GRAPH_STATE.user_query
+        assert (
+            result.current_user_request
+            == SAMPLE_GRAPH_STATE.current_user_request
+        )
 
     def test_build_failed_state_sets_empty_investigations(self):
         """Test that failed state sets investigations to empty list."""
@@ -326,7 +329,7 @@ class TestBuildFailedState:
     def test_build_failed_state_with_existing_investigations(self):
         """Test failed state building when original state has investigations."""
         state_with_investigations = GraphState(
-            user_query="test query",
+            messages=[HumanMessage(content="test query")],
             investigations=[
                 Investigation(
                     device_name="existing-device",
@@ -338,14 +341,16 @@ class TestBuildFailedState:
             max_retries=3,
             current_retries=0,
             assessment=None,
-            final_report=None,
         )
 
         result = _build_failed_state(state_with_investigations)
 
         # Should clear investigations even if they existed
         assert result.investigations == []
-        assert result.user_query == state_with_investigations.user_query
+        assert (
+            result.current_user_request
+            == state_with_investigations.current_user_request
+        )
 
 
 class TestDeviceToInvestigateDataClass:

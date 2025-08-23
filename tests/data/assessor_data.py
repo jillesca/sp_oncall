@@ -3,6 +3,8 @@ Test data for assessor node tests.
 Reorganized from existing assessor test files for better reusability.
 """
 
+from langchain_core.messages import HumanMessage
+
 from schemas.state import (
     GraphState,
     Investigation,
@@ -13,7 +15,7 @@ from schemas.assessment_schema import AssessmentOutput
 
 # Sample GraphState with investigations for assessment context building
 SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS = GraphState(
-    user_query="how are my routers PE doing?",
+    messages=[HumanMessage(content="how are my routers PE doing?")],
     investigations=[
         Investigation(
             device_name="xrd-1",
@@ -46,7 +48,6 @@ SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS = GraphState(
     max_retries=3,
     current_retries=0,
     assessment=None,
-    final_report=None,
 )
 
 # Sample AssessmentOutput for testing format ensuring
@@ -65,18 +66,17 @@ SAMPLE_ASSESSMENT_DICT = {
 
 # Empty state for testing
 EMPTY_GRAPH_STATE = GraphState(
-    user_query="test query",
+    messages=[HumanMessage(content="test query")],
     investigations=[],
     historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,
-    final_report=None,
 )
 
 # State with retry context
 RETRY_GRAPH_STATE = GraphState(
-    user_query="test query with retry",
+    messages=[HumanMessage(content="test query with retry")],
     investigations=[],
     historical_context=[],
     max_retries=3,
@@ -86,5 +86,4 @@ RETRY_GRAPH_STATE = GraphState(
         notes_for_final_report="First attempt failed",
         feedback_for_retry="Try a different approach",
     ),
-    final_report=None,
 )

@@ -86,13 +86,12 @@ EMPTY_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(
 
 # Sample GraphState for building failed state
 SAMPLE_GRAPH_STATE = GraphState(
-    user_query="test query",
+    messages=[HumanMessage(content="test query")],
     investigations=[],
     historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,
-    final_report=None,
 )
 
 # Test data for device profile normalization

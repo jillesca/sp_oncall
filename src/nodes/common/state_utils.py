@@ -5,7 +5,7 @@ This module provides shared functionality for state management operations
 that are used across different nodes to maintain consistency.
 """
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from dataclasses import replace
 
 from schemas.state import GraphState, Investigation
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 
 def build_error_state(
-    state: GraphState, error: Exception, error_message: str = None
+    state: GraphState, error: Exception, error_message: Optional[str] = None
 ) -> GraphState:
     """
     Build a GraphState for error scenarios.

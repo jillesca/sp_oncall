@@ -14,7 +14,7 @@ from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 # Sample GraphState with ready investigations
 SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS = GraphState(
-    user_query="Check device health",
+    messages=[HumanMessage(content="Check device health")],
     investigations=[
         Investigation(
             device_name="xrd-1",
@@ -47,7 +47,6 @@ SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS = GraphState(
     max_retries=3,
     current_retries=0,
     assessment=None,
-    final_report=None,
 )
 
 # Sample MCP response with messages

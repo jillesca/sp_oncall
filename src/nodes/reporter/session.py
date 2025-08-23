@@ -155,7 +155,7 @@ def _build_learning_insights_context(state: GraphState) -> str:
 
     # Original user query
     builder.add_section("Original User Query")
-    builder.add_text(state.user_query)
+    builder.add_text(state.current_user_request)
 
     # Investigation results summary
     builder.add_section("Investigation Results Summary")

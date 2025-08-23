@@ -40,7 +40,7 @@ def _add_investigation_details(
 ) -> None:
     """Add main investigation details to the context."""
     builder.add_header("Investigation Context")
-    builder.add_bold_text("User Query:", state.user_query)
+    builder.add_bold_text("User Query:", state.current_user_request)
     builder.add_bold_text("Device Name:", investigation.device_name)
     builder.add_bold_text("Role:", investigation.role)
     builder.add_bold_text(

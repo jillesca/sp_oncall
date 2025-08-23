@@ -45,7 +45,7 @@ def _add_user_query_section(
 ) -> None:
     """Add user query section."""
     builder.add_section("Original User Query")
-    builder.add_text(state.user_query)
+    builder.add_text(state.current_user_request)
 
 
 def _add_investigation_overview(

@@ -39,7 +39,7 @@ def planner_node(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with plan details and selected plan steps
     """
-    user_query = state.user_query
+    user_query = state.current_user_request
     logger.info("📋 Planning for user query: %s", user_query)
 
     try:

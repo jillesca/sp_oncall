@@ -9,7 +9,6 @@ learning insights generation and historical context management.
 from .core import (
     investigation_report_node,
     _log_successful_report_generation,
-    _build_reset_state_with_report,
 )
 
 # Import supporting functions

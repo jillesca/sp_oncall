@@ -85,7 +85,7 @@ class TestBuildInvestigationContext:
         result = build_investigation_context(investigation, state)
 
         assert isinstance(result, str)
-        assert f"**User Query:** {state.user_query}" in result
+        assert f"**User Query:** {state.current_user_request}" in result
         assert f"**Device Name:** {investigation.device_name}" in result
         assert investigation.device_profile in result
         assert f"**Role:** {investigation.role}" in result

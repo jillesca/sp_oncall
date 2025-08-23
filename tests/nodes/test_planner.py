@@ -171,7 +171,10 @@ class TestBuildSuccessfulPlanningState:
             SAMPLE_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_RESPONSE
         )
 
-        assert result.user_query == SAMPLE_GRAPH_STATE_FOR_PLANNING.user_query
+        assert (
+            result.current_user_request
+            == SAMPLE_GRAPH_STATE_FOR_PLANNING.current_user_request
+        )
         assert (
             result.max_retries == SAMPLE_GRAPH_STATE_FOR_PLANNING.max_retries
         )
@@ -271,7 +274,10 @@ class TestBuildFailedPlanningState:
             SAMPLE_GRAPH_STATE_FOR_PLANNING, SAMPLE_PLANNING_ERROR
         )
 
-        assert result.user_query == SAMPLE_GRAPH_STATE_FOR_PLANNING.user_query
+        assert (
+            result.current_user_request
+            == SAMPLE_GRAPH_STATE_FOR_PLANNING.current_user_request
+        )
         assert (
             result.max_retries == SAMPLE_GRAPH_STATE_FOR_PLANNING.max_retries
         )

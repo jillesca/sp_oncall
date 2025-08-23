@@ -34,7 +34,7 @@ def execute_investigation_planning(
     """
     logger.debug(
         "🔗 Executing investigation planning via MCP agent. User query: %s",
-        state.user_query,
+        state.current_user_request,
     )
 
     # Build comprehensive context including session history
@@ -67,7 +67,7 @@ def build_investigation_planning_context(state: GraphState) -> str:
 
     # Add user query
     builder.add_section("User Query")
-    builder.add_text(state.user_query)
+    builder.add_text(state.current_user_request)
 
     # Add historical context for historical awareness
     add_historical_context_to_builder(

@@ -11,11 +11,11 @@ from schemas.state import (
     HistoricalContext,
 )
 from schemas.assessment_schema import AssessmentOutput
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 # Sample GraphState with completed investigations for reporting
 SAMPLE_GRAPH_STATE_FOR_REPORTING = GraphState(
-    user_query="Check device health",
+    messages=[HumanMessage(content="Check device health")],
     investigations=[
         Investigation(
             device_name="xrd-1",
@@ -59,18 +59,16 @@ SAMPLE_GRAPH_STATE_FOR_REPORTING = GraphState(
         notes_for_final_report="Investigation completed successfully",
         feedback_for_retry=None,
     ),
-    final_report=None,
 )
 
 # Sample GraphState with no investigations
 EMPTY_GRAPH_STATE_FOR_REPORTING = GraphState(
-    user_query="test query",
+    messages=[HumanMessage(content="test query")],
     investigations=[],
     historical_context=[],
     max_retries=3,
     current_retries=0,
     assessment=None,
-    final_report=None,
 )
 
 # Sample historical contexts for testing

@@ -48,7 +48,7 @@ def _add_user_query_section(
 ) -> None:
     """Add user query section to the context."""
     builder.add_section("User Query")
-    builder.add_text(state.user_query)
+    builder.add_text(state.current_user_request)
 
 
 def _add_retry_information_section(

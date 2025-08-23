@@ -16,7 +16,7 @@ def log_incoming_state(state: GraphState) -> None:
     logger.debug(
         "📥 Executor received state: user_query='%s', investigations=%s total, "
         "ready_investigations=%s, current_retries=%s",
-        state.user_query,
+        state.current_user_request,
         len(state.investigations),
         len(state.get_ready_investigations()),
         state.current_retries,

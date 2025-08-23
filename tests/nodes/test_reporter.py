@@ -9,10 +9,11 @@ import pytest
 from unittest.mock import Mock, patch
 from dataclasses import replace
 
+from langchain_core.messages import HumanMessage
+
 from src.nodes.reporter.core import (
     investigation_report_node,
     _log_successful_report_generation,
-    _build_reset_state_with_report,
 )
 from src.nodes.reporter.context import (
     build_report_context,
@@ -55,7 +56,7 @@ class TestBuildReportContext:
         """Test that context includes the user query."""
         result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
 
-        assert SAMPLE_GRAPH_STATE_FOR_REPORTING.user_query in result
+        assert SAMPLE_GRAPH_STATE_FOR_REPORTING.current_user_request in result
 
     def test_build_report_context_includes_investigation_overview(self):
         """Test that context includes investigation overview statistics."""
@@ -175,7 +176,8 @@ class TestAddSessionContext:
         from schemas.state import GraphState
 
         mock_state = GraphState(
-            user_query="test", historical_context=SAMPLE_HISTORICAL_CONTEXTS
+            messages=[HumanMessage(content="test")],
+            historical_context=SAMPLE_HISTORICAL_CONTEXTS,
         )
         _add_historical_context(builder, mock_state)
         result = builder.build()
@@ -190,7 +192,9 @@ class TestAddSessionContext:
 
         from schemas.state import GraphState
 
-        mock_state = GraphState(user_query="test", historical_context=[])
+        mock_state = GraphState(
+            messages=[HumanMessage(content="test")], historical_context=[]
+        )
         _add_historical_context(builder, mock_state)
         result = builder.build()
 
@@ -205,7 +209,8 @@ class TestAddSessionContext:
         from schemas.state import GraphState
 
         mock_state = GraphState(
-            user_query="test", historical_context=SAMPLE_HISTORICAL_CONTEXTS
+            messages=[HumanMessage(content="test")],
+            historical_context=SAMPLE_HISTORICAL_CONTEXTS,
         )
         _add_historical_context(builder, mock_state)
         result = builder.build()
@@ -237,7 +242,8 @@ class TestAddSessionContext:
         from schemas.state import GraphState
 
         mock_state = GraphState(
-            user_query="test", historical_context=many_sessions
+            messages=[HumanMessage(content="test")],
+            historical_context=many_sessions,
         )
         _add_historical_context(builder, mock_state)
         result = builder.build()
@@ -452,59 +458,3 @@ class TestLogSuccessfulReportGeneration:
 
         # Function should complete without error
         assert True
-
-
-class TestBuildResetStateWithReport:
-    """Test cases for _build_reset_state_with_report function."""
-
-    def test_build_reset_state_with_report_creates_fresh_state(self):
-        """Test that function creates a fresh GraphState."""
-        updated_sessions = SAMPLE_HISTORICAL_CONTEXTS
-
-        result = _build_reset_state_with_report(
-            SAMPLE_GRAPH_STATE_FOR_REPORTING,
-            SAMPLE_FINAL_REPORT,
-            updated_sessions,
-        )
-
-        assert isinstance(result, GraphState)
-        assert result.user_query == SAMPLE_GRAPH_STATE_FOR_REPORTING.user_query
-        assert result.final_report == SAMPLE_FINAL_REPORT
-        assert result.historical_context == updated_sessions
-
-    def test_build_reset_state_with_report_resets_other_fields(self):
-        """Test that function resets other state fields to defaults."""
-        result = _build_reset_state_with_report(
-            SAMPLE_GRAPH_STATE_FOR_REPORTING,
-            SAMPLE_FINAL_REPORT,
-            SAMPLE_HISTORICAL_CONTEXTS,
-        )
-
-        # These should be reset to defaults
-        assert result.investigations == []
-        assert result.current_retries == 0
-        assert result.assessment is None
-
-    def test_build_reset_state_with_report_preserves_essential_info(self):
-        """Test that function preserves essential information."""
-        result = _build_reset_state_with_report(
-            SAMPLE_GRAPH_STATE_FOR_REPORTING,
-            SAMPLE_FINAL_REPORT,
-            SAMPLE_HISTORICAL_CONTEXTS,
-        )
-
-        # These should be preserved
-        assert result.user_query == SAMPLE_GRAPH_STATE_FOR_REPORTING.user_query
-        assert result.final_report == SAMPLE_FINAL_REPORT
-        assert result.historical_context == SAMPLE_HISTORICAL_CONTEXTS
-        assert result.max_retries == 3  # Default value
-
-    def test_build_reset_state_with_report_with_empty_inputs(self):
-        """Test function with empty inputs."""
-        result = _build_reset_state_with_report(
-            EMPTY_GRAPH_STATE_FOR_REPORTING, "", []
-        )
-
-        assert isinstance(result, GraphState)
-        assert result.final_report == ""
-        assert result.historical_context == []

@@ -250,8 +250,8 @@ class TestApplyAssessmentToWorkflow:
         )
 
         assert (
-            result.user_query
-            == SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS.user_query
+            result.current_user_request
+            == SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS.current_user_request
         )
         assert len(result.investigations) == len(
             SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS.investigations
