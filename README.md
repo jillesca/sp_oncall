@@ -140,15 +140,11 @@ Don't forget to `commit` your changes to XRd.
 
 The system employs a multi-agent workflow with five specialized nodes that work together to deliver completed network investigations:
 
-🔍 **Input Validator** - Validates user queries and identifies target devices for investigation
-
-📋 **Planner** - Creates tailored investigation strategies for each identified device
-
-⚡ **Executor** - Executes network investigations concurrently across multiple devices
-
-🎯 **Assessor** - Evaluates investigation results against objectives
-
-📊 **Reporter** - Generates comprehensive reports and manages knowledge retention
+- 🔍 **Input Validator** - Validates user queries and identifies target devices for investigation
+- 📋 **Planner** - Creates tailored investigation strategies for each identified device
+- ⚡ **Executor** - Executes network investigations concurrently across multiple devices
+- 🎯 **Assessor** - Evaluates investigation results against objectives
+- 📊 **Reporter** - Generates comprehensive reports and manages knowledge retention
 
 ## 🎯 Key Features
 
@@ -208,6 +204,8 @@ Configure your preferred LLM model in the `Configuration` class:
 > [!NOTE]
 > Default LLM is `gpt-5-nano`
 
+Best results has been with OpenAI. Is not garantee it will work with Ollama models, unless you add a high performant model.
+
 ### Investigation Plans
 
 Customize investigation behaviors by editing plans in the `/plans` directory:
@@ -215,6 +213,9 @@ Customize investigation behaviors by editing plans in the `/plans` directory:
 - Add new investigation types
 - Modify existing plan steps
 - Create role-specific investigation flows
+
+> [!NOTE]
+> The plans are only a suggestion for the network executor node. The network executor nodes reviews the request, objetive and plans and figure it out the best course of action.
 
 ### Logging and Debug
 
