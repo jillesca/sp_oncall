@@ -147,7 +147,7 @@ The system employs a multi-agent workflow with five specialized nodes that work 
 - 📊 **Reporter** - Generates comprehensive reports and manages knowledge retention
 
 <p align="center">
-  <img src="img/graph.png" alt="graph of agents" style="width: 100px; height: auto; display: block; margin: 0 auto;" />
+  <img src="img/graph.png" alt="graph of agents" style="width: 300px; height: auto; display: block; margin: 0 auto;" />
 </p>
 
 ## 🎯 Key Features
