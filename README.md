@@ -146,7 +146,9 @@ The system employs a multi-agent workflow with five specialized nodes that work 
 - 🎯 **Assessor** - Evaluates investigation results against objectives
 - 📊 **Reporter** - Generates comprehensive reports and manages knowledge retention
 
-![graph of agentes](img/graph.png)
+<p align="center">
+  <img src="img/graph.png" alt="graph of agentes" style="max-width: 600px; width: 100%; height: auto; display: block; margin: 0 auto;" />
+</p>
 
 ## 🎯 Key Features
 
