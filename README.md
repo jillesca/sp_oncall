@@ -9,8 +9,7 @@ The following prerequisites are required before using SP Oncall:
 - **[uv](https://docs.astral.sh/uv/#installation)** - Python package manager.
 - **[OpenAI API Key](https://platform.openai.com/)**.
 - **[LangSmith Account](https://smith.langchain.com/)** - For Langgraph Studio, tracing and debugging.
-- **[gNMIBuddy](https://github.com/jillesca/gNMIBuddy)** - gNMI collector with MCP.
-- **Network Devices** - Accessible via gNMI protocol, or use [DevNet sandbox](https://devnetsandbox.cisco.com/DevNet/).
+- **Network Devices** - Accessible via gNMI, or use [DevNet sandbox](https://devnetsandbox.cisco.com/DevNet/) for testing.
 
 ## ⚡️ Quick Start Guide
 
@@ -37,9 +36,9 @@ LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 SP_ONCALL_LANGCHAIN_DEBUG=false
 ```
 
-### 3. 🔌 MCP Server Configuration
+### 3. 🔌 MCP Configuration
 
-SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) via the Model Context Protocol (MCP) for network device communication. The MCP configuration is defined in `mcp_config.json`:
+SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to extract data from network devices. The MCP configuration is defined in [mcp_config.json](mcp_config.json)
 
 ```json
 {
