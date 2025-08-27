@@ -4,20 +4,20 @@ SP Oncall is an advanced AI-powered network investigation system that orchestrat
 
 ## 🛠️ Prerequisites
 
-Before using SP Oncall, ensure you have the following:
+The following prerequisites are required before using SP Oncall:
 
-- **[uv](https://docs.astral.sh/uv/#installation)** - Python package manager (required)
-- **OpenAI API Key** - For LLM-powered agent intelligence
-- **LangSmith Account** - For tracing and debugging (recommended)
-- **[gNMIBuddy](https://github.com/jillesca/gNMIBuddy)** - Network device communication tool (via MCP)
-- **Network Devices** - Accessible via gNMI protocol, or use DevNet sandbox
+- **[uv](https://docs.astral.sh/uv/#installation)** - Python package manager.
+- **[OpenAI API Key](https://platform.openai.com/)**.
+- **[LangSmith Account](https://smith.langchain.com/)** - For Langgraph Studio, tracing and debugging.
+- **[gNMIBuddy](https://github.com/jillesca/gNMIBuddy)** - gNMI collector with MCP.
+- **Network Devices** - Accessible via gNMI protocol, or use [DevNet sandbox](https://devnetsandbox.cisco.com/DevNet/).
 
 ## ⚡️ Quick Start Guide
 
 ### 1. 📁 Clone and Setup
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/jillesca/sp_oncall
 cd sp_oncall
 ```
 
@@ -29,19 +29,13 @@ Create a `.env` file in the project root with your API keys:
 # .env file - Required for operation
 OPENAI_API_KEY=your-openai-api-key-here
 LANGSMITH_API_KEY=your-langsmith-api-key-here
-LANGSMITH_PROJECT=sp-oncall-investigations
+LANGSMITH_PROJECT=your-project-name
 LANGSMITH_TRACING=true
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 
 # Optional: Enable detailed LangChain debugging
 SP_ONCALL_LANGCHAIN_DEBUG=false
 ```
-
-**Required Environment Variables:**
-
-- `OPENAI_API_KEY`: Your OpenAI API key for LLM functionality
-- `LANGSMITH_API_KEY`: Your LangSmith API key for tracing and monitoring
-- `LANGSMITH_PROJECT`: Project name for organizing your investigation traces
 
 ### 3. 🔌 MCP Server Configuration
 
@@ -64,7 +58,8 @@ SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) via the Model 
 }
 ```
 
-**Important**: Ensure your network inventory file (`xrd_sandbox.json`) contains your device definitions.
+> [!NOTE]
+> Replace `xrd_sandbox.json` by your device inventory if not using the [DevNet Sandbox](https://devnetsandbox.cisco.com/DevNet/).
 
 ### 4. 🚀 Installation and Launch
 
@@ -76,20 +71,18 @@ make run
 
 This command will:
 
-- Install all Python dependencies via uv
-- Configure the MCP client connection to gNMIBuddy
-- Start the LangGraph workflow server
-- Make the system ready for investigations
+- Install all Python dependencies via `uv`
+- Start the LangGraph dev server
 
 ### 5. 💻 Usage Examples
 
-Once running, you can submit various types of investigation requests:
+Once running, you can submit various types of requests:
 
 **Single Device Investigation:**
 
 ```text
-"Check BGP neighbors on pe-router-01"
-"Review the health of core-rtr-01"
+"Check BGP neighbors on xrd-1"
+"Review the health of xrd-8"
 ```
 
 **Multi-Device by Role:**
@@ -103,15 +96,7 @@ Once running, you can submit various types of investigation requests:
 **Pattern-Based Investigation:**
 
 ```text
-"Analyze all edge devices in region A"
-"Check interfaces on devices matching 'access-*'"
-```
-
-**Complex Investigations:**
-
-```text
-"Troubleshoot MPLS connectivity between sites"
-"Review VPN status across all PE devices"
+"Check interfaces on devices matching 'xrd-*'"
 ```
 
 ## 🧪 Testing with DevNet Sandbox
@@ -120,22 +105,37 @@ Don't have network devices? No problem! Use the [DevNet XRd Sandbox](https://dev
 
 ### 🏗️ Sandbox Setup
 
-1. Reserve the **IOS XRd MPLS Topology** sandbox
-2. Follow sandbox instructions to bring up the MPLS network with Docker
-3. Configure gNMI on the simulated devices
-4. Update your inventory file to point to the sandbox devices
+1. Reserve the **XRd sandbox**.
+2. Follow sandbox instructions to bring up the SR MPLS network with Docker.
+3. Configure gNMI on the simulated devices.
 
 ### 📚 Detailed gNMI Setup Guide
 
-For complete instructions on configuring the DevNet sandbox with gNMI support, visit:
-👉 **[gNMIBuddy Sandbox Setup Guide](https://github.com/jillesca/gNMIBuddy?tab=readme-ov-file#-testing-with-devnet-sandbox)**
+To configure the gNMI on the XRd DevNet sandbox you can use a helper script:
 
-This guide covers:
+```bash
+ANSIBLE_HOST_KEY_CHECKING=False \
+bash -c 'TMPDIR=$(mktemp -d) \
+&& trap "rm -rf $TMPDIR" EXIT \
+&& curl -s https://raw.githubusercontent.com/jillesca/gNMIBuddy/refs/heads/main/ansible-helper/xrd_apply_config.yaml > "$TMPDIR/playbook.yaml" \
+&& curl -s https://raw.githubusercontent.com/jillesca/gNMIBuddy/refs/heads/main/ansible-helper/hosts > "$TMPDIR/hosts" \
+&& uvx --from ansible-core --with "paramiko,ansible" ansible-playbook "$TMPDIR/playbook.yaml" -i "$TMPDIR/hosts"'
+```
 
-- 🔧 Enabling gNMI on XRd devices
-- 📝 Creating inventory files
-- 🔐 Setting up authentication
-- 🧪 Testing connectivity
+<details>
+<summary><strong>If you have problems with Ansible</strong></summary>
+
+Enable manually gNMI. Apply this configuration to all XRd devices:
+
+```bash
+grpc
+ port 57777
+ no-tls
+```
+
+Don't forget to `commit` your changes to XRd.
+
+</details>
 
 ## 🤖 Graph of Agents Architecture
 
