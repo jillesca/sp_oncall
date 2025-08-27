@@ -138,55 +138,17 @@ Don't forget to `commit` your changes to XRd.
 
 ## 🤖 Graph of Agents Architecture
 
-The system employs a sophisticated multi-agent workflow with five specialized nodes that work together to deliver comprehensive network investigations:
+The system employs a multi-agent workflow with five specialized nodes that work together to deliver completed network investigations:
 
-### 🔍 Input Validator
+🔍 **Input Validator** - Validates user queries and identifies target devices for investigation
 
-- **Purpose**: Validates user queries and identifies target devices for investigation
-- **Capabilities**:
-  - Parses natural language requests (single device, multiple devices, or role-based queries)
-  - Validates device existence against network inventory via gNMIBuddy
-  - Supports flexible device discovery by name, role, or pattern matching
-  - Extracts device profiles and roles for intelligent planning
+📋 **Planner** - Creates tailored investigation strategies for each identified device
 
-### 📋 Planner
+⚡ **Executor** - Executes network investigations concurrently across multiple devices
 
-- **Purpose**: Creates tailored investigation strategies for each identified device
-- **Capabilities**:
-  - Generates device-specific objectives and investigation plans
-  - Adapts plans based on device roles (PE, P, RR, etc.) and characteristics
-  - Seeds from static JSON plans but customizes for each device's context
-  - Considers device dependencies and investigation priorities
-  - Leverages historical context to avoid redundant checks
+🎯 **Assessor** - Evaluates investigation results against objectives
 
-### ⚡ Executor
-
-- **Purpose**: Executes network investigations concurrently across multiple devices
-- **Capabilities**:
-  - **Parallel Processing**: Investigates multiple devices simultaneously for improved efficiency
-  - Dynamically selects appropriate gNMIBuddy tools and parameters
-  - Handles device-specific protocols and configurations
-  - Manages execution results and error handling per device
-  - Supports concurrent investigation by device name, role, or type
-
-### 🎯 Assessor
-
-- **Purpose**: Evaluates investigation results against objectives
-- **Capabilities**:
-  - Analyzes execution results for completeness and quality
-  - Determines if investigation objectives were met
-  - Provides intelligent retry logic with feedback
-  - Identifies areas needing additional investigation
-
-### 📊 Reporter
-
-- **Purpose**: Generates comprehensive reports and manages knowledge retention
-- **Capabilities**:
-  - Creates detailed investigation summaries combining all device results
-  - **Historical Context Management**: Maintains session history with previous reports
-  - **Learning Insights Extraction**: Uses LLM analysis to identify patterns and relationships
-  - **Device Relationship Discovery**: Maps network dependencies and connectivity patterns
-  - Stores learned patterns for future investigation context
+📊 **Reporter** - Generates comprehensive reports and manages knowledge retention
 
 ## 🎯 Key Features
 
@@ -242,6 +204,9 @@ Configure your preferred LLM model in the `Configuration` class:
 
 - OpenAI: `gpt-4`, `gpt-4o-mini`, `gpt-5-nano`
 - Ollama: `qwen3:8b`, `llama3.1`
+
+> [!NOTE]
+> Default LLM is `gpt-5-nano`
 
 ### Investigation Plans
 
