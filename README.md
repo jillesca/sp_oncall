@@ -157,6 +157,13 @@ The system employs a multi-agent workflow with five specialized nodes that work 
   <img src="img/graph.png" alt="graph of agents" style="width: 300px; height: auto; display: block; margin: 0 auto;" />
 </p>
 
+**Core Benefits:**
+
+- **Stateful Workflow**: Maintains context throughout complex investigations.
+- **Learning System**: Continuously improves through pattern recognition.
+- **Concurrent Processing**: Handles multiple devices efficiently.
+- **Adaptive Execution**: Tailors strategies to device roles and context.
+
 ## 🎯 Key Features
 
 - **Intelligent Learning**: Maintains investigation history and extracts operational patterns for context-aware planning.
@@ -185,26 +192,3 @@ Customize behaviors by editing JSON plans in `/plans/`:
 - Set `SP_ONCALL_LANGCHAIN_DEBUG=true` for detailed tracing.
 - Use LangSmith for comprehensive investigation monitoring.
 - Review logs in `/logs/debug/` for troubleshooting.
-
-## 🏗️ Architecture
-
-The system implements a stateful workflow using LangGraph with five specialized nodes:
-
-```mermaid
-graph LR
-    A[User Query] --> B[Input Validator]
-    B --> C[Planner]
-    C --> D[Executor]
-    D --> E[Assessor]
-    E --> F{Objective Met?}
-    F -->|No| D
-    F -->|Yes| G[Reporter]
-    G --> H[Final Report + Learning]
-```
-
-**Core Benefits:**
-
-- **Stateful Workflow**: Maintains context throughout complex investigations.
-- **Learning System**: Continuously improves through pattern recognition.
-- **Concurrent Processing**: Handles multiple devices efficiently.
-- **Adaptive Execution**: Tailors strategies to device roles and context.
