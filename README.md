@@ -2,6 +2,26 @@
 
 SP Oncall is an advanced AI-powered network investigation system that orchestrates a specialized graph of agents to automate complex network diagnostics and troubleshooting. Built with [LangGraph](https://github.com/langchain-ai/langgraph), it provides intelligent, concurrent analysis of multiple network devices while learning from each investigation to improve future performance.
 
+## 🤖 Graph of Agents Architecture
+
+The system uses a multi-agent workflow with five specialized agent nodes that work together to deliver completed network investigations:
+
+- 🔍 **Input Validator** - Validates user queries and identifies target devices for investigation.
+- 📋 **Planner** - Creates tailored investigation strategies for each identified device.
+- ⚡ **Executor** - Executes network investigations concurrently across multiple devices.
+- 🎯 **Assessor** - Evaluates investigation results against objectives.
+- 📊 **Reporter** - Generates comprehensive reports and manages knowledge retention.
+
+![graph](img/graph.png)
+
+## 🎯 Key Features
+
+- **Intelligent Learning**: Maintains investigation history and extracts operational patterns for context-aware planning.
+- **Multi-Device Processing**: Concurrent execution across devices with flexible targeting by name, role, or pattern.
+- **Dynamic Planning**: Uses predefined JSON templates as starting points, then adapts plans per device based on role, capabilities, and context.
+- **Smart Assessment**: Continuous evaluation with automated retry logic when objectives aren't met.
+- **Comprehensive Reporting**: Generates detailed reports while preserving learned insights for future investigations.
+
 ## 🛠️ Prerequisites
 
 The following prerequisites are required before using SP Oncall:
@@ -143,41 +163,16 @@ Don't forget to `commit` your changes to XRd.
 
 </details>
 
-## 🤖 Graph of Agents Architecture
-
-The system employs a multi-agent workflow with five specialized nodes that work together to deliver completed network investigations:
-
-- 🔍 **Input Validator** - Validates user queries and identifies target devices for investigation.
-- 📋 **Planner** - Creates tailored investigation strategies for each identified device.
-- ⚡ **Executor** - Executes network investigations concurrently across multiple devices.
-- 🎯 **Assessor** - Evaluates investigation results against objectives.
-- 📊 **Reporter** - Generates comprehensive reports and manages knowledge retention.
-
-<p align="center">
-  <img src="img/graph.png" alt="graph of agents" style="width: 300px; height: auto; display: block; margin: 0 auto;" />
-</p>
-
-**Core Benefits:**
-
-- **Stateful Workflow**: Maintains context throughout complex investigations.
-- **Learning System**: Continuously improves through pattern recognition.
-- **Concurrent Processing**: Handles multiple devices efficiently.
-- **Adaptive Execution**: Tailors strategies to device roles and context.
-
-## 🎯 Key Features
-
-- **Intelligent Learning**: Maintains investigation history and extracts operational patterns for context-aware planning.
-- **Multi-Device Processing**: Concurrent execution across devices with flexible targeting by name, role, or pattern.
-- **Dynamic Planning**: Uses predefined JSON templates as starting points, then adapts plans per device based on role, capabilities, and context.
-- **Smart Assessment**: Continuous evaluation with automated retry logic when objectives aren't met.
-- **Comprehensive Reporting**: Generates detailed reports while preserving learned insights for future investigations.
-
 ## 🔧 Configuration
 
 ### LLM Models
 
+On the _Manage Assistants_ button you can select different LLMs to try.
+
 - **OpenAI**: `gpt-4`, `gpt-4o-mini`, `gpt-5-nano` (default).
 - **Ollama**: `qwen3:8b`, `llama3.1` (experimental).
+
+![llms](img/llms.png)
 
 ### Investigation Plans
 
