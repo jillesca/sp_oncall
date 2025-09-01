@@ -65,13 +65,22 @@ SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to 
 Install dependencies and start the investigation system:
 
 ```bash
+# First time only: Install dependencies using the exact versions from uv.lock
+make install
+
+# Start the investigation system
 make run
 ```
 
-This command will:
+The `make install` command will:
 
-- Install all Python dependencies via `uv`.
+- Install all Python dependencies using the exact versions specified in `uv.lock` (frozen dependencies).
+- This ensures you have the same exact dependencies that were used during development.
+
+The `make run` command will:
+
 - Start the LangGraph dev server.
+- Note: Dependencies only need to be installed once, unless you update them.
 
 ### 5. 💻 Usage Examples
 
