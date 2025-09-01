@@ -70,8 +70,8 @@ make run
 
 This command will:
 
-- Install all Python dependencies via `uv`
-- Start the LangGraph dev server
+- Install all Python dependencies via `uv`.
+- Start the LangGraph dev server.
 
 ### 5. 💻 Usage Examples
 
@@ -100,15 +100,13 @@ Once running, you can submit various types of requests:
 
 ## 🧪 Testing with DevNet Sandbox
 
-Don't have network devices? No problem! Use the [DevNet XRd Sandbox](https://devnetsandbox.cisco.com/DevNet/) to test SP Oncall:
+Don't have network devices? No problem! Use the [DevNet XRd Sandbox.](https://devnetsandbox.cisco.com/DevNet/)
 
 ### 🏗️ Sandbox Setup
 
 1. Reserve the **XRd sandbox**.
 2. Follow sandbox instructions to bring up the SR MPLS network with Docker.
 3. Configure gNMI on the simulated devices.
-
-### 📚 Detailed gNMI Setup Guide
 
 To configure the gNMI on the XRd DevNet sandbox you can use a helper script:
 
@@ -140,11 +138,11 @@ Don't forget to `commit` your changes to XRd.
 
 The system employs a multi-agent workflow with five specialized nodes that work together to deliver completed network investigations:
 
-- 🔍 **Input Validator** - Validates user queries and identifies target devices for investigation
-- 📋 **Planner** - Creates tailored investigation strategies for each identified device
-- ⚡ **Executor** - Executes network investigations concurrently across multiple devices
-- 🎯 **Assessor** - Evaluates investigation results against objectives
-- 📊 **Reporter** - Generates comprehensive reports and manages knowledge retention
+- 🔍 **Input Validator** - Validates user queries and identifies target devices for investigation.
+- 📋 **Planner** - Creates tailored investigation strategies for each identified device.
+- ⚡ **Executor** - Executes network investigations concurrently across multiple devices.
+- 🎯 **Assessor** - Evaluates investigation results against objectives.
+- 📊 **Reporter** - Generates comprehensive reports and manages knowledge retention.
 
 <p align="center">
   <img src="img/graph.png" alt="graph of agents" style="width: 300px; height: auto; display: block; margin: 0 auto;" />
@@ -152,84 +150,36 @@ The system employs a multi-agent workflow with five specialized nodes that work 
 
 ## 🎯 Key Features
 
-### 📚 Intelligent Learning & History
+- **Intelligent Learning**: Maintains investigation history and extracts operational patterns for context-aware planning.
+- **Multi-Device Processing**: Concurrent execution across devices with flexible targeting by name, role, or pattern.
+- **Dynamic Planning**: Uses predefined JSON templates as starting points, then adapts plans per device based on role, capabilities, and context.
+- **Smart Assessment**: Continuous evaluation with automated retry logic when objectives aren't met.
+- **Comprehensive Reporting**: Generates detailed reports while preserving learned insights for future investigations.
 
-- **Session History**: Maintains history of previous investigations with full reports
-- **Learning Insights**: Automatically extracts valuable patterns from each investigation:
-  - Common configuration patterns across device roles
-  - Operational behaviors and troubleshooting approaches
-  - Network architecture insights and performance patterns
-- **Device Relationships**: Discovers and maps network relationships:
-  - Physical and logical connections between devices
-  - Dependencies affecting investigation order
-  - Traffic flow and control plane relationships (BGP, ISIS, OSPF)
-- **Context-Aware Planning**: Uses historical insights to inform future investigations
+## 🔧 Configuration
 
-### 🚀 Advanced Multi-Device Processing
+### LLM Models
 
-- **Concurrent Execution**: Investigates multiple devices in parallel for maximum efficiency
-- **Flexible Device Targeting**:
-  - **By Name**: Specific device names (e.g., "router-01", "pe-core-01")
-  - **By Role**: Device functions (e.g., "all PE routers", "core P devices", "route reflectors")
-  - **By Pattern**: Pattern matching (e.g., "all edge devices", "devices in region A")
-- **Priority-Based Investigation**: HIGH/MEDIUM/LOW priority levels for resource optimization
-- **Dependency Management**: Handles investigation order based on device dependencies
-
-### 📋 Dynamic Plan Generation
-
-- **Static Plan Seeding**: Uses predefined JSON plans as starting templates:
-  - `general_device_health_check.json`
-  - `check_bgp_neighbors.json`
-  - `check_interface_status.json`
-  - `check_mpls_state.json`
-  - `review_p_device.json`, `review_pe_device.json`, `review_rr_device.json`
-  - `troubleshoot_vpn_vrf.json`
-- **Adaptive Planning**: Executor can modify plans per device based on:
-  - Device role and capabilities
-  - Historical findings and patterns
-  - Current network state and context
-  - Investigation priority and scope
-
-### 🔄 Intelligent Retry & Assessment
-
-- **Smart Retry Logic**: Automated retry with feedback when objectives aren't met
-- **Continuous Assessment**: Real-time evaluation of investigation progress
-- **Error Handling**: Graceful handling of device communication issues
-
-## 🔧 Configuration Options
-
-### LLM Model Selection
-
-Configure your preferred LLM model in the `Configuration` class:
-
-- OpenAI: `gpt-4`, `gpt-4o-mini`, `gpt-5-nano`
-- Ollama: `qwen3:8b`, `llama3.1`
-
-> [!NOTE]
-> Default LLM is `gpt-5-nano`
-
-Best results has been with OpenAI. Is not garantee it will work with Ollama models, unless you add a high performant model.
+- **OpenAI**: `gpt-4`, `gpt-4o-mini`, `gpt-5-nano` (default).
+- **Ollama**: `qwen3:8b`, `llama3.1` (experimental).
 
 ### Investigation Plans
 
-Customize investigation behaviors by editing plans in the `/plans` directory:
+Customize behaviors by editing JSON plans in `/plans/`:
 
-- Add new investigation types
-- Modify existing plan steps
-- Create role-specific investigation flows
+- Device health checks, BGP analysis, interface monitoring, MPLS state.
+- Role-specific flows for PE, P, and route reflector devices.
+- Plans serve as suggestions - the executor adapts them based on context.
 
-> [!NOTE]
-> The plans are only a suggestion for the network executor node. The network executor nodes reviews the request, objetive and plans and figure it out the best course of action.
+### Debug & Monitoring
 
-### Logging and Debug
+- Set `SP_ONCALL_LANGCHAIN_DEBUG=true` for detailed tracing.
+- Use LangSmith for comprehensive investigation monitoring.
+- Review logs in `/logs/debug/` for troubleshooting.
 
-- Set `SP_ONCALL_LANGCHAIN_DEBUG=true` for detailed tracing
-- Use LangSmith for comprehensive investigation monitoring
-- Review logs in `/logs/debug/` for troubleshooting
+## 🏗️ Architecture
 
-## 🏗️ Architecture Deep Dive
-
-The system implements a sophisticated state machine using LangGraph:
+The system implements a stateful workflow using LangGraph with five specialized nodes:
 
 ```mermaid
 graph LR
@@ -243,14 +193,9 @@ graph LR
     G --> H[Final Report + Learning]
 ```
 
-**Key Architectural Benefits:**
+**Core Benefits:**
 
-- 🔄 **Stateful Workflow**: Maintains context throughout complex investigations
-- 🧠 **Learning System**: Continuously improves through pattern recognition
-- 🚀 **Concurrent Processing**: Handles multiple devices efficiently
-- 🎯 **Adaptive Planning**: Tailors strategies to device roles and context
-- 📊 **Comprehensive Reporting**: Combines technical findings with learned insights
-
----
-
-**Ready to revolutionize your network investigations?** 🚀 Start with the quick start guide above and experience intelligent, AI-powered network diagnostics!
+- **Stateful Workflow**: Maintains context throughout complex investigations.
+- **Learning System**: Continuously improves through pattern recognition.
+- **Concurrent Processing**: Handles multiple devices efficiently.
+- **Adaptive Execution**: Tailors strategies to device roles and context.
