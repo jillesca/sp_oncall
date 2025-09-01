@@ -52,7 +52,7 @@ LANGSMITH_PROJECT=your-project-name
 LANGSMITH_TRACING=true
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 
-# Optional: Enable detailed LangChain debugging
+# Optional: Enable application debug logging
 SP_ONCALL_LANGCHAIN_DEBUG=false
 ```
 
@@ -184,6 +184,10 @@ Customize behaviors by editing JSON plans in `/plans/`:
 
 ### Debug & Monitoring
 
-- Set `SP_ONCALL_LANGCHAIN_DEBUG=true` for detailed tracing.
-- Use LangSmith for comprehensive investigation monitoring.
-- Review logs in `/logs/debug/` for troubleshooting.
+The system includes a logging system with automatic operation tracking and external library noise suppression:
+
+- **Environment Control**: Set `SP_ONCALL_LOG_LEVEL=debug` for detailed logging, `SP_ONCALL_LANGCHAIN_DEBUG=true` for LangChain logging.
+- **Module-Specific Levels**: Configure individual module verbosity (e.g., `SP_ONCALL_MODULE_LEVELS="sp_oncall.nodes=debug,langgraph=error"`).
+- **Object Debug Capture Utility**: Use `SP_ONCALL_DEBUG_CAPTURE=1` to automatically capture complex objects to log files for offline analysis. Note: This requires the `debug_capture_object` function to be called in your code.
+
+For detailed logging configuration and advanced features, see [src/logging/README.md](src/logging/README.md). For debug capture objects, see [docs/DEBUG_CAPTURE.md](docs/DEBUG_CAPTURE.md).
