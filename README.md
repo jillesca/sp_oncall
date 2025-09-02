@@ -1,6 +1,6 @@
-# 🚀 SP Oncall: Intelligent Network Investigation with Multi-Agent LangGraph
+# 🚀 SP Oncall: Multi-Agent Network Investigation
 
-SP Oncall is an advanced AI-powered network investigation system that orchestrates a specialized graph of agents to automate complex network diagnostics and troubleshooting. Built with [LangGraph](https://github.com/langchain-ai/langgraph), it provides intelligent, concurrent analysis of multiple network devices while learning from each investigation to improve future performance.
+SP Oncall is a network investigation system that orchestrates a specialized graph of agents to automate complex network diagnostics and troubleshooting.
 
 ## 🤖 Graph of Agents Architecture
 
@@ -10,26 +10,29 @@ The system uses a multi-agent workflow with five specialized agent nodes that wo
 - 📋 **Planner** - Creates tailored investigation strategies for each identified device.
 - ⚡ **Executor** - Executes network investigations concurrently across multiple devices.
 - 🎯 **Assessor** - Evaluates investigation results against objectives.
-- 📊 **Reporter** - Generates comprehensive reports and manages knowledge retention.
+- 📊 **Reporter** - Generates reports and manages knowledge retention.
 
 ![graph](img/graph.png)
 
 ## 🎯 Key Features
 
-- **Intelligent Learning**: Maintains investigation history and extracts operational patterns for context-aware planning.
+- **Learning**: Maintains investigation history and extracts operational patterns for context-aware planning.
 - **Multi-Device Processing**: Concurrent execution across devices with flexible targeting by name, role, or pattern.
 - **Dynamic Planning**: Uses predefined JSON templates as starting points, then adapts plans per device based on role, capabilities, and context.
-- **Smart Assessment**: Continuous evaluation with automated retry logic when objectives aren't met.
-- **Comprehensive Reporting**: Generates detailed reports while preserving learned insights for future investigations.
+- **Self Assessment**: Continuous evaluation with automated retry logic when objectives aren't met.
+- **Reporting**: Generates detailed reports while preserving learned insights for future investigations.
 
 ## 🛠️ Prerequisites
 
 The following prerequisites are required before using SP Oncall:
 
+- **Make**
 - **[uv](https://docs.astral.sh/uv/#installation)** - Python package manager.
-- **[OpenAI API Key](https://platform.openai.com/)**.
-- **[LangSmith Account](https://smith.langchain.com/)** - For Langgraph Studio, tracing and debugging.
+- **[OpenAI API Key](https://platform.openai.com/)**. Provide your own.
+- **[LangSmith Account](https://smith.langchain.com/)** - For Langgraph Studio. Provide your own.
 - **Network Devices** - Accessible via gNMI, or use [DevNet sandbox](https://devnetsandbox.cisco.com/DevNet/) for testing.
+
+**Windows users**: This repo requires a Unix-like environment. Use [WSL](https://docs.microsoft.com/en-us/windows/wsl/install).
 
 ## ⚡️ Quick Start Guide
 
@@ -51,9 +54,6 @@ LANGSMITH_API_KEY=your-langsmith-api-key-here
 LANGSMITH_PROJECT=your-project-name
 LANGSMITH_TRACING=true
 LANGSMITH_ENDPOINT=https://api.smith.langchain.com
-
-# Optional: Enable application debug logging
-SP_ONCALL_LANGCHAIN_DEBUG=false
 ```
 
 ### 3. 🔌 MCP Configuration
@@ -85,7 +85,7 @@ SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to 
 Install dependencies and start the investigation system:
 
 ```bash
-# First time only: Install dependencies using the exact versions from uv.lock
+# First time only
 make install
 
 # Start the investigation system
@@ -95,12 +95,10 @@ make run
 The `make install` command will:
 
 - Install all Python dependencies using the exact versions specified in `uv.lock` (frozen dependencies).
-- This ensures you have the same exact dependencies that were used during development.
 
 The `make run` command will:
 
 - Start the LangGraph dev server.
-- Note: Dependencies only need to be installed once, unless you update them.
 
 ### 5. 💻 Usage Examples
 
@@ -133,7 +131,7 @@ Don't have network devices? No problem! Use the [DevNet XRd Sandbox.](https://de
 
 ### 🏗️ Sandbox Setup
 
-1. Reserve the **XRd sandbox**.
+1. Reserve the DevNet **XRd Sandbox**.
 2. Follow sandbox instructions to bring up the SR MPLS network with Docker.
 3. Configure gNMI on the simulated devices.
 
@@ -176,7 +174,7 @@ On the _Manage Assistants_ button you can select different LLMs to try.
 
 ### Investigation Plans
 
-Customize behaviors by editing JSON plans in `/plans/`:
+Customize behaviors by editing JSON plans in the `/plans` directory:
 
 - Device health checks, BGP analysis, interface monitoring, MPLS state.
 - Role-specific flows for PE, P, and route reflector devices.
@@ -188,6 +186,7 @@ The system includes a logging system with automatic operation tracking and exter
 
 - **Environment Control**: Set `SP_ONCALL_LOG_LEVEL=debug` for detailed logging, `SP_ONCALL_LANGCHAIN_DEBUG=true` for LangChain logging.
 - **Module-Specific Levels**: Configure individual module verbosity (e.g., `SP_ONCALL_MODULE_LEVELS="sp_oncall.nodes=debug,langgraph=error"`).
+  - Use `make logger-names` to find the logging modules available.
 - **Object Debug Capture Utility**: Use `SP_ONCALL_DEBUG_CAPTURE=1` to automatically capture complex objects to log files for offline analysis. Note: This requires the `debug_capture_object` function to be called in your code.
 
 For detailed logging configuration and advanced features, see [src/logging/README.md](src/logging/README.md). For debug capture objects, see [docs/DEBUG_CAPTURE.md](docs/DEBUG_CAPTURE.md).
