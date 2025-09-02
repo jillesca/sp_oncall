@@ -44,7 +44,7 @@ class LoggerNames:
 
     # Prompts
     PROMPTS = f"{APP_ROOT}.prompts"
-    DEVICE_EXTRACTION = f"{PROMPTS}.device_extraction"
+    INVESTIGATION_PLANNING = f"{PROMPTS}.investigation_planning"
     NETWORK_EXECUTOR = f"{PROMPTS}.network_executor"
     OBJECTIVE_ASSESSOR = f"{PROMPTS}.objective_assessor"
     PLANNER_PROMPT = f"{PROMPTS}.planner"
@@ -54,7 +54,7 @@ class LoggerNames:
     SCHEMAS = f"{APP_ROOT}.schemas"
     STATE = f"{SCHEMAS}.state"
     ASSESSMENT = f"{SCHEMAS}.assessment_schema"
-    DEVICE_EXTRACTION_SCHEMA = f"{SCHEMAS}.device_extraction_schema"
+    INVESTIGATION_PLANNING_SCHEMA = f"{SCHEMAS}.investigation_planning_schema"
     PLANNER_SCHEMA = f"{SCHEMAS}.planner_schema"
 
     @classmethod

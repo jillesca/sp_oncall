@@ -63,6 +63,13 @@ from .decorators import log_operation, log_async_operation, log_node_execution
 # Utilities
 from .utils.dynamic import get_logger, set_module_level, get_module_levels
 from .utils.convenience import configure_logging
+from .utils.debug_capture import (
+    DebugCapture,
+    debug_capture_object,
+    debug_capture_with_context,
+    conditional_debug_capture,
+    get_debug_capture,
+)
 
 __all__ = [
     # Core components
@@ -96,4 +103,10 @@ __all__ = [
     "setup_cli_suppression",
     "setup_langgraph_suppression",
     "setup_development_suppression",
+    # Debug capture utilities
+    "DebugCapture",
+    "debug_capture_object",
+    "debug_capture_with_context",
+    "conditional_debug_capture",
+    "get_debug_capture",
 ]

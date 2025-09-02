@@ -5,7 +5,7 @@ from nodes import (
     llm_network_executor,
     input_validator_node,
     objective_assessor_node,
-    generate_llm_report_node,
+    investigation_report_node,
 )
 from schemas import GraphState
 from configuration import Configuration
@@ -22,7 +22,7 @@ def decide_next_step(state: GraphState) -> str:
     """
     Router function for the graph.
 
-    Uses the objective_achieved field to decide whether to continue
+    Uses the assessment.is_objective_achieved field to decide whether to continue
     the executor/assessor loop or proceed to report generation.
 
     Args:
@@ -31,11 +31,13 @@ def decide_next_step(state: GraphState) -> str:
     Returns:
         The name of the next node to execute
     """
-    logger.debug(
-        f"Routing decision: objective_achieved={state.objective_achieved_assessment}"
+    objective_achieved = (
+        state.assessment.is_objective_achieved if state.assessment else False
     )
 
-    if state.objective_achieved_assessment:
+    logger.debug("Routing decision: objective_achieved=%s", objective_achieved)
+
+    if objective_achieved:
         logger.info("✅ Objective achieved, proceeding to report generation")
         return "report_generator"
     else:
@@ -49,14 +51,15 @@ orchestrator = StateGraph(
     state_schema=GraphState, context_schema=Configuration
 )
 
-# Use original node functions now decorated with detailed logging
 orchestrator.add_node(node="input_validator_node", action=input_validator_node)
 orchestrator.add_node(node="planner_node", action=planner_node)
 orchestrator.add_node(node="network_executor", action=llm_network_executor)
 orchestrator.add_node(
     node="objective_assessor", action=objective_assessor_node
 )
-orchestrator.add_node(node="report_generator", action=generate_llm_report_node)
+orchestrator.add_node(
+    node="report_generator", action=investigation_report_node
+)
 
 orchestrator.set_entry_point(key="input_validator_node")
 orchestrator.add_edge(start_key="input_validator_node", end_key="planner_node")

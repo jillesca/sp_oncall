@@ -24,9 +24,10 @@ T = TypeVar("T")
 
 @log_operation("mcp_tool_execution")
 async def mcp_node(
-    messages: HumanMessage,
-    client_config: Optional[Dict[str, Any]] = None,
+    message: HumanMessage,
     system_prompt: str = "",
+    client_config: Optional[Dict[str, Any]] = None,
+    response_format: Any = None,
 ) -> Dict[str, List[AIMessage]]:
     """
     Generic node for executing MCP tools in the LangGraph pipeline.
@@ -48,12 +49,14 @@ async def mcp_node(
     """
     logger.info("🚀 Starting MCP agent execution")
 
-    _log_incoming_request_details(messages, system_prompt)
+    _log_incoming_request_details(message, system_prompt)
 
     model = _setup_mcp_model()
     mcp_config = await _load_mcp_config(client_config)
     tools = await _setup_mcp_tools(mcp_config)
-    result = await _execute_mcp_agent(model, messages, tools, system_prompt)
+    result = await _execute_mcp_agent(
+        model, message, tools, system_prompt, response_format
+    )
 
     _log_execution_results(result)
 
@@ -62,15 +65,15 @@ async def mcp_node(
 
 
 def _log_incoming_request_details(
-    messages: HumanMessage, system_prompt: str
+    message: HumanMessage, system_prompt: str
 ) -> None:
     """Log incoming request details for debugging purposes."""
     logger.debug("📤 MCP agent input:")
-    logger.debug("  Message type: %s", type(messages))
+    logger.debug("  Message type: %s", type(message))
 
     message_content_length = (
-        len(str(messages.content))
-        if hasattr(messages, "content")
+        len(str(message.content))
+        if hasattr(message, "content")
         else "No content"
     )
     logger.debug("  Message content length: %s", message_content_length)
@@ -78,8 +81,8 @@ def _log_incoming_request_details(
     logger.debug("  System prompt preview: %s...", system_prompt[:200])
 
     message_preview = (
-        str(messages.content)[:300]
-        if hasattr(messages, "content")
+        str(message.content)[:300]
+        if hasattr(message, "content")
         else "No content"
     )
     logger.debug("  Message content preview: %s...", message_preview)
@@ -155,7 +158,11 @@ def _log_available_tools(tools: List[Any]) -> None:
 
 
 async def _execute_mcp_agent(
-    model, messages: HumanMessage, tools: List[Any], system_prompt: str
+    model,
+    message: HumanMessage,
+    tools: List[Any],
+    system_prompt: str,
+    response_format: Any = None,
 ) -> Dict[str, List[AIMessage]]:
     """
     Create a reactive agent with the given model, tools, and prompt.
@@ -174,10 +181,15 @@ async def _execute_mcp_agent(
         model=model,
         tools=tools,
         prompt=system_prompt,
+        response_format=response_format,
     )
 
     logger.info("🎯 Executing MCP agent with %s tools available", len(tools))
-    return await agent.ainvoke(messages)
+    logger.debug("🤖 User request: %s", message.content)
+
+    return await agent.ainvoke(
+        input={"messages": [{"role": "user", "content": message.content}]}
+    )
 
 
 def _log_execution_results(result: Dict[str, List[AIMessage]]) -> None:

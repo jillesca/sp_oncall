@@ -31,7 +31,3 @@ class AssessmentOutput:
     def __str__(self) -> str:
         """Return a JSON representation of the assessment output."""
         return json.dumps(asdict(self), indent=2, default=str)
-
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return f"AssessmentOutput(is_objective_achieved={self.is_objective_achieved}, notes='{self.notes_for_final_report[:50]}...')"

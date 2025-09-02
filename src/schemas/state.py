@@ -1,88 +1,240 @@
-"""Define the state structures for the agent.
-
-This module centralizes the shared workflow state and structured outputs used
-by the LangGraph nodes. Each dataclass includes a concise docstring with field
-descriptions to keep the code readable and self-explanatory.
+"""
+Define the state structures for the agent.
 """
 
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field, asdict
-from typing import List, Dict, Any, Optional
+from enum import Enum
+from typing import List, Dict, Any, Optional, Annotated
+
+from langchain_core.messages import AnyMessage, HumanMessage
+from langgraph.graph.message import add_messages
+
+from .assessment_schema import AssessmentOutput
 
 
 @dataclass
 class GraphState:
-    """Shared workflow state passed between LangGraph nodes.
+    """Enhanced workflow state supporting multi-device investigations.
 
     Attributes:
-        user_query: The original user question or task description.
-        device_name: The target device extracted/resolved from the user query.
-        objective: The current objective determined by validation/planning.
-        working_plan_steps: Ordered list of plan steps to execute.
-        execution_results: Collected results for each executed plan step.
+        messages: Conversation history between user and LLM using LangChain message format.
+                 Supports proper integration with LangChain tools and maintains conversation context.
+        investigations: Collection of device-specific investigations.
+        historical_context: Historical context and learned patterns from previous investigations.
 
-        max_retries: Upper bound of the assessor-guided retry loop.
-        current_retries: Current retry attempt count.
-        objective_achieved_assessment: Assessment from the objective assessor
-            indicating whether the objective has been met (True), needs retry (False),
-            or is not yet decided (None).
-        assessor_feedback_for_retry: Concrete guidance for the executor to use
-            on the next retry.
-        assessor_notes_for_final_report: Notes the assessor wants included in
-            the final report.
+        # Global workflow control
+        max_retries: Maximum retry attempts per investigation.
+        current_retries: Global retry counter for the entire workflow.
 
-        summary: Final synthesized summary/report once the workflow completes.
+        # Assessment results (composition with AssessmentOutput)
+        assessment: Assessment results from the objective assessor node.
+                   Contains is_objective_achieved, notes_for_final_report, and feedback_for_retry.
+
     """
 
-    user_query: str
-    device_name: str = ""
-    objective: str = ""
-    working_plan_steps: List[str] = field(default_factory=list)
-    execution_results: List[StepExecutionResult] = field(default_factory=list)
+    # LangChain messages for proper tool integration and conversation history
+    messages: Annotated[List[AnyMessage], add_messages] = field(
+        default_factory=list
+    )
 
+    investigations: List[Investigation] = field(default_factory=list)
+    historical_context: List[HistoricalContext] = field(default_factory=list)
+
+    # Global workflow control
     max_retries: int = 3
     current_retries: int = 0
-    objective_achieved_assessment: Optional[bool] = None
-    assessor_feedback_for_retry: Optional[str] = None
-    assessor_notes_for_final_report: Optional[str] = None
 
-    summary: Optional[str] = None
+    assessment: Optional[AssessmentOutput] = None
+
+    @property
+    def current_user_request(self) -> str:
+        """Extract the most recent user request content.
+
+        Returns the content of the most recent human message, which represents
+        the current user request being processed by the investigation workflow.
+
+        Handles both string content and structured content (list of content blocks).
+
+        Returns:
+            The content of the most recent human message, or empty string if none found.
+        """
+        # Find the most recent human message
+        for message in reversed(self.messages):
+            if isinstance(message, HumanMessage):
+                content = message.content
+
+                # Handle structured content (list of content blocks)
+                if isinstance(content, list):
+                    # Extract text from content blocks
+                    text_parts = []
+                    for block in content:
+                        if (
+                            isinstance(block, dict)
+                            and block.get("type") == "text"
+                        ):
+                            text_parts.append(block.get("text", ""))
+                        elif isinstance(block, str):
+                            text_parts.append(block)
+                    return " ".join(text_parts)
+
+                # Handle simple string content
+                elif isinstance(content, str):
+                    return content
+
+                # Fallback for other content types
+                else:
+                    return str(content)
+
+        return ""
+
+    def get_investigation_by_device(
+        self, device_name: str
+    ) -> Optional[Investigation]:
+        """Retrieve investigation for a specific device."""
+        return next(
+            (
+                inv
+                for inv in self.investigations
+                if inv.device_name == device_name
+            ),
+            None,
+        )
+
+    def get_pending_investigations(self) -> List[Investigation]:
+        """Get investigations that haven't been started."""
+        return [
+            inv
+            for inv in self.investigations
+            if inv.status == InvestigationStatus.PENDING
+        ]
+
+    def get_ready_investigations(self) -> List[Investigation]:
+        """Get investigations ready to execute (no unmet dependencies)."""
+        completed_devices = {
+            inv.device_name
+            for inv in self.investigations
+            if inv.status == InvestigationStatus.COMPLETED
+        }
+
+        return [
+            inv
+            for inv in self.investigations
+            if inv.status == InvestigationStatus.PENDING
+            and all(dep in completed_devices for dep in inv.dependencies)
+        ]
+
+    def all_investigations_complete(self) -> bool:
+        """Check if all investigations have reached a terminal state."""
+        terminal_statuses = {
+            InvestigationStatus.COMPLETED,
+            InvestigationStatus.FAILED,
+            InvestigationStatus.SKIPPED,
+        }
+        return all(
+            inv.status in terminal_statuses for inv in self.investigations
+        )
 
     def __str__(self) -> str:
         """Return a JSON representation of the graph state."""
         return json.dumps(asdict(self), indent=2, default=str)
 
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return (
-            f"GraphState(user_query='{self.user_query[:50]}...', "
-            f"device_name='{self.device_name}', "
-            f"objective='{self.objective[:50]}...', "
-            f"execution_results={len(self.execution_results)} results)"
-        )
+
+@dataclass
+class HistoricalContext:
+    """Represents historical context and learnings from a previous investigation session.
+
+    This class stores valuable insights from past investigations that can be used
+    to provide context to LLMs for improved decision-making in current investigations.
+
+    Attributes:
+        session_id: Unique identifier for the historical investigation session.
+        previous_report: Investigation report from the historical session.
+        learned_patterns: Patterns discovered from the historical investigation (markdown formatted).
+        device_relationships: Known relationships between devices discovered historically (markdown formatted).
+    """
+
+    session_id: str
+    previous_report: str = ""
+    learned_patterns: str = ""
+    device_relationships: str = ""
+
+    def __str__(self) -> str:
+        """Return a JSON representation of the historical context."""
+        return json.dumps(asdict(self), indent=2, default=str)
+
+
+class InvestigationStatus(Enum):
+    """Lifecycle state for a single device investigation.
+
+    Values:
+    - PENDING: Not yet started.
+    - IN_PROGRESS: Currently being executed.
+    - COMPLETED: Finished successfully.
+    - FAILED: Exhausted retries without success.
+    - SKIPPED: Not executed due to dependencies or plan changes.
+    """
+
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+    def __str__(self) -> str:
+        """Return the string value of the enum."""
+        return self.value
+
+
+class InvestigationPriority(Enum):
+    """Priority level for investigation execution."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+    def __str__(self) -> str:
+        """Return the string value of the enum."""
+        return self.value
 
 
 @dataclass
-class StepExecutionResult:
-    """Outcome of executing a single natural-language plan step.
+class Investigation:
+    """Encapsulates all work related to a specific device investigation.
 
     Attributes:
-        investigation_report: Narrative report produced by the LLM for this step.
-        executed_calls: Sequence of concrete tool calls performed for this step.
+        device_name: Target device identifier extracted by input validator.
+        device_profile: Device type/model information for context-aware planning.
+        objective: Specific objective for this device investigation.
+        working_plan_steps: Ordered execution steps tailored to this device.
+        execution_results: Results from executing plan steps on this device.
+        status: Current state of this investigation.
+        priority: Execution priority level.
+        dependencies: Other investigation device names this depends on.
+        retry_count: Number of retries attempted for this specific investigation.
+        report: Final investigation summary and findings.
+        error_details: Error information if investigation failed.
     """
 
-    investigation_report: str
-    executed_calls: List[ExecutedToolCall] = field(default_factory=list)
+    device_name: str
+    device_profile: str = ""
+    role: str = ""
+    objective: Optional[str] = None
+    working_plan_steps: str = ""
+    execution_results: List["ExecutedToolCall"] = field(default_factory=list)
+
+    status: InvestigationStatus = InvestigationStatus.PENDING
+    priority: InvestigationPriority = InvestigationPriority.MEDIUM
+    dependencies: List[str] = field(default_factory=list)
+
+    report: Optional[str] = None
+    error_details: Optional[str] = None
 
     def __str__(self) -> str:
-        """Return a JSON representation of the step execution result."""
+        """Return a JSON representation of the investigation."""
         return json.dumps(asdict(self), indent=2, default=str)
-
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return f"StepExecutionResult(investigation_report='{self.investigation_report[:50]}...', executed_calls={len(self.executed_calls)} calls)"
 
 
 @dataclass
@@ -94,19 +246,13 @@ class ExecutedToolCall:
         params: Parameters passed to the tool.
         result: Structured result returned by the tool, if successful.
         error: Error message if the tool invocation failed.
-        detailed_findings: Free-form details gathered during this call.
     """
 
     function: str
     params: Dict[str, Any] = field(default_factory=dict)
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
-    detailed_findings: str = ""
 
     def __str__(self) -> str:
         """Return a JSON representation of the tool call."""
         return json.dumps(asdict(self), indent=2, default=str)
-
-    def __repr__(self) -> str:
-        """Return a detailed representation for debugging."""
-        return f"ExecutedToolCall(function='{self.function}', params={self.params}, error={self.error})"

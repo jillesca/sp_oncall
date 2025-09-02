@@ -1,3 +1,6 @@
+install:
+	@uv sync --frozen
+
 rerun:
 	uv run langgraph dev --no-browser --debug-port 51111 --server-log-level debug
 
@@ -12,6 +15,7 @@ logger-names:
 
 help:
 	@echo "Available make targets:"
+	@echo "  install       - Install dependencies using frozen lockfile (first time only)"
 	@echo "  run           - Start the application with debug port"
 	@echo "  rerun         - Start the application without browser"
 	@echo "  upgrade       - Upgrade dependencies"

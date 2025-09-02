@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 from pathlib import Path
 import asyncio
-from typing import Any, Optional
+from typing import Any, Dict, List, Optional
 
 # Add logging
 from src.logging import get_logger
@@ -116,3 +117,47 @@ async def load_project_json_async(
     """Async version of load_project_json using to_thread for file IO."""
     path = resolve_path(filename, start_dir=start_dir)
     return await load_json_file_async(path)
+
+
+def load_json_files_from_directory(
+    directory_path: str,
+) -> List[Dict[str, Any]]:
+    """Load all JSON files from a directory and return them as a list of dictionaries.
+
+    Args:
+        directory_path: Path to the directory containing JSON files
+
+    Returns:
+        List of dictionaries, each representing the content of a JSON file
+
+    Raises:
+        FileNotFoundError: If the directory doesn't exist
+        json.JSONDecodeError: If any file contains invalid JSON
+    """
+    logger.debug("Loading JSON files from directory: %s", directory_path)
+
+    if not os.path.isdir(directory_path):
+        error_msg = f"Directory does not exist: {directory_path}"
+        logger.error(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    json_files = glob.glob(os.path.join(directory_path, "*.json"))
+    logger.debug("Found %s JSON files in directory", len(json_files))
+
+    loaded_files = []
+    for file_path in json_files:
+        try:
+            file_data = load_json_file(file_path)
+            loaded_files.append(file_data)
+            logger.debug(
+                "Successfully loaded JSON file: %s",
+                os.path.basename(file_path),
+            )
+        except Exception as e:
+            logger.warning("Failed to load JSON file %s: %s", file_path, e)
+            continue
+
+    logger.info(
+        "Successfully loaded %s JSON files from directory", len(loaded_files)
+    )
+    return loaded_files

@@ -1,0 +1,460 @@
+"""
+Unit tests for reporter.py data building functions.
+
+Tests focus on testing data processing logic, not LLM interactions.
+Functions that use invoke() or with_structured_output() are excluded.
+"""
+
+import pytest
+from unittest.mock import Mock, patch
+from dataclasses import replace
+
+from langchain_core.messages import HumanMessage
+
+from src.nodes.reporter.core import (
+    investigation_report_node,
+    _log_successful_report_generation,
+)
+from src.nodes.reporter.context import (
+    build_report_context,
+    _add_single_investigation_details,
+    _add_historical_context,
+)
+from src.nodes.reporter.generation import _extract_report_content
+from src.nodes.reporter.session import (
+    update_historical_context,
+    _build_learning_insights_context,
+)
+from src.nodes.markdown_builder import MarkdownBuilder
+from schemas.state import GraphState, HistoricalContext, InvestigationStatus
+from tests.data.reporter_data import (
+    SAMPLE_GRAPH_STATE_FOR_REPORTING,
+    EMPTY_GRAPH_STATE_FOR_REPORTING,
+    SAMPLE_HISTORICAL_CONTEXTS,
+    SAMPLE_AI_RESPONSE,
+    SAMPLE_AI_RESPONSE_LIST,
+    SAMPLE_FINAL_REPORT,
+)
+
+
+class TestBuildReportContext:
+    """Test cases for _build_report_context function."""
+
+    def test_build_report_context_structure(self):
+        """Test that report context builds proper markdown structure."""
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+
+        assert isinstance(result, str)
+        assert "# Network Investigation Report Context" in result
+        assert "## Original User Query" in result
+        assert "## Investigation Overview" in result
+        assert "## Device Investigation Results" in result
+        assert "## Assessment Results" in result
+        assert "## Historical Context" in result
+
+    def test_build_report_context_includes_user_query(self):
+        """Test that context includes the user query."""
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+
+        assert SAMPLE_GRAPH_STATE_FOR_REPORTING.current_user_request in result
+
+    def test_build_report_context_includes_investigation_overview(self):
+        """Test that context includes investigation overview statistics."""
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+
+        assert "Total devices investigated: 2" in result
+        assert "Successfully completed: 1" in result
+        assert "Success rate:" in result
+        assert "Retry attempts:" in result
+
+    def test_build_report_context_with_empty_investigations(self):
+        """Test context building with no investigations."""
+        result = build_report_context(EMPTY_GRAPH_STATE_FOR_REPORTING)
+
+        assert "No device investigations found." in result
+        assert "Total devices investigated: 0" in result
+
+    def test_build_report_context_includes_assessment(self):
+        """Test that context includes assessment information."""
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+
+        assert "## Assessment Results" in result
+        assert "Objective achieved: True" in result
+        assert "Investigation completed successfully" in result
+
+    def test_build_report_context_with_no_assessment(self):
+        """Test context building when no assessment is available."""
+        state_no_assessment = replace(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING, assessment=None
+        )
+        result = build_report_context(state_no_assessment)
+
+        assert "No assessment results available." in result
+
+    def test_build_report_context_returns_string(self):
+        """Test that function returns a non-empty string."""
+        result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
+
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+
+class TestAddInvestigationDetails:
+    """Test cases for _add_investigation_details function."""
+
+    def test_add_investigation_details_structure(self):
+        """Test that investigation details are added with proper structure."""
+        builder = MarkdownBuilder()
+        investigation = SAMPLE_GRAPH_STATE_FOR_REPORTING.investigations[0]
+
+        _add_single_investigation_details(builder, investigation, 1)
+        result = builder.build()
+
+        assert "### Investigation 1: xrd-1" in result
+        assert "Status:" in result
+        assert "Device Profile:" in result
+        assert "Role:" in result
+        assert "Priority:" in result
+
+    def test_add_investigation_details_includes_status_icons(self):
+        """Test that investigation details include status icons."""
+        builder = MarkdownBuilder()
+        investigation = SAMPLE_GRAPH_STATE_FOR_REPORTING.investigations[
+            0
+        ]  # Completed
+
+        _add_single_investigation_details(builder, investigation, 1)
+        result = builder.build()
+
+        assert "✅" in result  # Completed status icon
+
+    def test_add_investigation_details_with_failed_investigation(self):
+        """Test investigation details for failed investigation."""
+        builder = MarkdownBuilder()
+        investigation = SAMPLE_GRAPH_STATE_FOR_REPORTING.investigations[
+            1
+        ]  # Failed
+
+        _add_single_investigation_details(builder, investigation, 2)
+        result = builder.build()
+
+        assert "❌" in result  # Failed status icon
+        assert "**Error Details:** Connection timeout" in result
+
+    def test_add_investigation_details_with_report(self):
+        """Test investigation details when report is available."""
+        builder = MarkdownBuilder()
+        investigation = SAMPLE_GRAPH_STATE_FOR_REPORTING.investigations[0]
+
+        _add_single_investigation_details(builder, investigation, 1)
+        result = builder.build()
+
+        assert "**Investigation Report:**" in result
+        assert "Device xrd-1 is healthy" in result
+
+    def test_add_investigation_details_with_dependencies(self):
+        """Test investigation details when dependencies are present."""
+        builder = MarkdownBuilder()
+        investigation = replace(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING.investigations[0],
+            dependencies=["device1", "device2"],
+        )
+
+        _add_single_investigation_details(builder, investigation, 1)
+        result = builder.build()
+
+        assert "Dependencies: device1, device2" in result
+
+
+class TestAddSessionContext:
+    """Test cases for _add_session_context function."""
+
+    def test_add_session_context_with_sessions(self):
+        """Test adding session context with historical contexts."""
+        builder = MarkdownBuilder()
+
+        from schemas.state import GraphState
+
+        mock_state = GraphState(
+            messages=[HumanMessage(content="test")],
+            historical_context=SAMPLE_HISTORICAL_CONTEXTS,
+        )
+        _add_historical_context(builder, mock_state)
+        result = builder.build()
+
+        assert "## Historical Context" in result
+        assert "**Total Previous Sessions:** 2" in result
+        assert "**1 previous sessions**" in result
+
+    def test_add_session_context_with_empty_sessions(self):
+        """Test adding session context with no sessions."""
+        builder = MarkdownBuilder()
+
+        from schemas.state import GraphState
+
+        mock_state = GraphState(
+            messages=[HumanMessage(content="test")], historical_context=[]
+        )
+        _add_historical_context(builder, mock_state)
+        result = builder.build()
+
+        assert "## Historical Context" in result
+        assert "**No previous historical context available.**" in result
+        assert "first investigation session" in result
+
+    def test_add_session_context_includes_session_details(self):
+        """Test that session context includes session details."""
+        builder = MarkdownBuilder()
+
+        from schemas.state import GraphState
+
+        mock_state = GraphState(
+            messages=[HumanMessage(content="test")],
+            historical_context=SAMPLE_HISTORICAL_CONTEXTS,
+        )
+        _add_historical_context(builder, mock_state)
+        result = builder.build()
+
+        assert "Session session-1:" in result
+        assert "Latest Session: session-2" in result
+        assert "Previous Investigation Report" in result
+        assert "Learned Patterns from Previous Sessions" in result
+
+    def test_add_session_context_limits_recent_sessions(self):
+        """Test that session context limits to recent sessions."""
+        # Create more than 3 sessions
+        many_sessions = SAMPLE_HISTORICAL_CONTEXTS + [
+            HistoricalContext(
+                session_id="session-3",
+                previous_report="Report 3",
+                learned_patterns="Pattern 3",
+                device_relationships="device3 -> device4",
+            ),
+            HistoricalContext(
+                session_id="session-4",
+                previous_report="Report 4",
+                learned_patterns="Pattern 4",
+                device_relationships="device4 -> device5",
+            ),
+        ]
+
+        builder = MarkdownBuilder()
+        from schemas.state import GraphState
+
+        mock_state = GraphState(
+            messages=[HumanMessage(content="test")],
+            historical_context=many_sessions,
+        )
+        _add_historical_context(builder, mock_state)
+        result = builder.build()
+
+        # Should show only last 3 sessions in historical summary
+        assert "**3 previous sessions**" in result
+
+
+class TestExtractReportContent:
+    """Test cases for _extract_report_content function."""
+
+    def test_extract_report_content_with_string_content(self):
+        """Test extraction from response with string content."""
+        result = _extract_report_content(SAMPLE_AI_RESPONSE)
+
+        assert isinstance(result, str)
+        assert result == "Generated report content"
+
+    def test_extract_report_content_with_list_content(self):
+        """Test extraction from response with list content."""
+        result = _extract_report_content(SAMPLE_AI_RESPONSE_LIST)
+
+        assert isinstance(result, str)
+        assert "Part 1 of report" in result
+        assert "Part 2 of report" in result
+
+    def test_extract_report_content_with_no_content_attribute(self):
+        """Test extraction from response without content attribute."""
+        mock_response = Mock()
+        mock_response.content = None
+        del mock_response.content  # Remove content attribute
+
+        result = _extract_report_content(mock_response)
+
+        assert isinstance(result, str)
+
+    def test_extract_report_content_with_non_string_response(self):
+        """Test extraction handles non-string response objects."""
+        result = _extract_report_content({"key": "value"})
+
+        assert isinstance(result, str)
+        assert "key" in result or "value" in result
+
+
+class TestUpdateHistoricalContext:
+    """Test cases for update_historical_context function."""
+
+    @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
+    def test_update_historical_context_creates_new_entry(
+        self, mock_generate_insights
+    ):
+        """Test that function creates a new historical context entry."""
+        from schemas.learning_insights_schema import LearningInsights
+
+        mock_generate_insights.return_value = LearningInsights(
+            learned_patterns="Test patterns",
+            device_relationships="Test relationships",
+        )
+
+        result = update_historical_context(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING, SAMPLE_FINAL_REPORT
+        )
+
+        assert isinstance(result, list)
+        assert len(result) == 2  # Original session + new session
+
+        # New session should be last
+        new_session = result[-1]
+        assert new_session.previous_report == SAMPLE_FINAL_REPORT
+        assert new_session.learned_patterns == "Test patterns"
+        assert new_session.device_relationships == "Test relationships"
+
+    @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
+    def test_update_historical_context_with_empty_state(
+        self, mock_generate_insights
+    ):
+        """Test session update with empty state."""
+        from schemas.learning_insights_schema import LearningInsights
+
+        mock_generate_insights.return_value = LearningInsights(
+            learned_patterns="", device_relationships=""
+        )
+
+        result = update_historical_context(
+            EMPTY_GRAPH_STATE_FOR_REPORTING, SAMPLE_FINAL_REPORT
+        )
+
+        assert isinstance(result, list)
+        assert len(result) == 1  # Only new session
+
+        new_session = result[0]
+        assert new_session.previous_report == SAMPLE_FINAL_REPORT
+
+    @patch("src.nodes.reporter.session._generate_learning_insights_with_llm")
+    def test_update_historical_context_limits_entry_count(
+        self, mock_generate_insights
+    ):
+        """Test that session update limits total session count."""
+        from schemas.learning_insights_schema import LearningInsights
+
+        mock_generate_insights.return_value = LearningInsights(
+            learned_patterns="Test", device_relationships="Test"
+        )
+
+        # Create state with many existing sessions
+        many_sessions = [
+            HistoricalContext(
+                session_id=f"session-{i}",
+                previous_report=f"Report {i}",
+                learned_patterns="Pattern",
+                device_relationships="Relationships",
+            )
+            for i in range(25)  # More than the 20 limit
+        ]
+
+        state_with_many_contexts = replace(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING, historical_context=many_sessions
+        )
+
+        result = update_historical_context(
+            state_with_many_contexts, SAMPLE_FINAL_REPORT
+        )
+
+        # Should be limited to 20 sessions
+        assert len(result) == 20
+
+
+class TestBuildLearningInsightsContext:
+    """Test cases for _build_learning_insights_context function."""
+
+    def test_build_learning_insights_context_structure(self):
+        """Test that insights context builds proper structure."""
+        result = _build_learning_insights_context(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING
+        )
+
+        assert isinstance(result, str)
+        assert (
+            "# Investigation Data for Learning Insights Extraction" in result
+        )
+        assert "## Original User Query" in result
+        assert "## Investigation Results Summary" in result
+        assert "## Detailed Investigation Data" in result
+
+    def test_build_learning_insights_context_includes_summary_stats(self):
+        """Test that context includes investigation summary statistics."""
+        result = _build_learning_insights_context(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING
+        )
+
+        assert "Total investigations: 2" in result
+        assert "Completed investigations: 1" in result
+
+    def test_build_learning_insights_context_includes_investigation_details(
+        self,
+    ):
+        """Test that context includes detailed investigation information."""
+        result = _build_learning_insights_context(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING
+        )
+
+        assert "### Investigation 1: xrd-1" in result
+        assert "### Investigation 2: xrd-2" in result
+        assert "Status:" in result
+        assert "Device Profile:" in result
+
+    def test_build_learning_insights_context_includes_assessment(self):
+        """Test that context includes assessment results when available."""
+        result = _build_learning_insights_context(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING
+        )
+
+        assert "## Assessment Results" in result
+        assert "Objective Achieved: True" in result
+
+    def test_build_learning_insights_context_truncates_long_reports(self):
+        """Test that context truncates very long investigation reports."""
+        long_report = "A" * 1000  # Very long report
+        investigation_with_long_report = replace(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING.investigations[0],
+            report=long_report,
+        )
+
+        state_with_long_report = replace(
+            SAMPLE_GRAPH_STATE_FOR_REPORTING,
+            investigations=[investigation_with_long_report],
+        )
+
+        result = _build_learning_insights_context(state_with_long_report)
+
+        # Should be truncated with "..."
+        assert "..." in result
+
+
+class TestLogSuccessfulReportGeneration:
+    """Test cases for _log_successful_report_generation function."""
+
+    def test_log_successful_report_generation(self, caplog):
+        """Test logging of successful report generation."""
+        caplog.clear()
+
+        _log_successful_report_generation(SAMPLE_FINAL_REPORT)
+
+        # Function should complete without error
+        assert True
+
+    def test_log_successful_report_generation_with_empty_report(self, caplog):
+        """Test logging with empty report."""
+        caplog.clear()
+
+        _log_successful_report_generation("")
+
+        # Function should complete without error
+        assert True
