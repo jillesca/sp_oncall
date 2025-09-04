@@ -1,6 +1,6 @@
 # 🚀 SP Oncall: Multi-Agent Network Investigation
 
-SP Oncall is a network investigation system that automates complex network diagnostics and troubleshooting for Service Provider (SP) networks. It uses artificial intelligence to analyze network devices, identify issues, and provide detailed reports.
+SP Oncall is an experiment about a network investigation system that automates complex network diagnostics and troubleshooting for Service Provider (SP) networks. It uses artificial intelligence to analyze network devices, identify issues, and provide detailed reports. I'm mostly using it to learn and demo about AI solutions for networking.
 
 ## 🤖 What Does It Do?
 
