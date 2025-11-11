@@ -27,7 +27,7 @@ sequenceDiagram
     participant MCP as gNMIBuddy MCP Server
     participant Devices as Network Devices
 
-    User->>SPOncall: Query: "Check BGP on xrd-1"
+    User->>SPOncall: User query
     activate SPOncall
 
     Note over SPOncall: 1. Input Validator<br/>Validates query and scope
