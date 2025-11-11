@@ -1,5 +1,7 @@
 # 🚀 SP Oncall: Multi-Agent Network Investigation
 
+[![published](https://static.production.devnetcloud.com/codeexchange/assets/images/devnet-published.svg)](https://developer.cisco.com/codeexchange/github/repo/jillesca/sp_oncall)
+
 SP Oncall is an experiment about a network investigation system that automates complex network diagnostics and troubleshooting for Service Provider (SP) networks. It uses artificial intelligence to analyze network devices, identify issues, and provide detailed reports. I'm mostly using it to learn and demo about AI solutions for networking.
 
 ## 🤖 What Does It Do?
@@ -13,6 +15,57 @@ Think of SP Oncall as a team of specialized AI agents that work together to inve
 - 📊 **Reporter** - Creates easy-to-understand reports and remembers what it learned.
 
 ![graph](img/graph.png)
+
+## 🏗️ Architecture
+
+The system uses a multi-agent architecture where specialized AI agents collaborate to investigate network issues. Here's how the workflow operates from user query to final report:
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant SPOncall as SP Oncall
+    participant MCP as gNMIBuddy MCP Server
+    participant Devices as Network Devices
+
+    User->>SPOncall: Query: "Check BGP on xrd-1"
+    activate SPOncall
+
+    Note over SPOncall: 1. Input Validator<br/>Validates query and scope
+    SPOncall->>MCP: Get available devices
+    activate MCP
+    MCP-->>SPOncall: Device list
+    deactivate MCP
+
+    Note over SPOncall: 2. Planner<br/>Creates investigation strategy
+
+    Note over SPOncall: 3. Executor<br/>Runs network operations
+    SPOncall->>MCP: Network operations (BGP, interfaces, etc.)
+    activate MCP
+    MCP->>Devices: gNMI requests
+    activate Devices
+    Devices-->>MCP: gNMI responses
+    deactivate Devices
+    MCP-->>SPOncall: Structured data
+    deactivate MCP
+
+    Note over SPOncall: 4. Assessor<br/>Evaluates results
+
+    loop Until objective achieved
+        Note over SPOncall: If more data needed
+        SPOncall->>MCP: Additional operations
+        activate MCP
+        MCP->>Devices: gNMI requests
+        activate Devices
+        Devices-->>MCP: gNMI responses
+        deactivate Devices
+        MCP-->>SPOncall: Additional data
+        deactivate MCP
+    end
+
+    Note over SPOncall: 5. Reporter<br/>Generates final report
+    SPOncall->>User: Investigation Report
+    deactivate SPOncall
+```
 
 ## 🎯 Key Features
 
@@ -143,7 +196,7 @@ bash -c 'TMPDIR=$(mktemp -d) \
 && trap "rm -rf $TMPDIR" EXIT \
 && curl -s https://raw.githubusercontent.com/jillesca/gNMIBuddy/refs/heads/main/ansible-helper/xrd_apply_config.yaml > "$TMPDIR/playbook.yaml" \
 && curl -s https://raw.githubusercontent.com/jillesca/gNMIBuddy/refs/heads/main/ansible-helper/hosts > "$TMPDIR/hosts" \
-&& uvx --from ansible-core --with "paramiko,ansible" ansible-playbook "$TMPDIR/playbook.yaml" -i "$TMPDIR/hosts"'
+&& uvx --from "ansible-core==2.19.2" --with "paramiko,ansible" ansible-playbook "$TMPDIR/playbook.yaml" -i "$TMPDIR/hosts"'
 ```
 
 <details>
