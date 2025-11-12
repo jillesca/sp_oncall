@@ -25,6 +25,8 @@ class LLMModel(str, Enum):
     OPENAI_GPT4 = "openai/gpt-4"
     OPENAI_GPT4O_MINI = "openai/gpt-4o-mini"
     OPENAI_GPT5_NANO = "openai/gpt-5-nano"
+    OPENAI_GPT5 = "openai/gpt-5"
+    OPENAI_GPT5_MINI = "openai/gpt-5-mini"
 
     def __str__(self) -> str:
         return self.value
