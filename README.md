@@ -14,6 +14,10 @@ Think of SP Oncall as a team of specialized AI agents that work together to inve
 - 🎯 **Assessor** - Checks if the investigation found what you were looking for.
 - 📊 **Reporter** - Creates easy-to-understand reports and remembers what it learned.
 
+## 🎥 Quick Demo
+
+📹 Watch [SP Oncall in Action](https://app.vidcast.io/share/71c7937d-645d-4226-87c6-883b49c0e4f3) (2:25) showing how to query the network using natural language.
+
 ![graph](img/graph.png)
 
 ## 🏗️ Architecture
