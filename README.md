@@ -120,16 +120,8 @@ SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to 
 ```json
 {
   "gNMIBuddy": {
-    "command": "uvx",
-    "args": [
-      "--from",
-      "git+https://github.com/jillesca/gNMIBuddy.git",
-      "gnmibuddy-mcp"
-    ],
-    "transport": "stdio",
-    "env": {
-      "NETWORK_INVENTORY": "xrd_sandbox.json"
-    }
+    "transport": "http",
+    "url": "http://localhost:8000/mcp"
   }
 }
 ```
@@ -224,8 +216,7 @@ Don't forget to `commit` your changes to XRd.
 
 On the _Manage Assistants_ button in the web interface, you can select different AI models to try:
 
-- **OpenAI**: `gpt-4`, `gpt-4o-mini`, `gpt-5-nano` (default - most capable)
-- **Ollama**: `qwen3:8b`, `llama3.1` (experimental - poor results, runs locally)
+- **OpenAI**: `gpt-5`, `gpt-5.4-nano`, `gpt-5-nano` (default - most capable)
 
 ![llms](img/llms.png)
 
