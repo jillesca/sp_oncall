@@ -6,7 +6,7 @@ from typing import (
     TypeVar,
 )
 
-from langgraph.prebuilt import create_react_agent
+from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 T = TypeVar("T")
 
 
-@log_operation("mcp_tool_execution")
+@log_operation(operation_name="mcp_tool_execution")
 async def mcp_node(
     message: HumanMessage,
     system_prompt: str = "",
@@ -126,7 +126,7 @@ async def _resolve_mcp_config_source(
     ):
         return configuration.mcp_client_config
 
-    return await load_project_json_async(DEFAULT_MCP_CONFIG_FILENAME)
+    return await load_project_json_async(filename=DEFAULT_MCP_CONFIG_FILENAME)
 
 
 async def _setup_mcp_tools(mcp_config: Dict[str, Any]) -> List[Any]:
@@ -139,7 +139,7 @@ async def _setup_mcp_tools(mcp_config: Dict[str, Any]) -> List[Any]:
     Returns:
         List of available MCP tools
     """
-    client = MultiServerMCPClient(mcp_config)
+    client = MultiServerMCPClient(connections=mcp_config)
     tools = await client.get_tools()
 
     logger.info("🛠️ Retrieved %s MCP tools", len(tools))
@@ -177,10 +177,10 @@ async def _execute_mcp_agent(
     """
     logger.debug("🤖 Reactive agent created with %s tools", len(tools))
 
-    agent = create_react_agent(
+    agent = create_agent(
         model=model,
         tools=tools,
-        prompt=system_prompt,
+        system_prompt=system_prompt,
         response_format=response_format,
     )
 
