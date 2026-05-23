@@ -28,10 +28,12 @@ class GraphState:
     investigations: List[Investigation] = field(default_factory=list)
 
     @property
-    def current_user_request(self) -> str:
-        """Extract the most recent user request content.
+    def trigger_context(self) -> str:
+        """Extract the most recent trigger content.
 
-        Returns the content of the most recent human message.
+        Returns the content of the most recent human message, whether it
+        originates from a user query, an alert from an observability system,
+        or an upstream agent.
         Handles both string content and structured content (list of content blocks).
         """
         for message in reversed(self.messages):
@@ -57,6 +59,14 @@ class GraphState:
                     return str(content)
 
         return ""
+
+    def get_pending_investigations(self) -> List["Investigation"]:
+        """Return all investigations that have not yet been executed."""
+        return [
+            inv
+            for inv in self.investigations
+            if inv.status == InvestigationStatus.PENDING
+        ]
 
     def get_investigation_by_device(
         self, device_name: str

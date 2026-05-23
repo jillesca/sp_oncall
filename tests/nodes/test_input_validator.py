@@ -305,8 +305,8 @@ class TestBuildFailedState:
 
         assert isinstance(result, GraphState)
         assert (
-            result.current_user_request
-            == SAMPLE_GRAPH_STATE.current_user_request
+            result.trigger_context
+            == SAMPLE_GRAPH_STATE.trigger_context
         )
 
     def test_build_failed_state_sets_empty_investigations(self):
@@ -320,7 +320,7 @@ class TestBuildFailedState:
         result = _build_failed_state(SAMPLE_GRAPH_STATE)
 
         assert (
-            result.current_user_request == SAMPLE_GRAPH_STATE.current_user_request
+            result.trigger_context == SAMPLE_GRAPH_STATE.trigger_context
         )
 
     def test_build_failed_state_with_existing_investigations(self):
@@ -341,8 +341,8 @@ class TestBuildFailedState:
         # Should clear investigations even if they existed
         assert result.investigations == []
         assert (
-            result.current_user_request
-            == state_with_investigations.current_user_request
+            result.trigger_context
+            == state_with_investigations.trigger_context
         )
 
 

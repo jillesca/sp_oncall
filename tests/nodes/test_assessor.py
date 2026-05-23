@@ -18,10 +18,11 @@ from src.nodes.assessor.assessment import ensure_proper_assessment_format
 from src.nodes.markdown_builder import MarkdownBuilder
 from schemas.assessment_schema import AssessmentOutput
 from tests.data.assessor_data import (
-    SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS,
+    SAMPLE_TRIGGER_CONTEXT,
+    SAMPLE_INVESTIGATION_XRD1,
+    SAMPLE_INVESTIGATION_XRD2,
     SAMPLE_ASSESSMENT_OUTPUT,
     SAMPLE_ASSESSMENT_DICT,
-    EMPTY_GRAPH_STATE,
 )
 
 
@@ -31,37 +32,28 @@ class TestBuildAssessmentContext:
     def test_build_assessment_context_structure(self):
         """Test that assessment context builds proper markdown structure."""
         result = build_assessment_context(
-            SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS
+            SAMPLE_INVESTIGATION_XRD1, SAMPLE_TRIGGER_CONTEXT
         )
 
-        assert "# Network Investigation Assessment Context" in result
-        assert "## User Query" in result
-        assert "## Device Investigations" in result
-        assert "how are my routers PE doing?" in result
+        assert "# Device Investigation Assessment Context" in result
+        assert "## Trigger Context" in result
+        assert SAMPLE_TRIGGER_CONTEXT in result
 
-    def test_build_assessment_context_with_investigations(self):
-        """Test context building with investigations."""
+    def test_build_assessment_context_with_investigation(self):
+        """Test context building includes investigation details."""
         result = build_assessment_context(
-            SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS
+            SAMPLE_INVESTIGATION_XRD1, SAMPLE_TRIGGER_CONTEXT
         )
 
-        assert "### Investigation 1: xrd-1" in result
-        assert "### Investigation 2: xrd-2" in result
+        assert "xrd-1" in result
         assert "**Status:**" in result
         assert "**Device Profile:**" in result
         assert "**Role:**" in result
 
-    def test_build_assessment_context_with_empty_investigations(self):
-        """Test context building with no investigations."""
-        result = build_assessment_context(EMPTY_GRAPH_STATE)
-
-        assert "No device investigations found." in result
-        assert "## Device Investigations" in result
-
     def test_build_assessment_context_returns_string(self):
         """Test that function returns a non-empty string."""
         result = build_assessment_context(
-            SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS
+            SAMPLE_INVESTIGATION_XRD1, SAMPLE_TRIGGER_CONTEXT
         )
 
         assert isinstance(result, str)
@@ -74,14 +66,11 @@ class TestAddInvestigationToBuilder:
     def test_add_investigation_structure(self):
         """Test that investigation is added with proper structure."""
         builder = MarkdownBuilder()
-        investigation = SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS.investigations[
-            0
-        ]
 
-        _add_investigation_to_builder(builder, investigation, 1)
+        _add_investigation_to_builder(builder, SAMPLE_INVESTIGATION_XRD1)
         result = builder.build()
 
-        assert "### Investigation 1: xrd-1" in result
+        assert "xrd-1" in result
         assert "**Status:**" in result
         assert "**Device Profile:**" in result
         assert "**Role:**" in result
@@ -92,7 +81,7 @@ class TestAddInvestigationToBuilder:
         """Test adding investigation with execution results."""
         builder = MarkdownBuilder()
         investigation = replace(
-            SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS.investigations[0],
+            SAMPLE_INVESTIGATION_XRD1,
             execution_results=[
                 Mock(
                     function="test_function",
@@ -103,7 +92,7 @@ class TestAddInvestigationToBuilder:
             ],
         )
 
-        _add_investigation_to_builder(builder, investigation, 1)
+        _add_investigation_to_builder(builder, investigation)
         result = builder.build()
 
         assert "**Execution Results:**" in result
@@ -112,11 +101,11 @@ class TestAddInvestigationToBuilder:
         """Test adding investigation with error details."""
         builder = MarkdownBuilder()
         investigation = replace(
-            SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS.investigations[0],
+            SAMPLE_INVESTIGATION_XRD1,
             error_details="Test error occurred",
         )
 
-        _add_investigation_to_builder(builder, investigation, 1)
+        _add_investigation_to_builder(builder, investigation)
         result = builder.build()
 
         assert "**Error Details:** Test error occurred" in result
@@ -126,14 +115,11 @@ class TestAddInvestigationToBuilder:
         builder = MarkdownBuilder()
         builder.add_header("Existing Content")
 
-        investigation = SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS.investigations[
-            0
-        ]
-        _add_investigation_to_builder(builder, investigation, 1)
+        _add_investigation_to_builder(builder, SAMPLE_INVESTIGATION_XRD1)
         result = builder.build()
 
         assert "# Existing Content" in result
-        assert "### Investigation 1: xrd-1" in result
+        assert "xrd-1" in result
 
 
 class TestEnsureProperAssessmentFormat:

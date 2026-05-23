@@ -40,9 +40,9 @@ def build_report_context(state: GraphState) -> str:
 def _add_user_query_section(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
-    """Add user query section."""
-    builder.add_section("Original User Query")
-    builder.add_text(state.current_user_request)
+    """Add trigger context section."""
+    builder.add_section("Trigger Context")
+    builder.add_text(state.trigger_context)
 
 
 def _add_investigation_overview(

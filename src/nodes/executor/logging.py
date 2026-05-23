@@ -22,7 +22,7 @@ def log_incoming_state(state: GraphState) -> None:
 
     logger.debug(
         "📥 Executor received state: user_query='%s', investigations=%s total, pending=%s",
-        state.current_user_request,
+        state.trigger_context,
         len(state.investigations),
         len(pending_investigations),
     )

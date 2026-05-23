@@ -39,8 +39,8 @@ def planner_node(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with plan details and selected plan steps
     """
-    user_query = state.current_user_request
-    logger.info("📋 Planning for user query: %s", user_query)
+    user_query = state.trigger_context
+    logger.info("📋 Planning for trigger context: %s", user_query)
 
     try:
         available_plans = load_available_plans()

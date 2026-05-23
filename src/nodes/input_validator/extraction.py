@@ -32,8 +32,8 @@ def execute_investigation_planning(
         MCP response containing investigation planning results
     """
     logger.debug(
-        "🔗 Executing investigation planning via MCP agent. User query: %s",
-        state.current_user_request,
+        "🔗 Executing investigation planning via MCP agent. Trigger context: %s",
+        state.trigger_context,
     )
 
     context = build_investigation_planning_context(state)
@@ -63,8 +63,8 @@ def build_investigation_planning_context(state: GraphState) -> str:
     builder = MarkdownBuilder()
     builder.add_header("Investigation Planning Context")
 
-    builder.add_section("User Query")
-    builder.add_text(state.current_user_request)
+    builder.add_section("Trigger Context")
+    builder.add_text(state.trigger_context)
 
     context_string = builder.build()
     logger.debug(

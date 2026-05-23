@@ -71,10 +71,10 @@ class TestBuildInvestigationContext:
         state = SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS
         investigation = state.investigations[0]
 
-        result = build_investigation_context(investigation, state)
+        result = build_investigation_context(investigation, state.trigger_context)
 
         assert isinstance(result, str)
-        assert f"**User Query:** {state.current_user_request}" in result
+        assert f"**Trigger Context:** {state.trigger_context}" in result
         assert f"**Device Name:** {investigation.device_name}" in result
         assert investigation.device_profile in result
         assert f"**Role:** {investigation.role}" in result
@@ -83,7 +83,8 @@ class TestBuildInvestigationContext:
     def testbuild_investigation_context_returns_valid_string(self):
         """Test that context building returns a valid non-empty string."""
         result = build_investigation_context(
-            SAMPLE_INVESTIGATION, SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS
+            SAMPLE_INVESTIGATION,
+            SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS.trigger_context,
         )
 
         assert isinstance(result, str)

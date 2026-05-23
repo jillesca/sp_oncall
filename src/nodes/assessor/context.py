@@ -1,37 +1,40 @@
 """
 Assessment context building functionality.
 
-This module handles building comprehensive assessment context from
-investigations and workflow state for LLM evaluation.
+This module handles building assessment context for a single device investigation,
+used by the per-device sub-graph in the executor.
 """
 
-from schemas.state import GraphState, Investigation
+from schemas.state import Investigation
 from nodes.markdown_builder import MarkdownBuilder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def build_assessment_context(state: GraphState) -> str:
+def build_assessment_context(
+    investigation: Investigation, trigger_context: str
+) -> str:
     """
-    Build comprehensive assessment context from all investigations in markdown format.
+    Build assessment context for a single device investigation in markdown format.
 
     Args:
-        state: Current workflow state
+        investigation: The device investigation to assess
+        trigger_context: Original trigger content (user query, alert, or upstream agent)
 
     Returns:
-        Markdown-formatted context string for the LLM
+        Markdown-formatted context string for the LLM assessor
     """
     logger.debug(
-        "📋 Building assessment context for %d investigations",
-        len(state.investigations),
+        "📋 Building assessment context for device: %s",
+        investigation.device_name,
     )
 
     builder = MarkdownBuilder()
-    builder.add_header("Network Investigation Assessment Context")
+    builder.add_header("Device Investigation Assessment Context")
 
-    _add_user_query_section(builder, state)
-    _add_investigations_section(builder, state)
+    _add_trigger_context_section(builder, trigger_context)
+    _add_investigation_details(builder, investigation)
 
     context_string = builder.build()
     logger.debug(
@@ -40,41 +43,19 @@ def build_assessment_context(state: GraphState) -> str:
     return context_string
 
 
-def _add_user_query_section(
-    builder: MarkdownBuilder, state: GraphState
+def _add_trigger_context_section(
+    builder: MarkdownBuilder, trigger_context: str
 ) -> None:
-    """Add user query section to the context."""
-    builder.add_section("User Query")
-    builder.add_text(state.current_user_request)
-
-
-def _add_investigations_section(
-    builder: MarkdownBuilder, state: GraphState
-) -> None:
-    """Add device investigations section to the context."""
-    builder.add_section("Device Investigations")
-
-    if not state.investigations:
-        builder.add_text("No device investigations found.")
-    else:
-        for i, investigation in enumerate(state.investigations, 1):
-            _add_investigation_details(builder, investigation, i)
+    """Add the trigger context section to the assessment."""
+    builder.add_section("Trigger Context")
+    builder.add_text(trigger_context)
 
 
 def _add_investigation_details(
-    builder: MarkdownBuilder, investigation: Investigation, index: int
+    builder: MarkdownBuilder, investigation: Investigation
 ) -> None:
-    """
-    Add individual investigation context to the markdown builder.
-
-    Args:
-        builder: Markdown builder instance
-        investigation: Investigation object to format
-        index: Investigation number for display
-    """
-    builder.add_subsection(
-        f"Investigation {index}: {investigation.device_name}"
-    )
+    """Add investigation details to the assessment context."""
+    builder.add_section(f"Investigation: {investigation.device_name}")
 
     builder.add_bold_text("Status:", investigation.status.value)
     builder.add_bold_text(
@@ -99,19 +80,11 @@ def _add_investigation_details(
     if investigation.error_details:
         builder.add_bold_text("Error Details:", investigation.error_details)
 
-    builder.add_separator()
-
 
 def _add_execution_results_to_builder(
     builder: MarkdownBuilder, execution_results
 ) -> None:
-    """
-    Add execution results to the markdown builder.
-
-    Args:
-        builder: Markdown builder instance
-        execution_results: List of execution results
-    """
+    """Add execution results to the markdown builder."""
     if execution_results:
         builder.add_bold_text(
             "Execution Results:",

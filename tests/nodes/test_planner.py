@@ -172,8 +172,8 @@ class TestBuildSuccessfulPlanningState:
         )
 
         assert (
-            result.current_user_request
-            == SAMPLE_GRAPH_STATE_FOR_PLANNING.current_user_request
+            result.trigger_context
+            == SAMPLE_GRAPH_STATE_FOR_PLANNING.trigger_context
         )
 
     def test_build_successful_planning_state_with_partial_plans(self):
@@ -267,8 +267,8 @@ class TestBuildFailedPlanningState:
         )
 
         assert (
-            result.current_user_request
-            == SAMPLE_GRAPH_STATE_FOR_PLANNING.current_user_request
+            result.trigger_context
+            == SAMPLE_GRAPH_STATE_FOR_PLANNING.trigger_context
         )
 
     def test_build_failed_planning_state_with_empty_investigations(self):

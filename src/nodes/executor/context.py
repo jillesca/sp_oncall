@@ -5,7 +5,7 @@ This module handles building investigation context in markdown format
 for MCP agent execution.
 """
 
-from schemas import GraphState, Investigation
+from schemas import Investigation
 from nodes.markdown_builder import MarkdownBuilder
 from src.logging import get_logger
 
@@ -13,29 +13,31 @@ logger = get_logger(__name__)
 
 
 def build_investigation_context(
-    investigation: Investigation, state: GraphState
+    investigation: Investigation, trigger_context: str
 ) -> str:
     """
     Build context string for a specific investigation in markdown format.
 
     Args:
         investigation: Investigation to build context for
-        state: Current GraphState for workflow context
+        trigger_context: Original trigger content (user query, alert, or upstream agent)
 
     Returns:
         Formatted context string in markdown for the MCP agent
     """
     builder = MarkdownBuilder()
-    _add_investigation_details(builder, investigation, state)
+    _add_investigation_details(builder, investigation, trigger_context)
     return builder.build()
 
 
 def _add_investigation_details(
-    builder: MarkdownBuilder, investigation: Investigation, state: GraphState
+    builder: MarkdownBuilder,
+    investigation: Investigation,
+    trigger_context: str,
 ) -> None:
     """Add main investigation details to the context."""
     builder.add_header("Investigation Context")
-    builder.add_bold_text("User Query:", state.current_user_request)
+    builder.add_bold_text("Trigger Context:", trigger_context)
     builder.add_bold_text("Device Name:", investigation.device_name)
     builder.add_bold_text("Role:", investigation.role)
     builder.add_bold_text(

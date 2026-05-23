@@ -38,7 +38,7 @@ class TestBuildReportContext:
 
         assert isinstance(result, str)
         assert "# Network Investigation Report Context" in result
-        assert "## Original User Query" in result
+        assert "## Trigger Context" in result
         assert "## Investigation Overview" in result
         assert "## Device Investigation Results" in result
 
@@ -46,7 +46,7 @@ class TestBuildReportContext:
         """Test that context includes the user query."""
         result = build_report_context(SAMPLE_GRAPH_STATE_FOR_REPORTING)
 
-        assert SAMPLE_GRAPH_STATE_FOR_REPORTING.current_user_request in result
+        assert SAMPLE_GRAPH_STATE_FOR_REPORTING.trigger_context in result
 
     def test_build_report_context_includes_investigation_overview(self):
         """Test that context includes investigation overview statistics."""
