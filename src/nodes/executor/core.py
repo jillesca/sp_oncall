@@ -17,8 +17,10 @@ from src.configuration import Configuration
 from src.logging import get_logger, log_node_execution
 from src.util.device_store import (
     get_device_profile,
+    get_device_history,
     update_device_profile,
     format_profile_for_context,
+    format_history_for_context,
 )
 
 from .device_subgraph import DeviceState, device_subgraph
@@ -89,25 +91,35 @@ def llm_network_executor(state: GraphState) -> GraphState:
 def _enrich_investigations_with_stored_profiles(
     store, investigations: List[Investigation]
 ) -> List[Investigation]:
-    """Load stored device profiles and inject historical context into each investigation."""
+    """Load stored device profiles and history, inject both into each investigation."""
     enriched = []
     for investigation in investigations:
         profile = get_device_profile(store, investigation.device_name)
-        enriched.append(_inject_profile_into_investigation(investigation, profile))
+        history = get_device_history(store, investigation.device_name, limit=3)
+        enriched.append(_inject_device_context(investigation, profile, history))
     return enriched
 
 
-def _inject_profile_into_investigation(
-    investigation: Investigation, profile: dict
+def _inject_device_context(
+    investigation: Investigation, profile: dict, history: list
 ) -> Investigation:
-    """Append stored profile facts to the investigation's device profile field."""
-    formatted = format_profile_for_context(profile)
-    if not formatted:
+    """Append stored profile facts and investigation history to the device profile field."""
+    sections = []
+
+    formatted_profile = format_profile_for_context(profile)
+    if formatted_profile:
+        sections.append(formatted_profile)
+
+    formatted_history = format_history_for_context(history)
+    if formatted_history:
+        sections.append(formatted_history)
+
+    if not sections:
         return investigation
 
-    enriched_profile = f"{investigation.device_profile}\n\n{formatted}"
+    enriched_profile = "\n\n".join([investigation.device_profile] + sections)
     logger.debug(
-        "Injected stored profile context into investigation for %s",
+        "Injected stored profile and history context into investigation for %s",
         investigation.device_name,
     )
     return replace(investigation, device_profile=enriched_profile)

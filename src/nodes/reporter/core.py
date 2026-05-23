@@ -10,7 +10,7 @@ from langgraph.config import get_store
 
 from schemas import GraphState
 from src.logging import get_logger, log_node_execution
-from src.util.device_store import update_device_profile
+from src.util.device_store import append_device_history, build_history_summary
 from nodes.common import load_model
 
 from .context import build_report_context
@@ -68,17 +68,14 @@ def investigation_report_node(state: GraphState) -> GraphState:
 
 
 def _save_investigation_summaries(state: GraphState) -> None:
-    """Persist each device's investigation summary to the store for future runs."""
+    """Persist each device's investigation summary to the history store for future runs."""
     store = get_store()
     for investigation in state.investigations:
-        if investigation.report:
-            update_device_profile(
-                store,
-                investigation.device_name,
-                dynamic_facts={
-                    "last_investigation_summary": investigation.report[:1000],
-                },
-            )
+        summary = build_history_summary(
+            status=investigation.status.value,
+            report=investigation.report,
+        )
+        append_device_history(store, investigation.device_name, summary)
 
 
 def _log_successful_report_generation(report: str) -> None:
