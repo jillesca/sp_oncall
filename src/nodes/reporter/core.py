@@ -6,9 +6,11 @@ comprehensive investigation reports.
 """
 
 from langchain_core.messages import AIMessage
+from langgraph.config import get_store
 
 from schemas import GraphState
 from src.logging import get_logger, log_node_execution
+from src.util.device_store import update_device_profile
 from nodes.common import load_model
 
 from .context import build_report_context
@@ -26,8 +28,9 @@ def investigation_report_node(state: GraphState) -> GraphState:
     1. Building comprehensive context from all investigations
     2. Setting up the LLM model for report generation
     3. Generating the final report using the LLM
-    4. Adding the final report as an AIMessage to the conversation
-    5. Resetting investigation state for the next user request
+    4. Persisting per-device investigation summaries to the store
+    5. Adding the final report as an AIMessage to the conversation
+    6. Resetting investigation state for the next user request
 
     Args:
         state: The current GraphState with all investigation results
@@ -46,6 +49,7 @@ def investigation_report_node(state: GraphState) -> GraphState:
         final_report = generate_report(model, report_context)
 
         _log_successful_report_generation(final_report)
+        _save_investigation_summaries(state)
         logger.info("🔄 Resetting working state for next user request")
 
         return GraphState(
@@ -61,6 +65,20 @@ def investigation_report_node(state: GraphState) -> GraphState:
             messages=state.messages + [AIMessage(content=error_report)],
             investigations=[],
         )
+
+
+def _save_investigation_summaries(state: GraphState) -> None:
+    """Persist each device's investigation summary to the store for future runs."""
+    store = get_store()
+    for investigation in state.investigations:
+        if investigation.report:
+            update_device_profile(
+                store,
+                investigation.device_name,
+                dynamic_facts={
+                    "last_investigation_summary": investigation.report[:1000],
+                },
+            )
 
 
 def _log_successful_report_generation(report: str) -> None:

@@ -1,4 +1,5 @@
 from langgraph.graph import StateGraph, END
+from langgraph.store.memory import InMemoryStore
 
 from nodes import (
     planner_node,
@@ -37,7 +38,7 @@ orchestrator.add_edge(
 )
 orchestrator.add_edge(start_key="report_generator", end_key=END)
 
-app = orchestrator.compile()
+app = orchestrator.compile(store=InMemoryStore())
 
 logger.info(
     "✅ LangGraph workflow compiled successfully with 4 nodes (linear flow)"

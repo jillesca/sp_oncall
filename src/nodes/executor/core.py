@@ -7,11 +7,19 @@ and merges the results back into the GraphState.
 """
 
 import asyncio
+from dataclasses import replace
 from typing import List
+
+from langgraph.config import get_store
 
 from schemas import GraphState, Investigation, InvestigationStatus
 from src.configuration import Configuration
 from src.logging import get_logger, log_node_execution
+from src.util.device_store import (
+    get_device_profile,
+    update_device_profile,
+    format_profile_for_context,
+)
 
 from .device_subgraph import DeviceState, device_subgraph
 from .logging import log_incoming_state
@@ -27,6 +35,10 @@ def llm_network_executor(state: GraphState) -> GraphState:
 
     Each pending investigation is executed inside its own per-device sub-graph
     that handles the execute → assess → retry loop internally.
+
+    Before running sub-graphs, stored device profiles are loaded and injected
+    into each investigation's context for historical awareness.
+    After sub-graphs complete, dynamic facts are saved back to the store.
 
     Args:
         state: The current GraphState from the workflow
@@ -44,25 +56,77 @@ def llm_network_executor(state: GraphState) -> GraphState:
             return state
 
         config = Configuration.from_context()
+        store = get_store()
+
+        enriched_investigations = _enrich_investigations_with_stored_profiles(
+            store, pending_investigations
+        )
+
         logger.info(
             "🚀 Starting per-device sub-graphs for %s investigation(s) (max_retries=%s)",
-            len(pending_investigations),
+            len(enriched_investigations),
             config.max_retries_per_device,
         )
 
         completed_investigations = asyncio.run(
             _run_device_subgraphs_concurrently(
-                pending_investigations,
+                enriched_investigations,
                 state.trigger_context,
                 config.max_retries_per_device,
             )
         )
+
+        _save_execution_dynamic_facts(store, completed_investigations, state.trigger_context)
 
         return update_state_with_investigations(state, completed_investigations)
 
     except Exception as e:
         logger.error("❌ Executor failed: %s", e)
         return update_state_with_global_error(state, e)
+
+
+def _enrich_investigations_with_stored_profiles(
+    store, investigations: List[Investigation]
+) -> List[Investigation]:
+    """Load stored device profiles and inject historical context into each investigation."""
+    enriched = []
+    for investigation in investigations:
+        profile = get_device_profile(store, investigation.device_name)
+        enriched.append(_inject_profile_into_investigation(investigation, profile))
+    return enriched
+
+
+def _inject_profile_into_investigation(
+    investigation: Investigation, profile: dict
+) -> Investigation:
+    """Append stored profile facts to the investigation's device profile field."""
+    formatted = format_profile_for_context(profile)
+    if not formatted:
+        return investigation
+
+    enriched_profile = f"{investigation.device_profile}\n\n{formatted}"
+    logger.debug(
+        "Injected stored profile context into investigation for %s",
+        investigation.device_name,
+    )
+    return replace(investigation, device_profile=enriched_profile)
+
+
+def _save_execution_dynamic_facts(
+    store,
+    investigations: List[Investigation],
+    trigger_context: str,
+) -> None:
+    """Persist per-device execution findings as dynamic facts for future runs."""
+    for investigation in investigations:
+        update_device_profile(
+            store,
+            investigation.device_name,
+            dynamic_facts={
+                "last_alert": trigger_context[:500],
+                "last_known_state": investigation.status.value,
+            },
+        )
 
 
 async def _run_device_subgraphs_concurrently(
@@ -110,8 +174,6 @@ def _extract_investigation_from_result(
             original_investigation.device_name,
             result,
         )
-        from dataclasses import replace
-
         return replace(
             original_investigation,
             status=InvestigationStatus.FAILED,
