@@ -1,13 +1,13 @@
 """
 Per-device investigation sub-graph.
 
-Encapsulates the execute → assess → retry loop for a single device.
+Encapsulates the plan → execute → assess → retry loop for a single device.
 The outer executor runs one of these sub-graphs per device, concurrently.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 from dataclasses import replace
@@ -18,6 +18,7 @@ from schemas.assessment_schema import AssessmentOutput
 from nodes.common.llm_utils import load_fast_model
 from nodes.assessor.context import build_assessment_context
 from nodes.assessor.assessment import execute_assessment
+from nodes.planner.core import plan_single_device
 from src.util.prompt_loader import load_prompt
 from src.logging import get_logger
 
@@ -39,6 +40,7 @@ class DeviceState:
         max_retries: Maximum number of execution attempts before giving up.
         current_retry: Number of assessment cycles completed so far.
         assessment: Latest assessment output, set after each assess_device run.
+        event_type: Alert event type used for skill routing in plan_device.
     """
 
     investigation: Investigation
@@ -46,6 +48,26 @@ class DeviceState:
     max_retries: int = 3
     current_retry: int = 0
     assessment: Optional[AssessmentOutput] = None
+    event_type: Optional[str] = None
+
+
+def plan_device(state: DeviceState) -> DeviceState:
+    """Generate an investigation plan for this device.
+
+    Raises if planning fails — the outer executor catches the exception and
+    marks the investigation as failed, skipping execution entirely.
+    """
+    logger.info(
+        "📋 Planning investigation for device: %s",
+        state.investigation.device_name,
+    )
+    device_plan = plan_single_device(state.investigation, state.event_type)
+    updated_investigation = replace(
+        state.investigation,
+        objective=device_plan.objective,
+        working_plan_steps=device_plan.working_plan_steps,
+    )
+    return replace(state, investigation=updated_investigation)
 
 
 async def execute_device(state: DeviceState) -> DeviceState:
@@ -118,10 +140,12 @@ def should_retry(state: DeviceState) -> str:
 
 
 _workflow = StateGraph(DeviceState)
+_workflow.add_node("plan_device", plan_device)
 _workflow.add_node("execute_device", execute_device)
 _workflow.add_node("assess_device", assess_device)
 
-_workflow.set_entry_point("execute_device")
+_workflow.set_entry_point("plan_device")
+_workflow.add_edge("plan_device", "execute_device")
 _workflow.add_edge("execute_device", "assess_device")
 _workflow.add_conditional_edges(
     "assess_device",

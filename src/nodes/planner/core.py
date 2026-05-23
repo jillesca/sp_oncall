@@ -1,67 +1,67 @@
 """
-Core functionality for the Planner Node.
+Per-device planning logic.
 
-This module contains the main entry point for the planning workflow that loads plans,
-selects appropriate plans, and updates investigations with planning results.
+Generates a tailored investigation plan for a single device by loading
+relevant skills, invoking the LLM, and parsing the structured response.
+Called from the per-device sub-graph rather than the outer graph.
 """
 
-from schemas.state import GraphState
-from src.logging import get_logger, log_node_execution
+from typing import Optional
+
+from schemas.state import Investigation
+from src.logging import get_logger
 from nodes.common import load_model, load_fast_model
 from src.util.prompt_loader import load_prompt
 
 from .planning import (
+    DevicePlan,
     load_available_skills,
     execute_plan_selection,
-    process_planning_response,
+    process_device_plan_response,
 )
 from .context import build_planning_context
-from .state import build_successful_planning_state, build_failed_planning_state
 
 logger = get_logger(__name__)
 
 
-@log_node_execution("Planner")
-def planner_node(state: GraphState) -> GraphState:
-    """
-    Planner node that orchestrates the planning workflow.
-
-    This function orchestrates the planning workflow by:
-    1. Loading available plans from the plan repository
-    2. Setting up the LLM model for plan selection
-    3. Generating a selection prompt with available plans
-    4. Processing the LLM response to extract objective and steps
-    5. Building the updated state with planning results
+def plan_single_device(
+    investigation: Investigation,
+    event_type: Optional[str] = None,
+) -> DevicePlan:
+    """Generate an investigation plan for a single device.
 
     Args:
-        state: The current GraphState from the workflow
+        investigation: The device investigation to plan for.
+        event_type: Alert event type used to filter relevant skills.
+                    None for manual queries (loads all skills).
 
     Returns:
-        Updated GraphState with plan details and selected plan steps
+        A DevicePlan with objective and step-by-step instructions for this device.
+
+    Raises:
+        Exception: If plan generation fails — callers should handle and mark
+                   the investigation as failed.
     """
-    user_query = state.trigger_context
-    logger.info("📋 Planning for trigger context: %s", user_query)
+    logger.info("📋 Planning for device: %s", investigation.device_name)
 
-    try:
-        available_skills = load_available_skills(state.event_type)
-        model = load_model()
-        fast_model = load_fast_model()
-        planning_context = build_planning_context(state)
-        response = execute_plan_selection(
-            model,
-            user_query,
-            available_skills,
-            planning_context,
-            load_prompt("planner"),
-        )
-        planning_response = process_planning_response(
-            response_content=response, model=fast_model
-        )
+    available_skills = load_available_skills(event_type)
+    model = load_model()
+    fast_model = load_fast_model()
+    planning_context = build_planning_context(investigation)
 
-        logger.debug("📋 PlanningResponse: %s", planning_response)
+    response = execute_plan_selection(
+        model,
+        investigation.device_name,
+        available_skills,
+        planning_context,
+        load_prompt("planner"),
+    )
 
-        return build_successful_planning_state(state, planning_response)
+    device_plan = process_device_plan_response(
+        response_content=response,
+        model=fast_model,
+        device_name=investigation.device_name,
+    )
 
-    except Exception as e:
-        logger.error("❌ Plan generation failed: %s", e)
-        return build_failed_planning_state(state, e)
+    logger.debug("📋 DevicePlan for %s: %s", investigation.device_name, device_plan)
+    return device_plan

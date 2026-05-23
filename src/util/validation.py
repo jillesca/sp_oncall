@@ -83,36 +83,30 @@ def validate_structured_output(
 
 
 def validate_planning_response(result: Any) -> List[str]:
-    """Validate a PlanningResponse: each device must have device_name and working_plan_steps."""
+    """Validate a DevicePlan: must have device_name and working_plan_steps."""
     violations = []
-    plan = _get_field(result, "plan", [])
+    device_name = _get_field(result, "device_name", "")
+    steps = _get_field(result, "working_plan_steps", "")
 
-    for device_plan in plan:
-        device_name = _get_field(device_plan, "device_name", "")
-        steps = _get_field(device_plan, "working_plan_steps", "")
-
-        if not device_name:
-            violations.append("device_name is empty for a device in the plan")
-        if not steps:
-            violations.append(
-                f"working_plan_steps is empty for device '{device_name}'"
-            )
+    if not device_name:
+        violations.append("device_name is empty")
+    if not steps:
+        violations.append("working_plan_steps is empty")
 
     return violations
 
 
 def validate_investigation_planning(result: Any) -> List[str]:
-    """Validate an InvestigationPlanningResponse: devices list non-empty, each has a name."""
+    """Validate an InvestigationPlanningResponse: device_names list is non-empty, all names non-empty."""
     violations = []
-    devices = _get_field(result, "devices", [])
+    device_names = _get_field(result, "device_names", [])
 
-    if not devices:
-        violations.append("devices list is empty")
+    if not device_names:
+        violations.append("device_names list is empty")
         return violations
 
-    for device in devices:
-        device_name = _get_field(device, "device_name", "")
-        if not device_name:
+    for name in device_names:
+        if not name:
             violations.append("device_name is empty for one or more devices")
 
     return violations

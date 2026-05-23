@@ -29,30 +29,17 @@ from src.util.validation import (
 @dataclass
 class _DevicePlan:
     device_name: str = ""
+    objective: str = ""
     working_plan_steps: str = ""
 
 
 @dataclass
-class _PlanningResponse:
-    plan: List[_DevicePlan] = None
-
-    def __post_init__(self):
-        if self.plan is None:
-            self.plan = []
-
-
-@dataclass
-class _DeviceToInvestigate:
-    device_name: str = ""
-
-
-@dataclass
 class _InvestigationResponse:
-    devices: List[_DeviceToInvestigate] = None
+    device_names: List[str] = None
 
     def __post_init__(self):
-        if self.devices is None:
-            self.devices = []
+        if self.device_names is None:
+            self.device_names = []
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +74,12 @@ class TestValidateStructuredOutput:
 
     def test_returns_result_and_empty_violations_when_valid(self):
         """Valid result on first attempt returns (result, [])."""
-        valid_result = _PlanningResponse(plan=[_DevicePlan("xrd-1", "step 1")])
+        valid_result = _DevicePlan("xrd-1", "check health", "step 1")
         model, structured = _make_model([valid_result])
 
         result, violations = validate_structured_output(
             raw_text="some text",
-            schema=_PlanningResponse,
+            schema=_DevicePlan,
             model=model,
             validators=[_no_violations],
         )
@@ -103,21 +90,19 @@ class TestValidateStructuredOutput:
 
     def test_retries_on_violations_and_succeeds(self):
         """When first attempt has violations and retry succeeds, returns valid result."""
-        invalid_result = _PlanningResponse(plan=[_DevicePlan("", "")])
-        valid_result = _PlanningResponse(plan=[_DevicePlan("xrd-1", "steps")])
+        invalid_result = _DevicePlan("", "")
+        valid_result = _DevicePlan("xrd-1", "check", "steps")
         model, structured = _make_model([invalid_result, valid_result])
 
         def validator(result):
-            plan = result.plan if hasattr(result, "plan") else result.get("plan", [])
-            for dp in plan:
-                name = dp.device_name if hasattr(dp, "device_name") else dp.get("device_name", "")
-                if not name:
-                    return ["device_name is empty"]
+            name = result.device_name if hasattr(result, "device_name") else result.get("device_name", "")
+            if not name:
+                return ["device_name is empty"]
             return []
 
         result, violations = validate_structured_output(
             raw_text="original",
-            schema=_PlanningResponse,
+            schema=_DevicePlan,
             model=model,
             validators=[validator],
             max_attempts=2,
@@ -129,12 +114,12 @@ class TestValidateStructuredOutput:
 
     def test_returns_best_effort_after_exhausting_attempts(self):
         """When all attempts fail validation, returns last result with violations."""
-        bad_result = _PlanningResponse(plan=[_DevicePlan("", "")])
+        bad_result = _DevicePlan("", "")
         model, structured = _make_model([bad_result, bad_result, bad_result])
 
         result, violations = validate_structured_output(
             raw_text="text",
-            schema=_PlanningResponse,
+            schema=_DevicePlan,
             model=model,
             validators=[_always_violates],
             max_attempts=2,
@@ -152,7 +137,7 @@ class TestValidateStructuredOutput:
 
         result, violations = validate_structured_output(
             raw_text="text",
-            schema=_PlanningResponse,
+            schema=_DevicePlan,
             model=model,
             validators=[_no_violations],
             max_attempts=1,
@@ -163,12 +148,12 @@ class TestValidateStructuredOutput:
 
     def test_retries_on_exception_then_succeeds(self):
         """An exception on first attempt allows retry; succeeds on second."""
-        valid_result = _PlanningResponse(plan=[_DevicePlan("xrd-1", "steps")])
+        valid_result = _DevicePlan("xrd-1", "check", "steps")
         model, structured = _make_model([RuntimeError("transient"), valid_result])
 
         result, violations = validate_structured_output(
             raw_text="text",
-            schema=_PlanningResponse,
+            schema=_DevicePlan,
             model=model,
             validators=[_no_violations],
             max_attempts=1,
@@ -180,13 +165,13 @@ class TestValidateStructuredOutput:
 
     def test_retry_prompt_is_used_on_second_attempt(self):
         """The second attempt receives a retry prompt, not the original text."""
-        invalid_result = _PlanningResponse(plan=[])
-        valid_result = _PlanningResponse(plan=[_DevicePlan("xrd-1", "steps")])
+        invalid_result = _DevicePlan("")
+        valid_result = _DevicePlan("xrd-1", "check", "steps")
         model, structured = _make_model([invalid_result, valid_result])
 
         validate_structured_output(
             raw_text="original input",
-            schema=_PlanningResponse,
+            schema=_DevicePlan,
             model=model,
             validators=[_always_violates],
             max_attempts=1,
@@ -199,12 +184,12 @@ class TestValidateStructuredOutput:
 
     def test_max_attempts_zero_means_one_attempt_total(self):
         """max_attempts=0 means only the initial attempt — no retries."""
-        bad_result = _PlanningResponse(plan=[])
+        bad_result = _DevicePlan("")
         model, structured = _make_model([bad_result])
 
         result, violations = validate_structured_output(
             raw_text="text",
-            schema=_PlanningResponse,
+            schema=_DevicePlan,
             model=model,
             validators=[_always_violates],
             max_attempts=0,
@@ -220,48 +205,40 @@ class TestValidateStructuredOutput:
 
 
 class TestValidatePlanningResponse:
-    """Tests for validate_planning_response validator."""
+    """Tests for validate_planning_response validator (single DevicePlan)."""
 
-    def test_valid_response_returns_no_violations(self):
-        """A well-formed planning response produces no violations."""
-        result = _PlanningResponse(
-            plan=[_DevicePlan("xrd-1", "Step 1: check health")]
-        )
+    def test_valid_device_plan_returns_no_violations(self):
+        """A well-formed DevicePlan produces no violations."""
+        result = _DevicePlan("xrd-1", "Check health", "Step 1: check system")
         assert validate_planning_response(result) == []
 
-    def test_empty_plan_returns_no_violations(self):
-        """An empty plan list is structurally valid (no devices to check)."""
-        assert validate_planning_response(_PlanningResponse(plan=[])) == []
-
-    def test_missing_device_name_returns_violation(self):
-        """A device plan with empty device_name triggers a violation."""
-        result = _PlanningResponse(plan=[_DevicePlan("", "Step 1")])
+    def test_empty_device_name_returns_violation(self):
+        """A DevicePlan with empty device_name triggers a violation."""
+        result = _DevicePlan("", "objective", "steps")
         violations = validate_planning_response(result)
         assert any("device_name" in v for v in violations)
 
-    def test_missing_working_plan_steps_returns_violation(self):
-        """A device plan with empty working_plan_steps triggers a violation."""
-        result = _PlanningResponse(plan=[_DevicePlan("xrd-1", "")])
+    def test_empty_working_plan_steps_returns_violation(self):
+        """A DevicePlan with empty working_plan_steps triggers a violation."""
+        result = _DevicePlan("xrd-1", "objective", "")
         violations = validate_planning_response(result)
         assert any("working_plan_steps" in v for v in violations)
 
-    def test_multiple_violations_reported(self):
-        """Both device_name and working_plan_steps violations are reported together."""
-        result = _PlanningResponse(plan=[_DevicePlan("", "")])
+    def test_both_empty_returns_two_violations(self):
+        """Both device_name and working_plan_steps empty yields two violations."""
+        result = _DevicePlan("", "", "")
         violations = validate_planning_response(result)
         assert len(violations) == 2
 
     def test_works_with_dict_input(self):
         """Validator handles dict representation as returned by some LLM providers."""
-        result = {"plan": [{"device_name": "", "working_plan_steps": "steps"}]}
+        result = {"device_name": "", "working_plan_steps": "steps"}
         violations = validate_planning_response(result)
         assert any("device_name" in v for v in violations)
 
     def test_dict_input_valid_returns_no_violations(self):
         """Dict input with all fields populated returns no violations."""
-        result = {
-            "plan": [{"device_name": "xrd-1", "working_plan_steps": "Step 1"}]
-        }
+        result = {"device_name": "xrd-1", "working_plan_steps": "Step 1"}
         assert validate_planning_response(result) == []
 
 
@@ -274,38 +251,36 @@ class TestValidateInvestigationPlanning:
     """Tests for validate_investigation_planning validator."""
 
     def test_valid_response_returns_no_violations(self):
-        """A well-formed investigation response produces no violations."""
-        result = _InvestigationResponse(
-            devices=[_DeviceToInvestigate("xrd-1"), _DeviceToInvestigate("xrd-2")]
-        )
+        """A well-formed response with device names produces no violations."""
+        result = _InvestigationResponse(device_names=["xrd-1", "xrd-2"])
         assert validate_investigation_planning(result) == []
 
-    def test_empty_devices_returns_violation(self):
-        """An empty devices list triggers a violation."""
-        result = _InvestigationResponse(devices=[])
+    def test_empty_device_names_returns_violation(self):
+        """An empty device_names list triggers a violation."""
+        result = _InvestigationResponse(device_names=[])
         violations = validate_investigation_planning(result)
         assert any("empty" in v for v in violations)
 
-    def test_missing_device_name_returns_violation(self):
-        """A device with empty device_name triggers a violation."""
-        result = _InvestigationResponse(devices=[_DeviceToInvestigate("")])
+    def test_empty_name_in_list_returns_violation(self):
+        """A device_names entry that is empty string triggers a violation."""
+        result = _InvestigationResponse(device_names=[""])
         violations = validate_investigation_planning(result)
         assert any("device_name" in v for v in violations)
 
     def test_works_with_dict_input(self):
         """Validator handles dict representation as returned by some LLM providers."""
-        result = {"devices": [{"device_name": ""}]}
+        result = {"device_names": [""]}
         violations = validate_investigation_planning(result)
         assert any("device_name" in v for v in violations)
 
-    def test_dict_empty_devices_returns_violation(self):
-        """Dict with empty devices list triggers violation."""
-        violations = validate_investigation_planning({"devices": []})
+    def test_dict_empty_device_names_returns_violation(self):
+        """Dict with empty device_names list triggers violation."""
+        violations = validate_investigation_planning({"device_names": []})
         assert any("empty" in v for v in violations)
 
-    def test_dict_valid_devices_returns_no_violations(self):
+    def test_dict_valid_device_names_returns_no_violations(self):
         """Dict with named devices returns no violations."""
-        result = {"devices": [{"device_name": "xrd-1"}]}
+        result = {"device_names": ["xrd-1", "xrd-2"]}
         assert validate_investigation_planning(result) == []
 
 

@@ -6,10 +6,7 @@ Contains realistic data structures used in input_validator functions.
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from schemas.state import GraphState, Investigation, InvestigationStatus
-from src.nodes.input_validator.processing import (
-    DeviceToInvestigate,
-    InvestigationPlanningResponse,
-)
+from src.nodes.input_validator.processing import InvestigationPlanningResponse
 
 SAMPLE_MCP_RESPONSE_FOR_EXTRACTION = {
     "messages": [
@@ -58,45 +55,17 @@ NO_AI_MESSAGE_RESPONSE = {
 }
 
 SAMPLE_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(
-    devices=[
-        DeviceToInvestigate(
-            device_name="xrd-1",
-            device_profile="PE router with MPLS",
-            role="PE",
-        ),
-        DeviceToInvestigate(
-            device_name="xrd-2", device_profile="PE router with BGP", role="PE"
-        ),
-    ]
+    device_names=["xrd-1", "xrd-2"]
 )
 
 EMPTY_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(
-    devices=[]
+    device_names=[]
 )
 
 SAMPLE_GRAPH_STATE = GraphState(
     messages=[HumanMessage(content="test query")],
     investigations=[],
 )
-
-DEVICE_PROFILE_TEST_CASES = [
-    # (input, expected_output, description)
-    (None, "unknown", "None input"),
-    ("", "unknown", "Empty string"),
-    ("   ", "unknown", "Whitespace only"),
-    ("simple_string", "simple_string", "Simple string"),
-    ("  trimmed_string  ", "trimmed_string", "String with whitespace"),
-    ({"key": "value"}, '{"key": "value"}', "Simple dict"),
-    ({}, "unknown", "Empty dict"),
-    (
-        {"complex": {"nested": "value"}},
-        '{"complex": {"nested": "value"}}',
-        "Complex dict",
-    ),
-    (123, "123", "Integer"),
-    (True, "True", "Boolean"),
-    ([], "[]", "Empty list"),
-]
 
 SAMPLE_AI_MESSAGE = AIMessage(
     content="Device analysis complete: xrd-1 (PE), xrd-2 (PE)",

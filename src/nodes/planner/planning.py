@@ -1,7 +1,7 @@
 """Planning logic for the planner node."""
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 from langchain_core.language_models import BaseChatModel
 
@@ -15,21 +15,15 @@ logger = get_logger(__name__)
 
 @dataclass
 class DevicePlan:
+    """A plan tailored for a single device investigation.
+
+    Using flat string fields (no nested objects or lists) keeps this schema
+    compatible with all LLM providers when used with structured output.
+    """
+
     device_name: str
-    role: str = ""
-    objective: Optional[str] = None
+    objective: str = ""
     working_plan_steps: str = ""
-
-
-@dataclass
-class PlanningResponse:
-    plan: List[DevicePlan]
-
-    def __len__(self) -> int:
-        return len(self.plan)
-
-    def __iter__(self):
-        return iter(self.plan)
 
 
 def load_available_skills(event_type: Optional[str] = None) -> str:
@@ -69,15 +63,15 @@ def execute_plan_selection(
     return response
 
 
-def process_planning_response(
-    response_content: BaseMessage, model: BaseChatModel
-) -> PlanningResponse:
-    """Process LLM response and extract planning information."""
-    logger.debug("🧠 Getting structured output")
+def process_device_plan_response(
+    response_content: BaseMessage, model: BaseChatModel, device_name: str
+) -> DevicePlan:
+    """Process LLM response and extract a single device plan."""
+    logger.debug("🧠 Getting structured output for device: %s", device_name)
 
     result, violations = validate_structured_output(
         raw_text=response_content.content,
-        schema=PlanningResponse,
+        schema=DevicePlan,
         model=model,
         validators=[validate_planning_response],
     )
@@ -87,28 +81,14 @@ def process_planning_response(
     if violations:
         logger.warning("⚠️ Planning response validation violations: %s", violations)
 
-    if isinstance(result, PlanningResponse):
+    if isinstance(result, DevicePlan):
         return result
-    elif isinstance(result, dict) and "plan" in result:
-        return _create_planning_response_from_dict(result)
+    elif isinstance(result, dict):
+        return DevicePlan(
+            device_name=result.get("device_name", device_name),
+            objective=result.get("objective", ""),
+            working_plan_steps=result.get("working_plan_steps", ""),
+        )
 
     logger.error("❌ Unexpected response format: %s", type(result))
-    return PlanningResponse(plan=[])
-
-
-def _create_planning_response_from_dict(response: dict) -> PlanningResponse:
-    """Create PlanningResponse from dictionary."""
-    investigations_data = response["plan"]
-    plan = [
-        (
-            DevicePlan(
-                device_name=item["device_name"],
-                objective=item["objective"],
-                working_plan_steps=item["working_plan_steps"],
-            )
-            if isinstance(item, dict)
-            else item
-        )
-        for item in investigations_data
-    ]
-    return PlanningResponse(plan=plan)
+    return DevicePlan(device_name=device_name)

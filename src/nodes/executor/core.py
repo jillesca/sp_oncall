@@ -8,7 +8,7 @@ and merges the results back into the GraphState.
 
 import asyncio
 from dataclasses import replace
-from typing import List
+from typing import List, Optional
 
 from langgraph.config import get_store
 
@@ -73,6 +73,7 @@ def llm_network_executor(state: GraphState) -> GraphState:
                 enriched_investigations,
                 state.trigger_context,
                 config.max_retries_per_device,
+                state.event_type,
             )
         )
 
@@ -133,6 +134,7 @@ async def _run_device_subgraphs_concurrently(
     investigations: List[Investigation],
     trigger_context: str,
     max_retries: int,
+    event_type: Optional[str] = None,
 ) -> List[Investigation]:
     """
     Run each device's sub-graph concurrently and collect results.
@@ -141,6 +143,7 @@ async def _run_device_subgraphs_concurrently(
         investigations: Pending investigations to execute
         trigger_context: Original trigger content for prompt building
         max_retries: Maximum execution attempts per device before giving up
+        event_type: Alert event type forwarded to per-device planning for skill routing
 
     Returns:
         List of investigations updated with execution results and assessments
@@ -151,6 +154,7 @@ async def _run_device_subgraphs_concurrently(
                 investigation=investigation,
                 trigger_context=trigger_context,
                 max_retries=max_retries,
+                event_type=event_type,
             )
         )
         for investigation in investigations

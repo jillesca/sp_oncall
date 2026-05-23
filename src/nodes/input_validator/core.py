@@ -96,13 +96,8 @@ def _log_successful_investigation_planning(devices) -> None:
         "✅ Investigation planning successful: %d devices created",
         len(devices),
     )
-    for investigation in devices:
-        logger.info(
-            "  📋 %s (role: %s, profile: %s)",
-            investigation.device_name,
-            investigation.role,
-            investigation.device_profile,
-        )
+    for device_name in devices:
+        logger.info("  📋 %s", device_name)
 
 
 def _build_failed_state(state: GraphState) -> GraphState:
