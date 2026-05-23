@@ -20,12 +20,16 @@ class GraphState:
     Attributes:
         messages: Conversation history using LangChain message format.
         investigations: Collection of device-specific investigations.
+        event_type: Alert event type extracted from the trigger context (e.g.
+                    "interface_state", "bgp_session_state"). None for manual
+                    queries.
     """
 
     messages: Annotated[List[AnyMessage], add_messages] = field(
         default_factory=list
     )
     investigations: List[Investigation] = field(default_factory=list)
+    event_type: Optional[str] = None
 
     @property
     def trigger_context(self) -> str:

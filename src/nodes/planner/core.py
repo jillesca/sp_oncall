@@ -11,7 +11,7 @@ from nodes.common import load_model
 from prompts.planner import PLANNER_PROMPT
 
 from .planning import (
-    load_available_plans,
+    load_available_skills,
     execute_plan_selection,
     process_planning_response,
 )
@@ -43,13 +43,13 @@ def planner_node(state: GraphState) -> GraphState:
     logger.info("📋 Planning for trigger context: %s", user_query)
 
     try:
-        available_plans = load_available_plans()
+        available_skills = load_available_skills(state.event_type)
         model = load_model()
         planning_context = build_planning_context(state)
         response = execute_plan_selection(
             model,
             user_query,
-            available_plans,
+            available_skills,
             planning_context,
             PLANNER_PROMPT,
         )

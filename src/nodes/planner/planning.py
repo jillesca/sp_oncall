@@ -5,7 +5,8 @@ from typing import List, Optional
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 from langchain_core.language_models import BaseChatModel
 
-from util.plans import load_plans, plans_to_string
+from src.util.skills import load_skills
+from src.util.skill_routing import get_skills_for_alert
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,12 +31,19 @@ class PlanningResponse:
         return iter(self.plan)
 
 
-def load_available_plans() -> str:
-    """Load available plans from the plan repository and format them as string."""
-    plans = load_plans()
-    available_plans_string = plans_to_string(plans)
-    logger.debug("📚 Loaded %s available plans", len(plans))
-    return available_plans_string
+def load_available_skills(event_type: Optional[str] = None) -> str:
+    """Load skills filtered by alert event_type, or all skills for manual queries."""
+    if event_type:
+        skill_names = get_skills_for_alert(event_type)
+        logger.debug(
+            "📚 Loading %d skills for event_type '%s'",
+            len(skill_names),
+            event_type,
+        )
+        return load_skills(skill_names)
+
+    logger.debug("📚 Loading all skills for manual query")
+    return load_skills()
 
 
 def execute_plan_selection(

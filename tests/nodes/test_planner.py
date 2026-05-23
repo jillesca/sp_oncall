@@ -11,7 +11,7 @@ from dataclasses import replace
 
 from src.nodes.planner.core import planner_node
 from src.nodes.planner.planning import (
-    load_available_plans,
+    load_available_skills,
     execute_plan_selection,
     process_planning_response,
     DevicePlan,
@@ -35,42 +35,48 @@ from tests.data.planner_data import (
 )
 
 
-class TestLoadAvailablePlans:
-    """Test cases for _load_available_plans function."""
+class TestLoadAvailableSkills:
+    """Test cases for load_available_skills function."""
 
-    @patch("src.nodes.planner.planning.load_plans")
-    @patch("src.nodes.planner.planning.plans_to_string")
-    def test_load_available_plans_success(
-        self, mock_plans_to_string, mock_load_plans
-    ):
-        """Test successful loading of available plans."""
-        # Mock the functions
-        mock_load_plans.return_value = [{"name": "plan1"}, {"name": "plan2"}]
-        mock_plans_to_string.return_value = (
-            "Plan 1: Description\nPlan 2: Description"
-        )
+    @patch("src.nodes.planner.planning.load_skills")
+    def test_load_all_skills_for_manual_query(self, mock_load_skills):
+        """When event_type is None, all skills are loaded without filtering."""
+        mock_load_skills.return_value = "# Skill 1\n\n---\n\n# Skill 2"
 
-        result = load_available_plans()
+        result = load_available_skills(event_type=None)
 
         assert isinstance(result, str)
         assert len(result) > 0
-        mock_load_plans.assert_called_once()
-        mock_plans_to_string.assert_called_once()
+        mock_load_skills.assert_called_once_with()
 
-    @patch("src.nodes.planner.planning.load_plans")
-    @patch("src.nodes.planner.planning.plans_to_string")
-    def test_load_available_plans_empty(
-        self, mock_plans_to_string, mock_load_plans
+    @patch("src.nodes.planner.planning.get_skills_for_alert")
+    @patch("src.nodes.planner.planning.load_skills")
+    def test_load_filtered_skills_for_alert(
+        self, mock_load_skills, mock_get_skills
     ):
-        """Test loading when no plans are available."""
-        mock_load_plans.return_value = []
-        mock_plans_to_string.return_value = ""
+        """When event_type is present, skills are filtered via the routing table."""
+        mock_get_skills.return_value = [
+            "check_interface_status",
+            "general_device_health_check",
+        ]
+        mock_load_skills.return_value = "# Check Interface Status\n..."
 
-        result = load_available_plans()
+        result = load_available_skills(event_type="interface_state")
 
         assert isinstance(result, str)
-        mock_load_plans.assert_called_once()
-        mock_plans_to_string.assert_called_once()
+        mock_get_skills.assert_called_once_with("interface_state")
+        mock_load_skills.assert_called_once_with(
+            ["check_interface_status", "general_device_health_check"]
+        )
+
+    @patch("src.nodes.planner.planning.load_skills")
+    def test_load_available_skills_returns_string(self, mock_load_skills):
+        """Return value is always a string even when no skills are found."""
+        mock_load_skills.return_value = "No skills available."
+
+        result = load_available_skills()
+
+        assert isinstance(result, str)
 
 
 class TestExtractInvestigationsSummary:
