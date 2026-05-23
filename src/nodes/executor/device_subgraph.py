@@ -15,7 +15,7 @@ from langgraph.graph import StateGraph, END
 
 from schemas import Investigation
 from schemas.assessment_schema import AssessmentOutput
-from nodes.common.llm_utils import load_model
+from nodes.common.llm_utils import load_fast_model
 from nodes.assessor.context import build_assessment_context
 from nodes.assessor.assessment import execute_assessment
 from src.util.prompt_loader import load_prompt
@@ -71,7 +71,7 @@ def assess_device(state: DeviceState) -> DeviceState:
     assessment_context = build_assessment_context(
         state.investigation, state.trigger_context
     )
-    model = load_model()
+    model = load_fast_model()
     assessment = execute_assessment(
         model, assessment_context, load_prompt("objective_assessor")
     )

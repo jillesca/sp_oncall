@@ -17,15 +17,18 @@ logger = get_logger(__name__)
 
 
 def load_model() -> BaseChatModel:
-    """
-    Load and return the configured LLM model.
-
-    Returns:
-        Configured LLM model for use in nodes
-    """
+    """Load the main reasoning model from the current configuration."""
     configuration = Configuration.from_context()
     model = load_chat_model(configuration.model)
     logger.debug("🤖 Using model: %s", configuration.model)
+    return model
+
+
+def load_fast_model() -> BaseChatModel:
+    """Load the fast model for structured output parsing from the current configuration."""
+    configuration = Configuration.from_context()
+    model = load_chat_model(configuration.fast_model)
+    logger.debug("⚡ Using fast model: %s", configuration.fast_model)
     return model
 
 

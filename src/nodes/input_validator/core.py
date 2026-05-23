@@ -11,7 +11,7 @@ from typing import Optional
 
 from schemas.state import GraphState
 from src.logging import get_logger, log_node_execution
-from nodes.common import load_model
+from nodes.common import load_fast_model
 
 from .extraction import (
     execute_investigation_planning,
@@ -47,11 +47,11 @@ def input_validator_node(state: GraphState) -> GraphState:
 
     try:
         logger.info("🔍 Starting multi-device investigation setup")
-        model = load_model()
+        fast_model = load_fast_model()
         mcp_response = execute_investigation_planning(state)
         response_content = extract_mcp_response_content(mcp_response)
         investigation_list = process_investigation_planning_response(
-            response_content, model=model
+            response_content, model=fast_model
         )
 
         event_type = _extract_event_type(state.trigger_context)

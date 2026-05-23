@@ -23,6 +23,9 @@ class LLMModel(str, Enum):
     OPENAI_GPT5_NANO = "openai/gpt-5-nano"
     OPENAI_GPT5 = "openai/gpt-5"
     OPENAI_GPT5_4_NANO = "openai/gpt-5.4-nano"
+    OPENROUTER_CLAUDE_SONNET_4 = "openrouter/anthropic/claude-sonnet-4"
+    OPENROUTER_CLAUDE_SONNET_4_5 = "openrouter/anthropic/claude-sonnet-4-5"
+    OPENROUTER_GEMINI_2_5_PRO = "openrouter/google/gemini-2.5-pro"
 
     def __str__(self) -> str:
         return self.value
@@ -40,6 +43,17 @@ class Configuration:
                 "Select from the available models in the LLMModel enum."
             },
         )
+    )
+
+    fast_model: str = field(
+        default_factory=lambda: os.getenv(
+            "SP_ONCALL_FAST_MODEL", "openai/gpt-4o-mini"
+        ),
+        metadata={
+            "description": "The language model for structured output parsing. "
+            "Faster and cheaper than the main model. "
+            "Override with SP_ONCALL_FAST_MODEL env var."
+        },
     )
 
     max_retries_per_device: int = field(
