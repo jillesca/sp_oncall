@@ -13,6 +13,7 @@ from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel
 
 from schemas.state import Investigation
+from src.util.validation import validate_structured_output, validate_investigation_planning
 from src.logging import get_logger, debug_capture_object
 
 logger = get_logger(__name__)
@@ -51,31 +52,30 @@ def process_investigation_planning_response(
     """
     logger.debug("🧠 Getting structured output")
 
-    try:
-        # Use the model to process the response and extract device names
-        response = model.with_structured_output(
-            schema=InvestigationPlanningResponse
-        ).invoke(input=response_content.content)
+    result, violations = validate_structured_output(
+        raw_text=response_content.content,
+        schema=InvestigationPlanningResponse,
+        model=model,
+        validators=[validate_investigation_planning],
+    )
 
-        logger.debug("📋 Structured output captured: %s", response)
-        debug_capture_object(
-            response, label="_process_investigation_planning_response"
+    logger.debug("📋 Structured output captured: %s", result)
+    debug_capture_object(result, label="_process_investigation_planning_response")
+
+    logger.debug("🎯 Extracted device names: %s", result)
+
+    if violations:
+        logger.warning(
+            "⚠️ Investigation planning validation violations: %s", violations
         )
 
-        logger.debug("🎯 Extracted device names: %s", response)
+    if isinstance(result, InvestigationPlanningResponse):
+        return _normalize_investigation_response(result)
+    elif isinstance(result, dict) and "devices" in result:
+        return _create_response_from_dict(result)
 
-        # Ensure we have a proper InvestigationPlanningResponse object
-        if isinstance(response, InvestigationPlanningResponse):
-            return _normalize_investigation_response(response)
-        elif isinstance(response, dict) and "devices" in response:
-            return _create_response_from_dict(response)
-        else:
-            logger.error("❌ Unexpected response format: %s", type(response))
-            return InvestigationPlanningResponse(devices=[])
-
-    except Exception as e:
-        logger.error("❌ LLM processing failed: %s", e)
-        return InvestigationPlanningResponse(devices=[])
+    logger.error("❌ Unexpected response format: %s", type(result))
+    return InvestigationPlanningResponse(devices=[])
 
 
 def create_investigations_from_response(

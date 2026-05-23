@@ -7,6 +7,7 @@ from langchain_core.language_models import BaseChatModel
 
 from src.util.skills import load_skills
 from src.util.skill_routing import get_skills_for_alert
+from src.util.validation import validate_structured_output, validate_planning_response
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,24 +75,25 @@ def process_planning_response(
     """Process LLM response and extract planning information."""
     logger.debug("🧠 Getting structured output")
 
-    try:
-        response = model.with_structured_output(
-            schema=PlanningResponse
-        ).invoke(input=response_content.content)
+    result, violations = validate_structured_output(
+        raw_text=response_content.content,
+        schema=PlanningResponse,
+        model=model,
+        validators=[validate_planning_response],
+    )
 
-        logger.debug("📋 Structured output captured: %s", response)
+    logger.debug("📋 Structured output captured: %s", result)
 
-        if isinstance(response, PlanningResponse):
-            return response
-        elif isinstance(response, dict) and "plan" in response:
-            return _create_planning_response_from_dict(response)
-        else:
-            logger.error("❌ Unexpected response format: %s", type(response))
-            return PlanningResponse(plan=[])
+    if violations:
+        logger.warning("⚠️ Planning response validation violations: %s", violations)
 
-    except Exception as e:
-        logger.error("❌ LLM processing failed: %s", e)
-        return PlanningResponse(plan=[])
+    if isinstance(result, PlanningResponse):
+        return result
+    elif isinstance(result, dict) and "plan" in result:
+        return _create_planning_response_from_dict(result)
+
+    logger.error("❌ Unexpected response format: %s", type(result))
+    return PlanningResponse(plan=[])
 
 
 def _create_planning_response_from_dict(response: dict) -> PlanningResponse:

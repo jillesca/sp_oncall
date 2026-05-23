@@ -211,6 +211,8 @@ Investigation strategies live in `skills/` as Markdown files. When an alert fire
 
 For detailed logging configuration, see [src/logging/README.md](src/logging/README.md).
 
+For domain terminology (Alert, Investigation, Device Role, etc.), see [CONTEXT.md](CONTEXT.md).
+
 ---
 
 ## 🚨 Demo Workflow
