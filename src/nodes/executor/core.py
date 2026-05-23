@@ -10,11 +10,12 @@ import asyncio
 from typing import List
 
 from schemas import GraphState, Investigation, InvestigationStatus
+from src.configuration import Configuration
 from src.logging import get_logger, log_node_execution
 
+from .device_subgraph import DeviceState, device_subgraph
 from .logging import log_incoming_state
 from .state import update_state_with_investigations, update_state_with_global_error
-from .device_subgraph import DeviceState, device_subgraph
 
 logger = get_logger(__name__)
 
@@ -42,14 +43,18 @@ def llm_network_executor(state: GraphState) -> GraphState:
             logger.info("🔍 No pending investigations to execute")
             return state
 
+        config = Configuration.from_context()
         logger.info(
-            "🚀 Starting per-device sub-graphs for %s investigation(s)",
+            "🚀 Starting per-device sub-graphs for %s investigation(s) (max_retries=%s)",
             len(pending_investigations),
+            config.max_retries_per_device,
         )
 
         completed_investigations = asyncio.run(
             _run_device_subgraphs_concurrently(
-                pending_investigations, state.trigger_context
+                pending_investigations,
+                state.trigger_context,
+                config.max_retries_per_device,
             )
         )
 
@@ -61,7 +66,9 @@ def llm_network_executor(state: GraphState) -> GraphState:
 
 
 async def _run_device_subgraphs_concurrently(
-    investigations: List[Investigation], trigger_context: str
+    investigations: List[Investigation],
+    trigger_context: str,
+    max_retries: int,
 ) -> List[Investigation]:
     """
     Run each device's sub-graph concurrently and collect results.
@@ -69,6 +76,7 @@ async def _run_device_subgraphs_concurrently(
     Args:
         investigations: Pending investigations to execute
         trigger_context: Original trigger content for prompt building
+        max_retries: Maximum execution attempts per device before giving up
 
     Returns:
         List of investigations updated with execution results and assessments
@@ -78,6 +86,7 @@ async def _run_device_subgraphs_concurrently(
             DeviceState(
                 investigation=investigation,
                 trigger_context=trigger_context,
+                max_retries=max_retries,
             )
         )
         for investigation in investigations

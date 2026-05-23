@@ -93,29 +93,36 @@ Before you can use SP Oncall, you'll need these tools installed on your system:
 
 ## ⚡️ Quick Start Guide
 
-### 1. 📁 Clone and Setup
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/jillesca/sp_oncall
 cd sp_oncall
+make install
 ```
 
-### 2. 🔐 Environment Configuration
+### 2. Configure environment
 
-Create a `.env` file in the project root with your API keys:
+Copy `.env.example` to `.env` and fill in the required values:
 
 ```bash
-# .env file - Required for operation
-OPENAI_API_KEY=your-openai-api-key-here
-LANGSMITH_API_KEY=your-langsmith-api-key-here
-LANGSMITH_PROJECT=your-project-name
-LANGSMITH_TRACING=true
-LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+cp .env.example .env
 ```
 
-### 3. 🔌 Network Device Access
+Required keys:
 
-SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to extract data from network devices. The MCP configuration is defined in [mcp_config.json](mcp_config.json).
+| Variable            | Description                               |
+| ------------------- | ----------------------------------------- |
+| `OPENAI_API_KEY`    | OpenAI API key                            |
+| `LANGSMITH_API_KEY` | LangSmith API key (for tracing)           |
+| `LANGSMITH_PROJECT` | LangSmith project name (e.g. `sp_oncall`) |
+| `LANGSMITH_TRACING` | Set to `true` to enable tracing           |
+
+See the [Configuration Reference](#-configuration-reference) below for all available options.
+
+### 3. Configure network device access
+
+SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to query network devices. Point `mcp_config.json` at your running gNMIBuddy instance:
 
 ```json
 {
@@ -126,53 +133,25 @@ SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to 
 }
 ```
 
-> [!NOTE]
-> If you're not using the DevNet Sandbox, replace `xrd_sandbox.json` with your own device inventory file.
-
-### 4. 🚀 Installation and Launch
-
-Install dependencies and start the investigation system:
+### 4. Start
 
 ```bash
-# First time only - installs all required Python packages
-make install
-
-# Start the investigation system (opens a web interface)
 make run
 ```
 
-The `make install` command will:
+This starts the LangGraph development server. Open LangGraph Studio at the URL shown in the terminal.
 
-- Install all Python dependencies using the exact versions specified in `uv.lock` (ensures consistency).
+### 5. Send a query
 
-The `make run` command will:
-
-- Start the LangGraph development server (a web interface for interacting with the AI agents).
-
-### 5. 💻 Usage Examples
-
-Once running, you can ask the system to investigate your network in various ways:
-
-**Single Device Investigation:**
+In LangGraph Studio, start a new thread and type a query:
 
 ```text
-"Check BGP neighbors on xrd-1"
-"Review the health of xrd-8"
+Check BGP neighbors on xrd-1
+How are my PE routers performing?
+Investigate all core P devices
 ```
 
-**Multi-Device by Role:**
-
-```text
-"How are my PE routers performing?" (PE = Provider Edge - routers that connect to customer networks)
-"Check all route reflectors" (Route reflectors help distribute routing information)
-"Investigate all core P devices" (P = Provider - core network routers)
-```
-
-**Pattern-Based Investigation:**
-
-```text
-"Check interfaces on devices matching 'xrd-*'"
-```
+For the alert-driven demo flow, see [Demo Workflow](#-demo-workflow) below.
 
 ## 🧪 Testing with DevNet Sandbox
 
@@ -210,36 +189,60 @@ Don't forget to `commit` your changes to XRd.
 
 </details>
 
-## 🔧 Configuration
+## 🔧 Configuration Reference
 
-### AI Language Models
+All `SP_ONCALL_*` variables can be set in your `.env` file. See `.env.example` for the full list with comments.
 
-On the _Manage Assistants_ button in the web interface, you can select different AI models to try:
+| Variable                    | Default | Description                                                                                                       |
+| --------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `SP_ONCALL_MAX_RETRIES`     | `3`     | Max execution retries per device investigation. Also overridable from LangGraph Studio.                           |
+| `SP_ONCALL_LOG_LEVEL`       | `info`  | Log level for sp_oncall modules (`debug` \| `info` \| `warning` \| `error`).                                      |
+| `SP_ONCALL_LANGCHAIN_DEBUG` | `false` | Enable verbose LangChain debug tracing.                                                                           |
+| `SP_ONCALL_MODULE_LEVELS`   | —       | Per-module log overrides (e.g. `sp_oncall.nodes=debug,langgraph=error`). Run `make logger-names` to list modules. |
+| `SP_ONCALL_LOG_FILE`        | —       | Write logs to a file in addition to stdout.                                                                       |
 
-- **OpenAI**: `gpt-5`, `gpt-5.4-nano`, `gpt-5-nano` (default - most capable)
+### AI model selection
 
-![llms](img/llms.png)
+In LangGraph Studio, click **Manage Assistants** to select the model. Available models are defined in `src/configuration.py` under `LLMModel`.
 
-### Investigation Plans
+### Investigation skills
 
-The system uses predefined investigation strategies stored as JSON files in the `/plans` directory:
+Investigation strategies live in `skills/` as Markdown files. When an alert fires, the planner selects skills based on the alert's `event_type`. For manual queries, all skills are available. See `src/util/skill_routing.py` for the routing table.
 
-- Device health checks, BGP analysis, interface monitoring, MPLS state verification
-- Role-specific flows for different types of network devices (PE, P, route reflectors)
-- These plans are starting points - the AI executor adapts them based on your specific situation
+For detailed logging configuration, see [src/logging/README.md](src/logging/README.md).
 
-### Debug & Monitoring
+---
 
-The system includes comprehensive logging to help you understand what's happening:
+## 🚨 Demo Workflow
 
-- **Environment Control**:
-  - Set `SP_ONCALL_LOG_LEVEL=debug` for detailed logging
-  - Set `SP_ONCALL_LANGCHAIN_DEBUG=true` for LangChain framework logging
-- **Module-Specific Levels**: Configure individual component verbosity (e.g., `SP_ONCALL_MODULE_LEVELS="sp_oncall.nodes=debug,langgraph=error"`)
-  - Use `make logger-names` to see all available logging modules
-- **Object Debug Capture**: Use `SP_ONCALL_DEBUG_CAPTURE=1` to automatically save complex objects to log files for offline analysis
+The primary demo path is alert-driven: an observability system fires a webhook that triggers a background investigation, and the presenter joins the running thread in LangGraph Studio.
 
-For detailed logging configuration and advanced features, see [src/logging/README.md](src/logging/README.md). For debug capture objects, see [docs/DEBUG_CAPTURE.md](docs/DEBUG_CAPTURE.md).
+### Thread-per-Alert flow
+
+1. **Alert fires** — Prometheus detects a network event and sends it to Alertmanager → Grafana → webhook container.
+2. **Webhook container** (`POST /alert`) transforms the Grafana payload into a `NetworkAlert` and calls `POST /runs` on the LangGraph API.
+3. **sp_oncall graph runs** in the background: `input_validator → planner → network_executor → report_generator`.
+4. **Open LangGraph Studio** and join the thread by its ID to watch the investigation live.
+5. **Ask follow-up questions** in the same thread — agents have full access to the investigation state.
+
+### Triggering a test alert manually
+
+Use `scripts/test_alert.sh` to send a fake alert to the webhook container:
+
+```bash
+# Show the curl commands without sending (dry run)
+bash scripts/test_alert.sh --dry-run
+
+# Send a specific alert type
+bash scripts/test_alert.sh interface_down
+bash scripts/test_alert.sh bgp_down
+bash scripts/test_alert.sh isis_down
+bash scripts/test_alert.sh topology_degraded
+bash scripts/test_alert.sh interface_flapping
+bash scripts/test_alert.sh interface_errors
+```
+
+The webhook container must be running (`docker compose up webhook-receiver`) and the LangGraph server must be reachable at `http://localhost:2024`.
 
 ## 🆘 Getting Help
 

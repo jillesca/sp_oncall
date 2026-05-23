@@ -285,6 +285,8 @@ python -c "from src.util.validation import validate_structured_output; print('OK
 
 ## Phase 2 — Post-Demo Improvements
 
+> **Note — README full rewrite:** The README was surgically updated in Stage 1.5 (Quick Start, Configuration Reference, Demo Workflow). A full rewrite is deferred here. At the end of Phase 2, rewrite the complete README to reflect the final architecture: linear outer graph, per-device sub-graph with retry loop, skills and prompts as Markdown files, and the updated mermaid sequence diagram.
+
 ### Stage 2.1 — Device Profiles via LangGraph Store
 
 **Goal:** Implement cross-thread device memory using LangGraph's built-in Store.

@@ -1,14 +1,15 @@
 """Define the configurable parameters for the agent."""
 
 from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import Annotated
-from dataclasses import dataclass, field, fields
 
-from langgraph.config import get_config
 from langchain_core.runnables import ensure_config
+from langgraph.config import get_config
 
-# Add logging
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -41,10 +42,11 @@ class Configuration:
         )
     )
 
-    max_search_results: int = field(
-        default=10,
+    max_retries_per_device: int = field(
+        default_factory=lambda: int(os.getenv("SP_ONCALL_MAX_RETRIES", "3")),
         metadata={
-            "description": "The maximum number of search results to return for each search query."
+            "description": "Maximum number of execution retries per device investigation. "
+            "Override with SP_ONCALL_MAX_RETRIES env var."
         },
     )
 
