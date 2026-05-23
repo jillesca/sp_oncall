@@ -149,12 +149,14 @@ pytest tests/nodes/test_planner.py
 **Changes:**
 
 1. Create `prompts/` directory at project root (replaces `src/prompts/`):
-   - `prompts/input_validator.md`
+   - `prompts/device_discovery.md` — was `input_validator.md`; named for what it does: discover and profile devices from the trigger context
    - `prompts/planner.md`
    - `prompts/network_executor.md`
    - `prompts/objective_assessor.md`
    - `prompts/report_generator.md`
-   - `prompts/learning_insights.md`
+   - `prompts/learning_insights.md` — **deleted** (no node uses it; see YAGNI note below)
+
+   > **YAGNI note:** `learning_insights.py` and `LearningInsights` schema (`src/schemas/learning_insights_schema.py`) are both dead code — defined but not used by any node. They were not migrated. If a learning-insights node is built in Phase 2, the prompt and schema should be written at that point with full context of the node's actual needs. The `LearningInsights` schema should be cleaned up in a separate task.
 
 2. Convert each Python prompt string to Markdown. During conversion, **tailor the content**:
    - Remove generic boilerplate (the prompts are currently very verbose)

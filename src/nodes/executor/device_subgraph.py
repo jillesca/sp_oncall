@@ -18,7 +18,7 @@ from schemas.assessment_schema import AssessmentOutput
 from nodes.common.llm_utils import load_model
 from nodes.assessor.context import build_assessment_context
 from nodes.assessor.assessment import execute_assessment
-from prompts.objective_assessor import OBJECTIVE_ASSESSOR_PROMPT
+from src.util.prompt_loader import load_prompt
 from src.logging import get_logger
 
 from .execution import execute_single_investigation
@@ -73,7 +73,7 @@ def assess_device(state: DeviceState) -> DeviceState:
     )
     model = load_model()
     assessment = execute_assessment(
-        model, assessment_context, OBJECTIVE_ASSESSOR_PROMPT
+        model, assessment_context, load_prompt("objective_assessor")
     )
     logger.info(
         "📋 Assessment result for %s: achieved=%s",

@@ -8,7 +8,7 @@ selects appropriate plans, and updates investigations with planning results.
 from schemas.state import GraphState
 from src.logging import get_logger, log_node_execution
 from nodes.common import load_model
-from prompts.planner import PLANNER_PROMPT
+from src.util.prompt_loader import load_prompt
 
 from .planning import (
     load_available_skills,
@@ -51,7 +51,7 @@ def planner_node(state: GraphState) -> GraphState:
             user_query,
             available_skills,
             planning_context,
-            PLANNER_PROMPT,
+            load_prompt("planner"),
         )
         planning_response = process_planning_response(
             response_content=response, model=model

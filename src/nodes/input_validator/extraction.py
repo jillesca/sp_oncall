@@ -9,7 +9,7 @@ import asyncio
 from typing import Any
 
 from langchain_core.messages import HumanMessage, AIMessage
-from prompts.investigation_planning import INVESTIGATION_PLANNING_PROMPT
+from src.util.prompt_loader import load_prompt
 from mcp_client import mcp_node
 from schemas.state import GraphState
 from nodes.markdown_builder import MarkdownBuilder
@@ -42,7 +42,7 @@ def execute_investigation_planning(
     return asyncio.run(
         mcp_node(
             message=message,
-            system_prompt=INVESTIGATION_PLANNING_PROMPT,
+            system_prompt=load_prompt("device_discovery"),
             response_format=response_format,
         )
     )

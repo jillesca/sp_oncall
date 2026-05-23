@@ -10,7 +10,7 @@ from langchain_core.messages import HumanMessage
 
 from schemas import Investigation, InvestigationStatus
 from mcp_client import mcp_node
-from prompts.network_executor import NETWORK_EXECUTOR_PROMPT
+from src.util.prompt_loader import load_prompt
 from src.logging import get_logger
 
 from .context import build_investigation_context
@@ -47,7 +47,7 @@ async def execute_single_investigation(
 
         mcp_response = await mcp_node(
             message=message,
-            system_prompt=NETWORK_EXECUTOR_PROMPT,
+            system_prompt=load_prompt("network_executor"),
         )
 
         logger.debug(
