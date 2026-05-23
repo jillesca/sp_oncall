@@ -47,3 +47,7 @@ Guidelines:
 - Eliminate attribute duplication — never mirror an existing structure with different names
 - Remove intermediate objects that exist only to pass data from one point to another
 - Prefer clarity over architectural purity
+
+## Notes
+
+- For logging, follow the existing framework in `src/logging` — do not introduce new logging libraries or patterns
