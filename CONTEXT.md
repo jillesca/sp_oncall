@@ -78,19 +78,20 @@ Runs benefit from cached profile data.
 
 ---
 
-## Plan / Skill
+## Skill
 
 A reusable investigation strategy for a specific intent (e.g. "check BGP neighbors").
-Format is under active revision: migrating from JSON files to Markdown Skill files
-(agentskills.io specification) so they can be shared outside sp_oncall.
+Stored as a Markdown file in the `skills/` directory following the agentskills.io specification.
+The planner selects relevant skills based on the alert's `event_type` (see `src/util/skill_routing.py`).
 
 ---
 
 ## Historical Context
 
-Cross-Run memory. Stores learned patterns, device relationships, and previous reports so
-future Runs can benefit from past findings. Currently global; target state is scoped per
-device (linked to Device Profile).
+Cross-Run memory per device. The last N investigation summaries for each device are stored
+in its Device Profile (via `append_device_history` / `get_device_history` in `device_store.py`)
+and injected into the executor context on subsequent Runs. This replaces the old global
+historical context approach.
 
 ---
 
