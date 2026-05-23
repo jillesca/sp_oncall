@@ -3,19 +3,14 @@ Test data for input_validator node tests.
 Contains realistic data structures used in input_validator functions.
 """
 
-from schemas.state import (
-    GraphState,
-    Investigation,
-    InvestigationStatus,
-    InvestigationPriority,
-)
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+
+from schemas.state import GraphState, Investigation, InvestigationStatus
 from src.nodes.input_validator.processing import (
     DeviceToInvestigate,
     InvestigationPlanningResponse,
 )
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-# Sample MCP response for device extraction
 SAMPLE_MCP_RESPONSE_FOR_EXTRACTION = {
     "messages": [
         HumanMessage(
@@ -47,13 +42,10 @@ SAMPLE_MCP_RESPONSE_FOR_EXTRACTION = {
     ]
 }
 
-# Sample MCP response with no messages
 EMPTY_MCP_RESPONSE = {"messages": []}
 
-# Sample MCP response with invalid structure
 INVALID_MCP_RESPONSE = {"not_messages": "invalid"}
 
-# Sample MCP response with no AI messages
 NO_AI_MESSAGE_RESPONSE = {
     "messages": [
         ToolMessage(
@@ -65,7 +57,6 @@ NO_AI_MESSAGE_RESPONSE = {
     ]
 }
 
-# Sample investigation planning response
 SAMPLE_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(
     devices=[
         DeviceToInvestigate(
@@ -79,22 +70,15 @@ SAMPLE_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(
     ]
 )
 
-# Empty investigation planning response
 EMPTY_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(
     devices=[]
 )
 
-# Sample GraphState for building failed state
 SAMPLE_GRAPH_STATE = GraphState(
     messages=[HumanMessage(content="test query")],
     investigations=[],
-    historical_context=[],
-    max_retries=3,
-    current_retries=0,
-    assessment=None,
 )
 
-# Test data for device profile normalization
 DEVICE_PROFILE_TEST_CASES = [
     # (input, expected_output, description)
     (None, "unknown", "None input"),
@@ -114,13 +98,11 @@ DEVICE_PROFILE_TEST_CASES = [
     ([], "[]", "Empty list"),
 ]
 
-# Sample AIMessage for extraction
 SAMPLE_AI_MESSAGE = AIMessage(
     content="Device analysis complete: xrd-1 (PE), xrd-2 (PE)",
     id="test-ai-msg",
 )
 
-# Sample AIMessage with list content
 SAMPLE_AI_MESSAGE_LIST_CONTENT = AIMessage(
     content=["Part 1: Device analysis", "Part 2: Results"],
     id="test-ai-msg-list",

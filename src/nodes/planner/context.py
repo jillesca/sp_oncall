@@ -3,7 +3,6 @@
 from typing import List
 from schemas.state import Investigation, GraphState
 from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_historical_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,10 +29,7 @@ def extract_investigations_summary(investigations: List[Investigation]) -> str:
     builder = MarkdownBuilder().add_section("Devices")
 
     for i, investigation in enumerate(investigations, 1):
-        # Device header with numbering
         builder.add_subsection(f"{i}. Device: `{investigation.device_name}`")
-
-        # Device profile section
         builder.add_bold_text("Device Profile:")
         builder.add_bold_text("Role:", investigation.role)
         builder.add_code_block(investigation.device_profile)
@@ -47,10 +43,10 @@ def extract_investigations_summary(investigations: List[Investigation]) -> str:
 
 def build_planning_context(state: GraphState) -> str:
     """
-    Build comprehensive planning context including investigations and session context.
+    Build planning context from investigations in the current state.
 
     Args:
-        state: Current GraphState with investigations and historical context
+        state: Current GraphState with investigations
 
     Returns:
         Markdown-formatted string containing complete planning context
@@ -63,15 +59,10 @@ def build_planning_context(state: GraphState) -> str:
     builder = MarkdownBuilder()
     builder.add_header("Planning Context")
 
-    # Add investigations summary
     investigations_content = extract_investigations_summary(
         state.investigations
     )
     builder.add_text(investigations_content)
-
-    add_historical_context_to_builder(
-        builder, state, section_title="Historical Context for Planning"
-    )
 
     context_string = builder.build()
     logger.debug(

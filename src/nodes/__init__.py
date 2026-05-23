@@ -5,7 +5,7 @@ This package contains all the node implementations that form the graph workflow:
 - input_validator: Validates input and extracts device information
 - planner: Creates execution plans based on user queries
 - executor: Executes network operations using MCP tools
-- assessor: Evaluates if objectives have been met
+- assessor: Evaluates if objectives have been met (used in per-device sub-graph, Stage 1.2)
 - reporter: Generates final reports
 - markdown_builder: Utility for building markdown content
 - common: Shared utilities across all nodes
@@ -14,13 +14,11 @@ This package contains all the node implementations that form the graph workflow:
 from .input_validator import input_validator_node
 from .planner import planner_node
 from .executor import llm_network_executor
-from .assessor import objective_assessor_node
 from .reporter import investigation_report_node
 
 __all__ = [
     "input_validator_node",
     "planner_node",
     "llm_network_executor",
-    "objective_assessor_node",
     "investigation_report_node",
 ]

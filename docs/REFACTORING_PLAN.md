@@ -2,7 +2,7 @@
 
 > Phased improvement plan for the SP Oncall LangGraph agent system.
 > Each stage is a self-contained unit of work. Agents implementing a stage must
-> verify their work by running `make install` and `pytest` after changes.
+> verify their work by running `make install` and `pytest` after changes or any other terminal command needed.
 
 ---
 
@@ -33,8 +33,11 @@
 4. Update all nodes that reference removed fields — fix imports and usages:
    - `src/nodes/assessor/context.py` — remove retry info section
    - `src/nodes/planner/context.py` — remove historical context references
-   - `src/nodes/reporter/session.py` — remove historical context update logic (stub it out)
-   - `src/graph.py` — remove `decide_next_step` function (routing changes in Stage 1.2)
+   - `src/nodes/reporter/session.py` — deleted (historical context is fully removed)
+   - `src/nodes/common/session_context.py` — deleted (historical context helper)
+   - `src/nodes/assessor/state.py` — deleted (all functions operated on removed fields; will be recreated in Stage 1.2 for `DeviceState`)
+   - `src/graph.py` — remove `decide_next_step` and wire executor → report_generator directly
+     > **Decision (Option B):** Rather than keeping a no-op `decide_next_step`, the `objective_assessor` node was removed from the outer graph entirely and the flow was made linear now. Stage 1.2 only needs to add the per-device subgraph inside the executor — the outer graph is already in its final linear shape.
 
 **Verification:**
 
@@ -107,6 +110,7 @@ pytest tests/nodes/test_executor.py tests/nodes/test_assessor.py
 
 3. Create `skills/skill_routing.py`:
    - A mapping from alert `event_type` to skill names:
+
      ```python
      ALERT_SKILL_ROUTING = {
          "interface_state": ["check_interface_status", "general_device_health_check"],
@@ -117,6 +121,7 @@ pytest tests/nodes/test_executor.py tests/nodes/test_assessor.py
          "interface_errors": ["check_interface_status"],
      }
      ```
+
    - A function `get_skills_for_alert(event_type: str) -> List[str]` that returns filtered skills
    - A function `get_all_skills() -> List[str]` for the manual path
 
@@ -327,6 +332,7 @@ pytest
 3. Update all structured output parsing calls to use `load_fast_model()` instead of `load_model()`.
 
 4. Update `.env.example`:
+
    ```bash
    SP_ONCALL_FAST_MODEL=openai/gpt-4o-mini
    OPENROUTER_API_KEY=  # optional, only if using openrouter/ models

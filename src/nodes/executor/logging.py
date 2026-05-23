@@ -6,6 +6,7 @@ providing debug information about incoming state and execution progress.
 """
 
 from schemas import GraphState
+from schemas.state import InvestigationStatus
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -13,19 +14,22 @@ logger = get_logger(__name__)
 
 def log_incoming_state(state: GraphState) -> None:
     """Log incoming state information for debugging purposes."""
+    pending_investigations = [
+        inv
+        for inv in state.investigations
+        if inv.status == InvestigationStatus.PENDING
+    ]
+
     logger.debug(
-        "📥 Executor received state: user_query='%s', investigations=%s total, "
-        "ready_investigations=%s, current_retries=%s",
+        "📥 Executor received state: user_query='%s', investigations=%s total, pending=%s",
         state.current_user_request,
         len(state.investigations),
-        len(state.get_ready_investigations()),
-        state.current_retries,
+        len(pending_investigations),
     )
 
-    ready_investigations = state.get_ready_investigations()
-    if ready_investigations:
-        logger.debug("📋 Ready investigations:")
-        for i, investigation in enumerate(ready_investigations, 1):
+    if pending_investigations:
+        logger.debug("📋 Pending investigations:")
+        for i, investigation in enumerate(pending_investigations, 1):
             logger.debug(
                 "  Investigation %s: device=%s, status=%s, objective='%s'",
                 i,
@@ -33,24 +37,6 @@ def log_incoming_state(state: GraphState) -> None:
                 investigation.status,
                 investigation.objective or "Not specified",
             )
-
-    if state.historical_context and len(state.historical_context) > 0:
-        contexts_with_reports = sum(
-            1
-            for context in state.historical_context
-            if context.previous_report
-        )
-        logger.debug(
-            "📚 Historical context available: %d entries, %d entries with reports",
-            len(state.historical_context),
-            contexts_with_reports,
-        )
-
-    if state.current_retries > 0:
-        logger.warning(
-            "🔄 Retry execution #%s for workflow",
-            state.current_retries,
-        )
 
 
 def log_processed_data(

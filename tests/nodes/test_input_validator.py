@@ -273,7 +273,6 @@ class TestCreateInvestigationsFromResponse:
             investigation = result[0]
             # Check default values are set
             assert investigation.execution_results == []
-            assert investigation.dependencies == []
             assert investigation.report is None
             assert investigation.error_details is None
 
@@ -320,10 +319,8 @@ class TestBuildFailedState:
         """Test that failed state preserves other state fields."""
         result = _build_failed_state(SAMPLE_GRAPH_STATE)
 
-        assert result.max_retries == SAMPLE_GRAPH_STATE.max_retries
-        assert result.current_retries == SAMPLE_GRAPH_STATE.current_retries
         assert (
-            result.historical_context == SAMPLE_GRAPH_STATE.historical_context
+            result.current_user_request == SAMPLE_GRAPH_STATE.current_user_request
         )
 
     def test_build_failed_state_with_existing_investigations(self):
@@ -337,10 +334,6 @@ class TestBuildFailedState:
                     role="PE",
                 )
             ],
-            historical_context=[],
-            max_retries=3,
-            current_retries=0,
-            assessment=None,
         )
 
         result = _build_failed_state(state_with_investigations)

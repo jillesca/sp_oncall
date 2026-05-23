@@ -5,15 +5,9 @@ Contains realistic data structures used in planner functions.
 
 from langchain_core.messages import HumanMessage
 
-from schemas.state import (
-    GraphState,
-    Investigation,
-    InvestigationStatus,
-    InvestigationPriority,
-)
+from schemas.state import GraphState, Investigation, InvestigationStatus
 from src.nodes.planner.planning import DevicePlan, PlanningResponse
 
-# Sample GraphState with investigations for planning
 SAMPLE_GRAPH_STATE_FOR_PLANNING = GraphState(
     messages=[HumanMessage(content="Check device health")],
     investigations=[
@@ -25,8 +19,6 @@ SAMPLE_GRAPH_STATE_FOR_PLANNING = GraphState(
             working_plan_steps="",
             execution_results=[],
             status=InvestigationStatus.PENDING,
-            priority=InvestigationPriority.MEDIUM,
-            dependencies=[],
             report=None,
             error_details=None,
         ),
@@ -38,19 +30,12 @@ SAMPLE_GRAPH_STATE_FOR_PLANNING = GraphState(
             working_plan_steps="",
             execution_results=[],
             status=InvestigationStatus.PENDING,
-            priority=InvestigationPriority.MEDIUM,
-            dependencies=[],
             report=None,
             error_details=None,
         ),
     ],
-    historical_context=[],
-    max_retries=3,
-    current_retries=0,
-    assessment=None,
 )
 
-# Sample PlanningResponse for testing
 SAMPLE_PLANNING_RESPONSE = PlanningResponse(
     plan=[
         DevicePlan(
@@ -68,18 +53,11 @@ SAMPLE_PLANNING_RESPONSE = PlanningResponse(
     ]
 )
 
-# Empty planning response
 EMPTY_PLANNING_RESPONSE = PlanningResponse(plan=[])
 
-# Sample GraphState with no investigations
 EMPTY_GRAPH_STATE_FOR_PLANNING = GraphState(
     messages=[HumanMessage(content="test query")],
     investigations=[],
-    historical_context=[],
-    max_retries=3,
-    current_retries=0,
-    assessment=None,
 )
 
-# Sample error for testing
 SAMPLE_PLANNING_ERROR = RuntimeError("Planning failed")

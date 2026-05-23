@@ -12,63 +12,33 @@ from typing import List, Dict, Any, Optional, Annotated
 from langchain_core.messages import AnyMessage, HumanMessage
 from langgraph.graph.message import add_messages
 
-from .assessment_schema import AssessmentOutput
-
 
 @dataclass
 class GraphState:
-    """Enhanced workflow state supporting multi-device investigations.
+    """Workflow state for the sp_oncall agent.
 
     Attributes:
-        messages: Conversation history between user and LLM using LangChain message format.
-                 Supports proper integration with LangChain tools and maintains conversation context.
+        messages: Conversation history using LangChain message format.
         investigations: Collection of device-specific investigations.
-        historical_context: Historical context and learned patterns from previous investigations.
-
-        # Global workflow control
-        max_retries: Maximum retry attempts per investigation.
-        current_retries: Global retry counter for the entire workflow.
-
-        # Assessment results (composition with AssessmentOutput)
-        assessment: Assessment results from the objective assessor node.
-                   Contains is_objective_achieved, notes_for_final_report, and feedback_for_retry.
-
     """
 
-    # LangChain messages for proper tool integration and conversation history
     messages: Annotated[List[AnyMessage], add_messages] = field(
         default_factory=list
     )
-
     investigations: List[Investigation] = field(default_factory=list)
-    historical_context: List[HistoricalContext] = field(default_factory=list)
-
-    # Global workflow control
-    max_retries: int = 3
-    current_retries: int = 0
-
-    assessment: Optional[AssessmentOutput] = None
 
     @property
     def current_user_request(self) -> str:
         """Extract the most recent user request content.
 
-        Returns the content of the most recent human message, which represents
-        the current user request being processed by the investigation workflow.
-
+        Returns the content of the most recent human message.
         Handles both string content and structured content (list of content blocks).
-
-        Returns:
-            The content of the most recent human message, or empty string if none found.
         """
-        # Find the most recent human message
         for message in reversed(self.messages):
             if isinstance(message, HumanMessage):
                 content = message.content
 
-                # Handle structured content (list of content blocks)
                 if isinstance(content, list):
-                    # Extract text from content blocks
                     text_parts = []
                     for block in content:
                         if (
@@ -80,11 +50,9 @@ class GraphState:
                             text_parts.append(block)
                     return " ".join(text_parts)
 
-                # Handle simple string content
                 elif isinstance(content, str):
                     return content
 
-                # Fallback for other content types
                 else:
                     return str(content)
 
@@ -103,29 +71,6 @@ class GraphState:
             None,
         )
 
-    def get_pending_investigations(self) -> List[Investigation]:
-        """Get investigations that haven't been started."""
-        return [
-            inv
-            for inv in self.investigations
-            if inv.status == InvestigationStatus.PENDING
-        ]
-
-    def get_ready_investigations(self) -> List[Investigation]:
-        """Get investigations ready to execute (no unmet dependencies)."""
-        completed_devices = {
-            inv.device_name
-            for inv in self.investigations
-            if inv.status == InvestigationStatus.COMPLETED
-        }
-
-        return [
-            inv
-            for inv in self.investigations
-            if inv.status == InvestigationStatus.PENDING
-            and all(dep in completed_devices for dep in inv.dependencies)
-        ]
-
     def all_investigations_complete(self) -> bool:
         """Check if all investigations have reached a terminal state."""
         terminal_statuses = {
@@ -142,30 +87,6 @@ class GraphState:
         return json.dumps(asdict(self), indent=2, default=str)
 
 
-@dataclass
-class HistoricalContext:
-    """Represents historical context and learnings from a previous investigation session.
-
-    This class stores valuable insights from past investigations that can be used
-    to provide context to LLMs for improved decision-making in current investigations.
-
-    Attributes:
-        session_id: Unique identifier for the historical investigation session.
-        previous_report: Investigation report from the historical session.
-        learned_patterns: Patterns discovered from the historical investigation (markdown formatted).
-        device_relationships: Known relationships between devices discovered historically (markdown formatted).
-    """
-
-    session_id: str
-    previous_report: str = ""
-    learned_patterns: str = ""
-    device_relationships: str = ""
-
-    def __str__(self) -> str:
-        """Return a JSON representation of the historical context."""
-        return json.dumps(asdict(self), indent=2, default=str)
-
-
 class InvestigationStatus(Enum):
     """Lifecycle state for a single device investigation.
 
@@ -174,7 +95,7 @@ class InvestigationStatus(Enum):
     - IN_PROGRESS: Currently being executed.
     - COMPLETED: Finished successfully.
     - FAILED: Exhausted retries without success.
-    - SKIPPED: Not executed due to dependencies or plan changes.
+    - SKIPPED: Not executed due to plan changes.
     """
 
     PENDING = "pending"
@@ -188,18 +109,6 @@ class InvestigationStatus(Enum):
         return self.value
 
 
-class InvestigationPriority(Enum):
-    """Priority level for investigation execution."""
-
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-    def __str__(self) -> str:
-        """Return the string value of the enum."""
-        return self.value
-
-
 @dataclass
 class Investigation:
     """Encapsulates all work related to a specific device investigation.
@@ -207,13 +116,11 @@ class Investigation:
     Attributes:
         device_name: Target device identifier extracted by input validator.
         device_profile: Device type/model information for context-aware planning.
+        role: Device role in the topology (PE, P, PCE, vRR).
         objective: Specific objective for this device investigation.
         working_plan_steps: Ordered execution steps tailored to this device.
         execution_results: Results from executing plan steps on this device.
-        status: Current state of this investigation.
-        priority: Execution priority level.
-        dependencies: Other investigation device names this depends on.
-        retry_count: Number of retries attempted for this specific investigation.
+        status: Current lifecycle state of this investigation.
         report: Final investigation summary and findings.
         error_details: Error information if investigation failed.
     """
@@ -224,11 +131,7 @@ class Investigation:
     objective: Optional[str] = None
     working_plan_steps: str = ""
     execution_results: List["ExecutedToolCall"] = field(default_factory=list)
-
     status: InvestigationStatus = InvestigationStatus.PENDING
-    priority: InvestigationPriority = InvestigationPriority.MEDIUM
-    dependencies: List[str] = field(default_factory=list)
-
     report: Optional[str] = None
     error_details: Optional[str] = None
 

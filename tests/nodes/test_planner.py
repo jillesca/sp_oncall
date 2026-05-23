@@ -175,13 +175,6 @@ class TestBuildSuccessfulPlanningState:
             result.current_user_request
             == SAMPLE_GRAPH_STATE_FOR_PLANNING.current_user_request
         )
-        assert (
-            result.max_retries == SAMPLE_GRAPH_STATE_FOR_PLANNING.max_retries
-        )
-        assert (
-            result.current_retries
-            == SAMPLE_GRAPH_STATE_FOR_PLANNING.current_retries
-        )
 
     def test_build_successful_planning_state_with_partial_plans(self):
         """Test planning with partial plans (not all devices have plans)."""
@@ -243,7 +236,6 @@ class TestBuildSuccessfulPlanningState:
             assert updated.device_profile == original.device_profile
             assert updated.role == original.role
             assert updated.status == original.status
-            assert updated.priority == original.priority
 
 
 class TestBuildFailedPlanningState:
@@ -278,13 +270,6 @@ class TestBuildFailedPlanningState:
             result.current_user_request
             == SAMPLE_GRAPH_STATE_FOR_PLANNING.current_user_request
         )
-        assert (
-            result.max_retries == SAMPLE_GRAPH_STATE_FOR_PLANNING.max_retries
-        )
-        assert (
-            result.current_retries
-            == SAMPLE_GRAPH_STATE_FOR_PLANNING.current_retries
-        )
 
     def test_build_failed_planning_state_with_empty_investigations(self):
         """Test failed planning with empty investigations list."""
@@ -310,7 +295,6 @@ class TestBuildFailedPlanningState:
             assert updated.device_profile == original.device_profile
             assert updated.role == original.role
             assert updated.status == original.status
-            assert updated.priority == original.priority
 
 
 class TestDevicePlanDataClass:

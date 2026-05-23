@@ -13,7 +13,6 @@ from prompts.investigation_planning import INVESTIGATION_PLANNING_PROMPT
 from mcp_client import mcp_node
 from schemas.state import GraphState
 from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_historical_context_to_builder
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -23,10 +22,10 @@ def execute_investigation_planning(
     state: GraphState, response_format: Any = None
 ) -> dict:
     """
-    Execute investigation planning via MCP agent with session context.
+    Execute investigation planning via MCP agent.
 
     Args:
-        state: Current GraphState containing user query and historical context
+        state: Current GraphState containing user query
         response_format: Optional response format specification
 
     Returns:
@@ -37,7 +36,6 @@ def execute_investigation_planning(
         state.current_user_request,
     )
 
-    # Build comprehensive context including session history
     context = build_investigation_planning_context(state)
     message = HumanMessage(content=context)
 
@@ -52,10 +50,10 @@ def execute_investigation_planning(
 
 def build_investigation_planning_context(state: GraphState) -> str:
     """
-    Build comprehensive context for investigation planning including session history.
+    Build context for investigation planning from the current user query.
 
     Args:
-        state: Current GraphState with user query and historical context
+        state: Current GraphState with user query
 
     Returns:
         Markdown-formatted context string for the MCP agent
@@ -65,14 +63,8 @@ def build_investigation_planning_context(state: GraphState) -> str:
     builder = MarkdownBuilder()
     builder.add_header("Investigation Planning Context")
 
-    # Add user query
     builder.add_section("User Query")
     builder.add_text(state.current_user_request)
-
-    # Add historical context for historical awareness
-    add_historical_context_to_builder(
-        builder, state, section_title="Historical Context for Device Discovery"
-    )
 
     context_string = builder.build()
     logger.debug(
@@ -108,7 +100,6 @@ def extract_mcp_response_content(mcp_response: Any) -> Any:
         ),
     )
 
-    # Check if the response has the expected structure
     if not isinstance(mcp_response, dict) or "messages" not in mcp_response:
         logger.error("❌ Invalid MCP response: missing 'messages' key")
         raise ValueError("Invalid MCP response format: missing 'messages' key")
@@ -122,7 +113,6 @@ def extract_mcp_response_content(mcp_response: Any) -> Any:
             "Invalid MCP response format: 'messages' is not a list or is empty"
         )
 
-    # Find the last AIMessage in the messages list
     last_ai_message = None
     for message in reversed(messages):
         if hasattr(message, "content") and hasattr(message, "__class__"):

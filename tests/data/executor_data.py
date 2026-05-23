@@ -3,16 +3,10 @@ Test data for executor node tests.
 Contains realistic data structures used in executor functions.
 """
 
-from schemas.state import (
-    GraphState,
-    Investigation,
-    InvestigationStatus,
-    InvestigationPriority,
-    ExecutedToolCall,
-)
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
-# Sample GraphState with ready investigations
+from schemas.state import GraphState, Investigation, InvestigationStatus, ExecutedToolCall
+
 SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS = GraphState(
     messages=[HumanMessage(content="Check device health")],
     investigations=[
@@ -24,8 +18,6 @@ SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS = GraphState(
             working_plan_steps="Step 1: Check system info",
             execution_results=[],
             status=InvestigationStatus.PENDING,
-            priority=InvestigationPriority.HIGH,
-            dependencies=[],
             report=None,
             error_details=None,
         ),
@@ -36,20 +28,13 @@ SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS = GraphState(
             objective="Check device health",
             working_plan_steps="Step 1: Check system info",
             execution_results=[],
-            status=InvestigationStatus.COMPLETED,  # This one is not ready
-            priority=InvestigationPriority.MEDIUM,
-            dependencies=[],
+            status=InvestigationStatus.COMPLETED,
             report="Already completed",
             error_details=None,
         ),
     ],
-    historical_context=[],
-    max_retries=3,
-    current_retries=0,
-    assessment=None,
 )
 
-# Sample MCP response with messages
 SAMPLE_MCP_RESPONSE = {
     "messages": [
         HumanMessage(
@@ -81,13 +66,10 @@ SAMPLE_MCP_RESPONSE = {
     ]
 }
 
-# Sample MCP response with no messages
 EMPTY_MCP_RESPONSE = {"messages": []}
 
-# Sample MCP response with invalid structure
 INVALID_MCP_RESPONSE = {"not_messages": "invalid"}
 
-# Sample ExecutedToolCall objects
 SAMPLE_EXECUTED_TOOL_CALLS = [
     ExecutedToolCall(
         function="get_system_info",
@@ -103,7 +85,6 @@ SAMPLE_EXECUTED_TOOL_CALLS = [
     ),
 ]
 
-# Sample investigation for context building
 SAMPLE_INVESTIGATION = Investigation(
     device_name="test-device",
     device_profile="test profile",
@@ -112,13 +93,10 @@ SAMPLE_INVESTIGATION = Investigation(
     working_plan_steps="Test steps",
     execution_results=[],
     status=InvestigationStatus.PENDING,
-    priority=InvestigationPriority.MEDIUM,
-    dependencies=[],
     report=None,
     error_details=None,
 )
 
-# Sample updated investigations list
 SAMPLE_UPDATED_INVESTIGATIONS = [
     Investigation(
         device_name="xrd-1",
@@ -128,8 +106,6 @@ SAMPLE_UPDATED_INVESTIGATIONS = [
         working_plan_steps="Step 1: Check system info",
         execution_results=SAMPLE_EXECUTED_TOOL_CALLS,
         status=InvestigationStatus.COMPLETED,
-        priority=InvestigationPriority.HIGH,
-        dependencies=[],
         report="Investigation completed successfully",
         error_details=None,
     ),
