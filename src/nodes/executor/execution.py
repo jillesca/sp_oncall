@@ -21,7 +21,9 @@ logger = get_logger(__name__)
 
 
 async def execute_single_investigation(
-    investigation: Investigation, trigger_context: str
+    investigation: Investigation,
+    trigger_context: str,
+    executor_prompt: str,
 ) -> Investigation:
     """
     Execute a single investigation using the MCP agent.
@@ -29,12 +31,16 @@ async def execute_single_investigation(
     Args:
         investigation: Investigation to execute
         trigger_context: Original trigger content for building the prompt
+        executor_prompt: Name of the prompt file to load as the system prompt
+                         ("network_executor" for primaries, "context_executor" for context)
 
     Returns:
         Updated Investigation with execution results
     """
     logger.info(
-        "🔍 Executing investigation for device: %s", investigation.device_name
+        "🔍 Executing investigation for device: %s (prompt=%s)",
+        investigation.device_name,
+        executor_prompt,
     )
 
     try:
@@ -47,7 +53,7 @@ async def execute_single_investigation(
 
         mcp_response = await mcp_node(
             message=message,
-            system_prompt=load_prompt("network_executor"),
+            system_prompt=load_prompt(executor_prompt),
         )
 
         logger.debug(

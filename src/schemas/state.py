@@ -19,17 +19,24 @@ class GraphState:
 
     Attributes:
         messages: Conversation history using LangChain message format.
-        investigations: Collection of device-specific investigations.
+        primary_investigations: Investigations for devices named in the trigger
+                                (alert target or explicitly requested devices).
+        context_investigations: Investigations for neighbor devices discovered
+                                by the input validator to verify network health.
         event_type: Alert event type extracted from the trigger context (e.g.
                     "interface_state", "bgp_session_state"). None for manual
                     queries.
+        root_cause: Root cause analysis produced by the rca_assessor_node after
+                    all investigations complete.
     """
 
     messages: Annotated[List[AnyMessage], add_messages] = field(
         default_factory=list
     )
-    investigations: List[Investigation] = field(default_factory=list)
+    primary_investigations: List[Investigation] = field(default_factory=list)
+    context_investigations: List[Investigation] = field(default_factory=list)
     event_type: Optional[str] = None
+    root_cause: Optional[str] = None
 
     @property
     def trigger_context(self) -> str:
@@ -64,38 +71,6 @@ class GraphState:
 
         return ""
 
-    def get_pending_investigations(self) -> List["Investigation"]:
-        """Return all investigations that have not yet been executed."""
-        return [
-            inv
-            for inv in self.investigations
-            if inv.status == InvestigationStatus.PENDING
-        ]
-
-    def get_investigation_by_device(
-        self, device_name: str
-    ) -> Optional[Investigation]:
-        """Retrieve investigation for a specific device."""
-        return next(
-            (
-                inv
-                for inv in self.investigations
-                if inv.device_name == device_name
-            ),
-            None,
-        )
-
-    def all_investigations_complete(self) -> bool:
-        """Check if all investigations have reached a terminal state."""
-        terminal_statuses = {
-            InvestigationStatus.COMPLETED,
-            InvestigationStatus.FAILED,
-            InvestigationStatus.SKIPPED,
-        }
-        return all(
-            inv.status in terminal_statuses for inv in self.investigations
-        )
-
     def __str__(self) -> str:
         """Return a JSON representation of the graph state."""
         return json.dumps(asdict(self), indent=2, default=str)
@@ -129,7 +104,6 @@ class Investigation:
 
     Attributes:
         device_name: Target device identifier extracted by input validator.
-        device_type: Raw device type/model string from MCP discovery (e.g. "Cisco IOS XR").
         device_context: Pre-formatted prompt-ready string assembled by the input validator
                         from fresh MCP data plus stored dynamic facts and investigation history.
         role: Device role in the topology (PE, P, PCE, vRR).
@@ -143,7 +117,6 @@ class Investigation:
     """
 
     device_name: str
-    device_type: str = ""
     device_context: str = ""
     role: str = ""
     neighbors: List[str] = field(default_factory=list)

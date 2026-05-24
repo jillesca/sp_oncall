@@ -22,6 +22,7 @@ class DiscoveredDevice:
     """Device information returned by the device discovery MCP agent."""
 
     device_name: str
+    is_primary: bool = False
     type_model: str = ""
     role: str = ""
     neighbors: List[str] = field(default_factory=list)

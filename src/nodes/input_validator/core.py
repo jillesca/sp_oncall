@@ -5,11 +5,14 @@ This module contains the main entry point for the input validation workflow.
 It orchestrates device discovery via MCP, hydrates each Investigation with
 store context (dynamic facts + history), and creates the final Investigation
 objects ready for the executor.
+
+Devices marked is_primary by the discovery agent become primary_investigations.
+All other discovered devices become context_investigations (neighbor health checks).
 """
 
 import json
 from dataclasses import replace
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from langgraph.config import get_store
 
@@ -44,15 +47,16 @@ def input_validator_node(state: GraphState) -> GraphState:
     Orchestrates the multi-device investigation workflow by:
     1. Calling MCP for fresh topology discovery (always runs)
     2. For each discovered device, loading stored dynamic facts and history
-    3. Building a pre-hydrated Investigation object per device
-    4. Returning the updated GraphState with investigations and event_type
+    3. Splitting devices into primary investigations (alert targets) and
+       context investigations (neighbor health checks)
+    4. Returning the updated GraphState with both investigation lists and event_type
 
     Args:
         state: The current GraphState from the workflow
 
     Returns:
-        Updated GraphState with investigations list and event_type populated,
-        or error state
+        Updated GraphState with primary_investigations, context_investigations,
+        and event_type populated, or error state
     """
     try:
         logger.info("🔍 Starting multi-device investigation setup")
@@ -71,14 +75,26 @@ def input_validator_node(state: GraphState) -> GraphState:
             logger.warning(
                 "⚠️ No devices found in investigation planning response"
             )
-            return replace(state, investigations=[], event_type=event_type)
+            return replace(
+                state,
+                primary_investigations=[],
+                context_investigations=[],
+                event_type=event_type,
+            )
 
         store = get_store()
-        investigations = _hydrate_investigations(investigation_list, store)
-        _log_successful_investigation_planning(investigation_list)
+        primary_investigations, context_investigations = _hydrate_and_split(
+            investigation_list, store
+        )
+        _log_successful_investigation_planning(
+            primary_investigations, context_investigations
+        )
 
         return replace(
-            state, investigations=investigations, event_type=event_type
+            state,
+            primary_investigations=primary_investigations,
+            context_investigations=context_investigations,
+            event_type=event_type,
         )
 
     except Exception as e:
@@ -86,18 +102,25 @@ def input_validator_node(state: GraphState) -> GraphState:
         return _build_failed_state(state)
 
 
-def _hydrate_investigations(
+def _hydrate_and_split(
     investigation_list: InvestigationPlanningResponse, store
-) -> List[Investigation]:
-    """Create fully hydrated Investigation objects for each discovered device.
+) -> Tuple[List[Investigation], List[Investigation]]:
+    """Hydrate all discovered devices and split into primary and context lists.
 
-    Each Investigation is enriched with stored dynamic facts and history
-    so downstream nodes never need to query the store for context reads.
+    Primary investigations are for devices the alert or user request explicitly
+    targets. Context investigations are neighbor devices checked for health.
     """
-    return [
-        _hydrate_single_investigation(device, store)
-        for device in investigation_list
-    ]
+    primary = []
+    context = []
+
+    for device in investigation_list:
+        investigation = _hydrate_single_investigation(device, store)
+        if device.is_primary:
+            primary.append(investigation)
+        else:
+            context.append(investigation)
+
+    return primary, context
 
 
 def _hydrate_single_investigation(
@@ -109,16 +132,16 @@ def _hydrate_single_investigation(
     device_context = _build_device_context(device, profile, history)
 
     logger.debug(
-        "  ✅ Hydrated investigation for %s (role=%s, neighbors=%s, has_history=%s)",
+        "  ✅ Hydrated investigation for %s (role=%s, neighbors=%s, has_history=%s, is_primary=%s)",
         device.device_name,
         device.role or "unknown",
         device.neighbors,
         bool(history),
+        device.is_primary,
     )
 
     return Investigation(
         device_name=device.device_name,
-        device_type=device.type_model,
         device_context=device_context,
         role=device.role,
         neighbors=device.neighbors,
@@ -170,23 +193,32 @@ def _extract_event_type(trigger_context: str) -> Optional[str]:
 
 
 def _log_successful_investigation_planning(
-    planning_response: InvestigationPlanningResponse,
+    primary_investigations: List[Investigation],
+    context_investigations: List[Investigation],
 ) -> None:
     """Log successful investigation planning details."""
     logger.info(
-        "✅ Investigation planning successful: %d devices hydrated",
-        len(planning_response),
+        "✅ Investigation planning successful: %d primary, %d context devices",
+        len(primary_investigations),
+        len(context_investigations),
     )
-    for device in planning_response:
+    for inv in primary_investigations:
         logger.info(
-            "  📋 %s | role=%s | neighbors=%s",
-            device.device_name,
-            device.role or "unknown",
-            device.neighbors,
+            "  🎯 PRIMARY %s | role=%s | neighbors=%s",
+            inv.device_name,
+            inv.role or "unknown",
+            inv.neighbors,
+        )
+    for inv in context_investigations:
+        logger.info(
+            "  📋 CONTEXT %s | role=%s | neighbors=%s",
+            inv.device_name,
+            inv.role or "unknown",
+            inv.neighbors,
         )
 
 
 def _build_failed_state(state: GraphState) -> GraphState:
     """Build a failed state when investigation planning fails."""
     logger.warning("🚨 Building failed state - no investigations created")
-    return replace(state, investigations=[])
+    return replace(state, primary_investigations=[], context_investigations=[])

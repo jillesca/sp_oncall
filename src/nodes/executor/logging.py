@@ -1,12 +1,11 @@
 """
-Logging utilities for the executor node.
+Logging utilities for the executor nodes.
 
 This module handles logging operations for the executor workflow,
 providing debug information about incoming state and execution progress.
 """
 
 from schemas import GraphState
-from schemas.state import InvestigationStatus
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -14,29 +13,26 @@ logger = get_logger(__name__)
 
 def log_incoming_state(state: GraphState) -> None:
     """Log incoming state information for debugging purposes."""
-    pending_investigations = [
-        inv
-        for inv in state.investigations
-        if inv.status == InvestigationStatus.PENDING
-    ]
-
     logger.debug(
-        "📥 Executor received state: user_query='%s', investigations=%s total, pending=%s",
+        "📥 Executor received state: trigger='%s', primary=%s, context=%s",
         state.trigger_context,
-        len(state.investigations),
-        len(pending_investigations),
+        len(state.primary_investigations),
+        len(state.context_investigations),
     )
 
-    if pending_investigations:
-        logger.debug("📋 Pending investigations:")
-        for i, investigation in enumerate(pending_investigations, 1):
-            logger.debug(
-                "  Investigation %s: device=%s, status=%s, objective='%s'",
-                i,
-                investigation.device_name,
-                investigation.status,
-                investigation.objective or "Not specified",
-            )
+    for inv in state.primary_investigations:
+        logger.debug(
+            "  🎯 PRIMARY device=%s, status=%s",
+            inv.device_name,
+            inv.status,
+        )
+
+    for inv in state.context_investigations:
+        logger.debug(
+            "  📋 CONTEXT device=%s, status=%s",
+            inv.device_name,
+            inv.status,
+        )
 
 
 def log_processed_data(

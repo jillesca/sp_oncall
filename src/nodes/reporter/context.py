@@ -12,23 +12,34 @@ def build_report_context(state: GraphState) -> str:
     """
     Build comprehensive report context from all investigations in markdown format.
 
+    The report is structured in two sections:
+    - Primary Device Investigations: root-cause findings for the alert targets
+    - Neighbor Health Checks: health verification findings for context devices
+
+    The root_cause produced by the rca_assessor_node is included as the
+    authoritative synthesis so the reporter can present it directly.
+
     Args:
-        state: Current workflow state with investigations
+        state: Current workflow state with investigations and root cause
 
     Returns:
         Markdown-formatted context string for the LLM
     """
+    total = len(state.primary_investigations) + len(state.context_investigations)
     logger.debug(
-        "📋 Building report context for %d investigations",
-        len(state.investigations),
+        "📋 Building report context for %d investigations (%d primary, %d context)",
+        total,
+        len(state.primary_investigations),
+        len(state.context_investigations),
     )
 
     builder = MarkdownBuilder()
     builder.add_header("Network Investigation Report Context")
 
-    _add_user_query_section(builder, state)
-    _add_investigation_overview(builder, state)
-    _add_investigation_details(builder, state)
+    _add_trigger_section(builder, state)
+    _add_root_cause_section(builder, state)
+    _add_primary_investigation_details(builder, state)
+    _add_context_investigation_details(builder, state)
 
     context_string = builder.build()
     logger.debug(
@@ -37,7 +48,7 @@ def build_report_context(state: GraphState) -> str:
     return context_string
 
 
-def _add_user_query_section(
+def _add_trigger_section(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
     """Add trigger context section."""
@@ -45,43 +56,42 @@ def _add_user_query_section(
     builder.add_text(state.trigger_context)
 
 
-def _add_investigation_overview(
+def _add_root_cause_section(
     builder: MarkdownBuilder, state: GraphState
 ) -> None:
-    """Add investigation overview section."""
-    builder.add_section("Investigation Overview")
-    total_investigations = len(state.investigations)
-    completed_investigations = [
-        inv
-        for inv in state.investigations
-        if inv.status == InvestigationStatus.COMPLETED
-    ]
-    success_rate = (
-        len(completed_investigations) / total_investigations
-        if total_investigations > 0
-        else 0.0
-    )
-
-    builder.add_bullet(f"Total devices investigated: {total_investigations}")
-    builder.add_bullet(
-        f"Successfully completed: {len(completed_investigations)}"
-    )
-    builder.add_bullet(f"Success rate: {success_rate:.1%}")
-
-
-def _add_investigation_details(
-    builder: MarkdownBuilder, state: GraphState
-) -> None:
-    """Add individual investigation details."""
-    builder.add_section("Device Investigation Results")
-    if not state.investigations:
-        builder.add_text("No device investigations found.")
+    """Add the root cause determination from the RCA assessor."""
+    builder.add_section("Root Cause Analysis")
+    if state.root_cause:
+        builder.add_text(state.root_cause)
     else:
-        for i, investigation in enumerate(state.investigations, 1):
-            _add_single_investigation_details(builder, investigation, i)
+        builder.add_text("Root cause analysis was not completed.")
 
 
-def _add_single_investigation_details(
+def _add_primary_investigation_details(
+    builder: MarkdownBuilder, state: GraphState
+) -> None:
+    """Add primary device investigation results."""
+    builder.add_section("Primary Device Investigations")
+    if not state.primary_investigations:
+        builder.add_text("No primary device investigations were performed.")
+        return
+    for i, investigation in enumerate(state.primary_investigations, 1):
+        _add_single_investigation(builder, investigation, i)
+
+
+def _add_context_investigation_details(
+    builder: MarkdownBuilder, state: GraphState
+) -> None:
+    """Add neighbor health check results."""
+    builder.add_section("Neighbor Health Checks")
+    if not state.context_investigations:
+        builder.add_text("No neighbor health checks were performed.")
+        return
+    for i, investigation in enumerate(state.context_investigations, 1):
+        _add_single_investigation(builder, investigation, i)
+
+
+def _add_single_investigation(
     builder: MarkdownBuilder, investigation: Investigation, index: int
 ) -> None:
     """Add details for a single investigation."""
@@ -97,7 +107,6 @@ def _add_single_investigation_details(
         f"Investigation {index}: {investigation.device_name}"
     )
     builder.add_bullet(f"Status: {status_icon} {investigation.status.value}")
-    builder.add_bullet(f"Device Type: {investigation.device_type}")
     builder.add_bullet(f"Role: {investigation.role}")
 
     if investigation.objective:

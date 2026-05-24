@@ -26,12 +26,18 @@ logger = get_logger(__name__)
 
 def plan_single_device(
     investigation: Investigation,
+    trigger_context: str,
+    investigation_role: str = "primary",
     event_type: Optional[str] = None,
 ) -> DevicePlan:
     """Generate an investigation plan for a single device.
 
     Args:
         investigation: The device investigation to plan for.
+        trigger_context: Original trigger content (alert or user request).
+        investigation_role: "primary" for alert targets, "context" for neighbor checks.
+                            Shapes the planning objective toward root-cause analysis
+                            (primary) or network health verification (context).
         event_type: Alert event type used to filter relevant skills.
                     None for manual queries (loads all skills).
 
@@ -42,12 +48,18 @@ def plan_single_device(
         Exception: If plan generation fails — callers should handle and mark
                    the investigation as failed.
     """
-    logger.info("📋 Planning for device: %s", investigation.device_name)
+    logger.info(
+        "📋 Planning for device: %s (investigation_role=%s)",
+        investigation.device_name,
+        investigation_role,
+    )
 
     available_skills = load_available_skills(event_type)
     model = load_model()
     fast_model = load_fast_model()
-    planning_context = build_planning_context(investigation)
+    planning_context = build_planning_context(
+        investigation, trigger_context, investigation_role
+    )
 
     response = execute_plan_selection(
         model,

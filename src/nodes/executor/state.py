@@ -2,7 +2,7 @@
 State management for executor investigations.
 
 This module handles updating the GraphState with investigation results
-and managing error conditions.
+and managing error conditions for both primary and context executor nodes.
 """
 
 from typing import List
@@ -14,67 +14,45 @@ from src.logging import get_logger
 logger = get_logger(__name__)
 
 
-def update_state_with_investigations(
-    state: GraphState, updated_investigations: List[Investigation]
+def update_context_investigations(
+    state: GraphState, completed: List[Investigation]
 ) -> GraphState:
-    """
-    Update the GraphState with completed investigations.
-
-    Args:
-        state: Current GraphState
-        updated_investigations: List of updated investigations
-
-    Returns:
-        Updated GraphState
-    """
-    # Create a mapping of device names to updated investigations
-    investigation_map = {
-        inv.device_name: inv for inv in updated_investigations
-    }
-
-    updated_investigation_list = []
-    for investigation in state.investigations:
-        if investigation.device_name in investigation_map:
-            updated_investigation_list.append(
-                investigation_map[investigation.device_name]
-            )
-        else:
-            # Keep the original investigation
-            updated_investigation_list.append(investigation)
-
-    logger.info(
-        "📊 Updated %s investigations in state", len(updated_investigations)
-    )
-
-    return replace(state, investigations=updated_investigation_list)
+    """Replace context_investigations with completed results."""
+    logger.info("📊 Updated %s context investigations in state", len(completed))
+    return replace(state, context_investigations=_merge(state.context_investigations, completed))
 
 
-def update_state_with_global_error(
-    state: GraphState, error: Exception
+def update_primary_investigations(
+    state: GraphState, completed: List[Investigation]
 ) -> GraphState:
-    """
-    Update state with a global error that affects the entire workflow.
+    """Replace primary_investigations with completed results."""
+    logger.info("📊 Updated %s primary investigations in state", len(completed))
+    return replace(state, primary_investigations=_merge(state.primary_investigations, completed))
 
-    Args:
-        state: Current GraphState
-        error: Exception that occurred during execution
 
-    Returns:
-        Updated GraphState with error information
-    """
+def mark_all_failed(
+    investigations: List[Investigation], error: Exception
+) -> List[Investigation]:
+    """Mark all pending investigations as failed due to a global executor error."""
     logger.error("❌ Global execution error: %s", error)
+    return [
+        replace(
+            inv,
+            status=InvestigationStatus.FAILED,
+            error_details=f"Global execution error: {error}",
+        )
+        if inv.status == InvestigationStatus.PENDING
+        else inv
+        for inv in investigations
+    ]
 
-    # Mark all ready investigations as failed
-    updated_investigations = []
-    for investigation in state.investigations:
-        if investigation.status == InvestigationStatus.PENDING:
-            failed_investigation = replace(
-                investigation,
-                status=InvestigationStatus.FAILED,
-                error_details=f"Global execution error: {error}",
-            )
-            updated_investigations.append(failed_investigation)
-        else:
-            updated_investigations.append(investigation)
 
-    return replace(state, investigations=updated_investigations)
+def _merge(
+    original: List[Investigation], updated: List[Investigation]
+) -> List[Investigation]:
+    """Overlay updated investigations onto the original list by device name."""
+    updated_map = {inv.device_name: inv for inv in updated}
+    return [
+        updated_map.get(inv.device_name, inv)
+        for inv in original
+    ]

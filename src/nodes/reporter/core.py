@@ -3,8 +3,8 @@ Core functionality for the Investigation Reporter Node.
 
 This module contains the main entry point for the reporter workflow that generates
 comprehensive investigation reports. It is also the single store-write node:
-after generating the report it persists static facts, dynamic facts, and
-investigation history for every device so future runs benefit from the context.
+after generating the report it persists dynamic facts and investigation history
+for every device so future runs benefit from the context.
 """
 
 from langchain_core.messages import AIMessage
@@ -31,21 +31,26 @@ def investigation_report_node(state: GraphState) -> GraphState:
     Generate a comprehensive investigation report.
 
     Orchestrates the report generation workflow by:
-    1. Building comprehensive context from all investigations
+    1. Building comprehensive context from all investigations and the RCA finding
     2. Generating the final report using the LLM
-    3. Persisting static facts, dynamic facts, and history to the store
+    3. Persisting dynamic facts and history to the store for all devices
     4. Adding the final report as an AIMessage to the conversation
     5. Resetting investigation state for the next user request
 
     Args:
-        state: The current GraphState with all investigation results
+        state: The current GraphState with all investigation results and root_cause
 
     Returns:
         Updated GraphState with final report in messages and cleared investigations
     """
+    total_devices = len(state.primary_investigations) + len(
+        state.context_investigations
+    )
     logger.info(
-        "📄 Generating comprehensive investigation report for %d devices",
-        len(state.investigations),
+        "📄 Generating investigation report for %d devices (%d primary, %d context)",
+        total_devices,
+        len(state.primary_investigations),
+        len(state.context_investigations),
     )
 
     try:
@@ -59,7 +64,8 @@ def investigation_report_node(state: GraphState) -> GraphState:
 
         return GraphState(
             messages=state.messages + [AIMessage(content=final_report)],
-            investigations=[],
+            primary_investigations=[],
+            context_investigations=[],
         )
 
     except Exception as e:
@@ -68,24 +74,27 @@ def investigation_report_node(state: GraphState) -> GraphState:
 
         return GraphState(
             messages=state.messages + [AIMessage(content=error_report)],
-            investigations=[],
+            primary_investigations=[],
+            context_investigations=[],
         )
 
 
 def _persist_investigation_results(state: GraphState) -> None:
     """Persist all investigation data to the store.
 
-    Writes static facts (device topology), dynamic facts (investigation outcome),
-    and appends a history summary for each device. This is the single store-write
-    point for the entire graph run.
+    Writes dynamic facts (investigation outcome) and appends a history summary
+    for every device — both primary and context. Static topology facts (role,
+    neighbors) are stored so future runs benefit from cached context.
+    This is the single store-write point for the entire graph run.
     """
     store = get_store()
-    for investigation in state.investigations:
+    all_investigations = state.primary_investigations + state.context_investigations
+
+    for investigation in all_investigations:
         update_device_profile(
             store,
             investigation.device_name,
             static_facts={
-                "device_type": investigation.device_type,
                 "role": investigation.role,
                 "neighbors": investigation.neighbors,
             },

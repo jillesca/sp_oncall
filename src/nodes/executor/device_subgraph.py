@@ -37,6 +37,10 @@ class DeviceState:
     Attributes:
         investigation: The device investigation being executed.
         trigger_context: Original trigger content (user query, alert, or upstream agent).
+        investigation_role: Whether this device is a "primary" (alert target) or
+                            "context" (neighbor health check) investigation.
+        executor_prompt: Name of the prompt file to use for execution
+                         ("network_executor" for primary, "context_executor" for context).
         max_retries: Maximum number of execution attempts before giving up.
         current_retry: Number of assessment cycles completed so far.
         assessment: Latest assessment output, set after each assess_device run.
@@ -45,6 +49,8 @@ class DeviceState:
 
     investigation: Investigation
     trigger_context: str
+    investigation_role: str = "primary"
+    executor_prompt: str = "network_executor"
     max_retries: int = 3
     current_retry: int = 0
     assessment: Optional[AssessmentOutput] = None
@@ -58,10 +64,16 @@ def plan_device(state: DeviceState) -> DeviceState:
     marks the investigation as failed, skipping execution entirely.
     """
     logger.info(
-        "📋 Planning investigation for device: %s",
+        "📋 Planning investigation for device: %s (role=%s)",
         state.investigation.device_name,
+        state.investigation_role,
     )
-    device_plan = plan_single_device(state.investigation, state.event_type)
+    device_plan = plan_single_device(
+        investigation=state.investigation,
+        trigger_context=state.trigger_context,
+        investigation_role=state.investigation_role,
+        event_type=state.event_type,
+    )
     updated_investigation = replace(
         state.investigation,
         objective=device_plan.objective,
@@ -79,7 +91,9 @@ async def execute_device(state: DeviceState) -> DeviceState:
         state.investigation.device_name,
     )
     updated_investigation = await execute_single_investigation(
-        state.investigation, state.trigger_context
+        investigation=state.investigation,
+        trigger_context=state.trigger_context,
+        executor_prompt=state.executor_prompt,
     )
     return replace(state, investigation=updated_investigation)
 

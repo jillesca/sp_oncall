@@ -2,23 +2,28 @@
 Node modules for the SP On-Call LangGraph workflow.
 
 This package contains all the node implementations that form the graph workflow:
-- input_validator: Validates input and extracts device information
-- executor: Plans and executes network operations per device (plan → execute → assess → retry)
-- reporter: Generates final reports
-- assessor: Evaluates if objectives have been met (used in per-device sub-graph)
+- input_validator: Validates input, discovers devices, splits primary vs context
+- executor: Two nodes — context_executor_node (neighbor health checks) then
+            primary_executor_node (alert target root-cause investigations)
+- rca_assessor: Synthesizes all reports into a root cause determination
+- reporter: Generates the final formatted report and persists to store
+- assessor: Per-device objective assessment (used inside device_subgraph)
 - markdown_builder: Utility for building markdown content
 - common: Shared utilities across all nodes
 
-Planning is handled inside the per-device sub-graph (executor/device_subgraph.py)
-and is no longer a separate outer-graph node.
+Planning runs inside the per-device sub-graph (executor/device_subgraph.py)
+and is not a separate outer-graph node.
 """
 
 from .input_validator import input_validator_node
-from .executor import llm_network_executor
+from .executor import context_executor_node, primary_executor_node
+from .rca_assessor import rca_assessor_node
 from .reporter import investigation_report_node
 
 __all__ = [
     "input_validator_node",
-    "llm_network_executor",
+    "context_executor_node",
+    "primary_executor_node",
+    "rca_assessor_node",
     "investigation_report_node",
 ]

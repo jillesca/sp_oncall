@@ -58,10 +58,10 @@ def _add_investigation_details(
     builder.add_section(f"Investigation: {investigation.device_name}")
 
     builder.add_bold_text("Status:", investigation.status.value)
+    builder.add_bold_text("Role:", investigation.role or "Not specified")
     builder.add_bold_text(
         "Device Context:", investigation.device_context or "Not available"
     )
-    builder.add_bold_text("Role:", investigation.role or "Not specified")
     builder.add_bold_text(
         "Objective:", investigation.objective or "Not specified"
     )
