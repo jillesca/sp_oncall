@@ -59,7 +59,7 @@ def _add_investigation_details(
 
     builder.add_bold_text("Status:", investigation.status.value)
     builder.add_bold_text(
-        "Device Profile:", investigation.device_profile or "Not available"
+        "Device Context:", investigation.device_context or "Not available"
     )
     builder.add_bold_text("Role:", investigation.role or "Not specified")
     builder.add_bold_text(

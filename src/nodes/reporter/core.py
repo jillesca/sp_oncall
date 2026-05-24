@@ -2,7 +2,9 @@
 Core functionality for the Investigation Reporter Node.
 
 This module contains the main entry point for the reporter workflow that generates
-comprehensive investigation reports.
+comprehensive investigation reports. It is also the single store-write node:
+after generating the report it persists static facts, dynamic facts, and
+investigation history for every device so future runs benefit from the context.
 """
 
 from langchain_core.messages import AIMessage
@@ -10,7 +12,11 @@ from langgraph.config import get_store
 
 from schemas import GraphState
 from src.logging import get_logger, log_node_execution
-from src.util.device_store import append_device_history, build_history_summary
+from src.util.device_store import (
+    append_device_history,
+    build_history_summary,
+    update_device_profile,
+)
 from nodes.common import load_model
 
 from .context import build_report_context
@@ -24,13 +30,12 @@ def investigation_report_node(state: GraphState) -> GraphState:
     """
     Generate a comprehensive investigation report.
 
-    This function orchestrates the report generation workflow by:
+    Orchestrates the report generation workflow by:
     1. Building comprehensive context from all investigations
-    2. Setting up the LLM model for report generation
-    3. Generating the final report using the LLM
-    4. Persisting per-device investigation summaries to the store
-    5. Adding the final report as an AIMessage to the conversation
-    6. Resetting investigation state for the next user request
+    2. Generating the final report using the LLM
+    3. Persisting static facts, dynamic facts, and history to the store
+    4. Adding the final report as an AIMessage to the conversation
+    5. Resetting investigation state for the next user request
 
     Args:
         state: The current GraphState with all investigation results
@@ -49,7 +54,7 @@ def investigation_report_node(state: GraphState) -> GraphState:
         final_report = generate_report(model, report_context)
 
         _log_successful_report_generation(final_report)
-        _save_investigation_summaries(state)
+        _persist_investigation_results(state)
         logger.info("🔄 Resetting working state for next user request")
 
         return GraphState(
@@ -67,15 +72,37 @@ def investigation_report_node(state: GraphState) -> GraphState:
         )
 
 
-def _save_investigation_summaries(state: GraphState) -> None:
-    """Persist each device's investigation summary to the history store for future runs."""
+def _persist_investigation_results(state: GraphState) -> None:
+    """Persist all investigation data to the store.
+
+    Writes static facts (device topology), dynamic facts (investigation outcome),
+    and appends a history summary for each device. This is the single store-write
+    point for the entire graph run.
+    """
     store = get_store()
     for investigation in state.investigations:
+        update_device_profile(
+            store,
+            investigation.device_name,
+            static_facts={
+                "device_type": investigation.device_type,
+                "role": investigation.role,
+                "neighbors": investigation.neighbors,
+            },
+            dynamic_facts={
+                "last_alert": state.trigger_context[:500],
+                "last_known_state": investigation.status.value,
+            },
+        )
         summary = build_history_summary(
             status=investigation.status.value,
             report=investigation.report,
         )
         append_device_history(store, investigation.device_name, summary)
+        logger.debug(
+            "💾 Persisted facts and history for device: %s",
+            investigation.device_name,
+        )
 
 
 def _log_successful_report_generation(report: str) -> None:

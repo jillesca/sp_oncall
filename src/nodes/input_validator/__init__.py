@@ -18,7 +18,6 @@ from .extraction import (
 )
 from .processing import (
     process_investigation_planning_response,
-    create_investigations_from_response,
     InvestigationPlanningResponse,
 )
 from nodes.common import load_model

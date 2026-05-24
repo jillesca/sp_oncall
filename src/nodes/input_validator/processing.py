@@ -1,8 +1,8 @@
 """
 Response processing for input validation.
 
-This module handles processing MCP responses to extract device information
-and create Investigation objects with full device context.
+This module handles parsing MCP agent responses into structured device data.
+Investigation object creation and store hydration are handled by core.py.
 """
 
 from typing import List
@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel
 
-from schemas.state import Investigation
 from src.util.validation import validate_structured_output, validate_investigation_planning
 from src.logging import get_logger, debug_capture_object
 
@@ -85,41 +84,3 @@ def process_investigation_planning_response(
     return InvestigationPlanningResponse(devices=[])
 
 
-def create_investigations_from_response(
-    planning_response: InvestigationPlanningResponse,
-) -> List[Investigation]:
-    """
-    Create Investigation objects from the device discovery response.
-
-    Populates device_profile, role, and neighbors from the discovery data.
-    The executor will further enrich device_profile with stored facts before
-    execution.
-
-    Args:
-        planning_response: The parsed response containing discovered devices
-
-    Returns:
-        List of Investigation objects, one for each discovered device
-    """
-    logger.debug(
-        "🏗️ Creating %d Investigation objects from planning response",
-        len(planning_response),
-    )
-
-    investigations = []
-    for device in planning_response:
-        investigation = Investigation(
-            device_name=device.device_name,
-            device_profile=device.type_model,
-            role=device.role,
-            neighbors=device.neighbors,
-        )
-        investigations.append(investigation)
-        logger.debug(
-            "  ✅ Created investigation for %s (role=%s, neighbors=%s)",
-            device.device_name,
-            device.role,
-            device.neighbors,
-        )
-
-    return investigations

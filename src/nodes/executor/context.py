@@ -44,8 +44,8 @@ def _add_investigation_details(
         "Objective:", investigation.objective or "Not specified"
     )
 
-    builder.add_section("Device Profile")
-    builder.add_code_block(investigation.device_profile)
+    builder.add_section("Device Context")
+    builder.add_code_block(investigation.device_context)
 
     builder.add_section("Working Plan Steps")
     builder.add_text(

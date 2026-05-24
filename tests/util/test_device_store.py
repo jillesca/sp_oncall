@@ -11,7 +11,7 @@ from langgraph.store.memory import InMemoryStore
 from src.util.device_store import (
     get_device_profile,
     update_device_profile,
-    format_profile_for_context,
+    format_dynamic_facts_for_context,
     get_device_history,
     append_device_history,
     build_history_summary,
@@ -228,40 +228,52 @@ class TestBuildHistorySummary:
         assert result["status"] == "failed"
 
 
-class TestFormatProfileForContext:
+class TestFormatDynamicFactsForContext:
     def test_returns_empty_string_for_empty_profile(self):
-        result = format_profile_for_context({})
+        result = format_dynamic_facts_for_context({})
         assert result == ""
 
-    def test_formats_static_facts(self):
+    def test_returns_empty_string_when_no_dynamic_facts(self):
         profile = {"static_facts": {"role": "PE", "bgp_as": 65001}}
-        result = format_profile_for_context(profile)
-
-        assert "Static Device Facts:" in result
-        assert "role: PE" in result
-        assert "bgp_as: 65001" in result
+        result = format_dynamic_facts_for_context(profile)
+        assert result == ""
 
     def test_formats_dynamic_facts(self):
         profile = {"dynamic_facts": {"last_alert": "interface down"}}
-        result = format_profile_for_context(profile)
+        result = format_dynamic_facts_for_context(profile)
 
         assert "Previous Investigation Context:" in result
         assert "last_alert: interface down" in result
 
-    def test_formats_both_static_and_dynamic(self):
+    def test_formats_multiple_dynamic_facts(self):
+        profile = {
+            "dynamic_facts": {
+                "last_alert": "bgp session down",
+                "last_known_state": "completed",
+            }
+        }
+        result = format_dynamic_facts_for_context(profile)
+
+        assert "Previous Investigation Context:" in result
+        assert "last_alert: bgp session down" in result
+        assert "last_known_state: completed" in result
+
+    def test_ignores_static_facts(self):
         profile = {
             "static_facts": {"role": "PE"},
             "dynamic_facts": {"last_known_state": "completed"},
         }
-        result = format_profile_for_context(profile)
+        result = format_dynamic_facts_for_context(profile)
 
-        assert "Static Device Facts:" in result
-        assert "role: PE" in result
+        assert "Static Device Facts:" not in result
+        assert "role: PE" not in result
         assert "Previous Investigation Context:" in result
         assert "last_known_state: completed" in result
 
     def test_returns_string_type(self):
-        result = format_profile_for_context({"static_facts": {"role": "PE"}})
+        result = format_dynamic_facts_for_context(
+            {"dynamic_facts": {"last_known_state": "completed"}}
+        )
         assert isinstance(result, str)
 
 

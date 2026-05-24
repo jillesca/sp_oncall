@@ -11,7 +11,7 @@ SAMPLE_TRIGGER_CONTEXT = "how are my routers PE doing?"
 
 SAMPLE_INVESTIGATION_XRD1 = Investigation(
     device_name="xrd-1",
-    device_profile="is_mpls_enabled=true; is_isis_enabled=true; is_bgp_l3vpn_enabled=true; is_route_reflector=false; has_vpn_ipv4_unicast_bgp=true; role=PE",
+    device_context="is_mpls_enabled=true; is_isis_enabled=true; is_bgp_l3vpn_enabled=true; is_route_reflector=false; has_vpn_ipv4_unicast_bgp=true; role=PE",
     role="PE",
     objective="Assess health and VPN/MPLS/BGP/L3VPN status for PE router xrd-1",
     working_plan_steps="Step 1: Review session history and prior investigation results",
@@ -23,7 +23,7 @@ SAMPLE_INVESTIGATION_XRD1 = Investigation(
 
 SAMPLE_INVESTIGATION_XRD2 = Investigation(
     device_name="xrd-2",
-    device_profile="is_mpls_enabled=true; is_isis_enabled=true; is_bgp_l3vpn_enabled=true; is_route_reflector=false; has_vpn_ipv4_unicast_bgp=true; role=PE",
+    device_context="is_mpls_enabled=true; is_isis_enabled=true; is_bgp_l3vpn_enabled=true; is_route_reflector=false; has_vpn_ipv4_unicast_bgp=true; role=PE",
     role="PE",
     objective="Assess health and VPN/MPLS/BGP/L3VPN status for PE router xrd-2",
     working_plan_steps="Step 1: Review session history and prior investigation results",

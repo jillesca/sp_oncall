@@ -76,7 +76,7 @@ class TestBuildInvestigationContext:
         assert isinstance(result, str)
         assert f"**Trigger Context:** {state.trigger_context}" in result
         assert f"**Device Name:** {investigation.device_name}" in result
-        assert investigation.device_profile in result
+        assert investigation.device_context in result
         assert f"**Role:** {investigation.role}" in result
         assert f"**Objective:** {investigation.objective}" in result
 

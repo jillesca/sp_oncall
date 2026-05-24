@@ -6,7 +6,10 @@ Contains realistic data structures used in input_validator functions.
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from schemas.state import GraphState, Investigation, InvestigationStatus
-from src.nodes.input_validator.processing import InvestigationPlanningResponse
+from src.nodes.input_validator.processing import (
+    InvestigationPlanningResponse,
+    DiscoveredDevice,
+)
 
 SAMPLE_MCP_RESPONSE_FOR_EXTRACTION = {
     "messages": [
@@ -55,12 +58,13 @@ NO_AI_MESSAGE_RESPONSE = {
 }
 
 SAMPLE_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(
-    device_names=["xrd-1", "xrd-2"]
+    devices=[
+        DiscoveredDevice(device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=["xrd-2"]),
+        DiscoveredDevice(device_name="xrd-2", type_model="IOS XR", role="P", neighbors=["xrd-1"]),
+    ]
 )
 
-EMPTY_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(
-    device_names=[]
-)
+EMPTY_INVESTIGATION_PLANNING_RESPONSE = InvestigationPlanningResponse(devices=[])
 
 SAMPLE_GRAPH_STATE = GraphState(
     messages=[HumanMessage(content="test query")],

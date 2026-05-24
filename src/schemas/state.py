@@ -129,7 +129,9 @@ class Investigation:
 
     Attributes:
         device_name: Target device identifier extracted by input validator.
-        device_profile: Device type/model information for context-aware planning.
+        device_type: Raw device type/model string from MCP discovery (e.g. "Cisco IOS XR").
+        device_context: Pre-formatted prompt-ready string assembled by the input validator
+                        from fresh MCP data plus stored dynamic facts and investigation history.
         role: Device role in the topology (PE, P, PCE, vRR).
         neighbors: Directly connected devices discovered during input validation.
         objective: Specific objective for this device investigation.
@@ -141,7 +143,8 @@ class Investigation:
     """
 
     device_name: str
-    device_profile: str = ""
+    device_type: str = ""
+    device_context: str = ""
     role: str = ""
     neighbors: List[str] = field(default_factory=list)
     objective: Optional[str] = None

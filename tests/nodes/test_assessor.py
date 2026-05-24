@@ -47,7 +47,7 @@ class TestBuildAssessmentContext:
 
         assert "xrd-1" in result
         assert "**Status:**" in result
-        assert "**Device Profile:**" in result
+        assert "**Device Context:**" in result
         assert "**Role:**" in result
 
     def test_build_assessment_context_returns_string(self):
@@ -72,7 +72,7 @@ class TestAddInvestigationToBuilder:
 
         assert "xrd-1" in result
         assert "**Status:**" in result
-        assert "**Device Profile:**" in result
+        assert "**Device Context:**" in result
         assert "**Role:**" in result
         assert "**Objective:**" in result
         assert "**Working Plan Steps:**" in result

@@ -94,30 +94,30 @@ def update_device_profile(
     logger.debug("Updated profile for device: %s", device_name)
 
 
-def format_profile_for_context(profile: dict[str, Any]) -> str:
-    """Format a stored device profile as human-readable text for prompt injection.
+def format_dynamic_facts_for_context(profile: dict[str, Any]) -> str:
+    """Format stored dynamic facts as human-readable text for prompt injection.
+
+    Only formats dynamic_facts (recent investigation findings). Static facts are
+    always sourced fresh from MCP discovery and never read back from the store
+    into prompts to avoid stale topology data.
 
     Args:
         profile: Profile dict from get_device_profile
 
     Returns:
         Formatted string for inclusion in investigation context, or empty string
-        if profile has no useful content.
+        if no dynamic facts exist.
     """
     if not profile:
         return ""
 
-    lines = []
+    dynamic = profile.get("dynamic_facts")
+    if not dynamic:
+        return ""
 
-    if static := profile.get("static_facts"):
-        lines.append("Static Device Facts:")
-        for key, value in static.items():
-            lines.append(f"  {key}: {value}")
-
-    if dynamic := profile.get("dynamic_facts"):
-        lines.append("Previous Investigation Context:")
-        for key, value in dynamic.items():
-            lines.append(f"  {key}: {value}")
+    lines = ["Previous Investigation Context:"]
+    for key, value in dynamic.items():
+        lines.append(f"  {key}: {value}")
 
     return "\n".join(lines)
 

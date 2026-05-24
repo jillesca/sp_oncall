@@ -84,7 +84,7 @@ class TestAddInvestigationDetails:
 
         assert "### Investigation 1: xrd-1" in result
         assert "Status:" in result
-        assert "Device Profile:" in result
+        assert "Device Type:" in result
         assert "Role:" in result
 
     def test_add_investigation_details_includes_status_icons(self):

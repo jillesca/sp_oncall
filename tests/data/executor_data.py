@@ -12,7 +12,7 @@ SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS = GraphState(
     investigations=[
         Investigation(
             device_name="xrd-1",
-            device_profile="PE router profile",
+            device_context="PE router profile",
             role="PE",
             objective="Check device health",
             working_plan_steps="Step 1: Check system info",
@@ -23,7 +23,7 @@ SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS = GraphState(
         ),
         Investigation(
             device_name="xrd-2",
-            device_profile="P router profile",
+            device_context="P router profile",
             role="P",
             objective="Check device health",
             working_plan_steps="Step 1: Check system info",
@@ -87,7 +87,7 @@ SAMPLE_EXECUTED_TOOL_CALLS = [
 
 SAMPLE_INVESTIGATION = Investigation(
     device_name="test-device",
-    device_profile="test profile",
+    device_context="test profile",
     role="PE",
     objective="Test objective",
     working_plan_steps="Test steps",
@@ -100,7 +100,7 @@ SAMPLE_INVESTIGATION = Investigation(
 SAMPLE_UPDATED_INVESTIGATIONS = [
     Investigation(
         device_name="xrd-1",
-        device_profile="PE router profile",
+        device_context="PE router profile",
         role="PE",
         objective="Check device health",
         working_plan_steps="Step 1: Check system info",

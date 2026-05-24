@@ -20,9 +20,14 @@ from src.nodes.input_validator.extraction import (
 )
 from src.nodes.input_validator.processing import (
     process_investigation_planning_response,
-    create_investigations_from_response,
     InvestigationPlanningResponse,
 )
+from src.nodes.input_validator.core import (
+    _build_device_context,
+    _format_mcp_device_section,
+    _hydrate_single_investigation,
+)
+from src.nodes.input_validator.processing import DiscoveredDevice
 from schemas.state import GraphState, Investigation
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
 from tests.data.input_validator_data import (
@@ -138,56 +143,142 @@ class TestLogSuccessfulInvestigationPlanning:
             _log_successful_investigation_planning(None)
 
 
-class TestCreateInvestigationsFromResponse:
-    """Test cases for create_investigations_from_response function."""
+class TestBuildDeviceContext:
+    """Test cases for _build_device_context function."""
 
-    def test_create_investigations_success(self):
-        """Test successful creation of investigations from response."""
-        result = create_investigations_from_response(
-            SAMPLE_INVESTIGATION_PLANNING_RESPONSE
+    def test_includes_mcp_section_for_new_device(self):
+        """Test that fresh MCP data is always included."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=["xrd-2"]
         )
+        result = _build_device_context(device, profile={}, history=[])
 
-        assert isinstance(result, list)
-        assert len(result) == len(
-            SAMPLE_INVESTIGATION_PLANNING_RESPONSE.device_names
+        assert "Device Facts:" in result
+        assert "IOS XR" in result
+        assert "PE" in result
+        assert "xrd-2" in result
+
+    def test_appends_dynamic_facts_when_present(self):
+        """Test that stored dynamic facts are appended to the MCP section."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
         )
+        profile = {"dynamic_facts": {"last_known_state": "completed"}}
+        result = _build_device_context(device, profile=profile, history=[])
 
-        for investigation in result:
-            assert isinstance(investigation, Investigation)
-            assert investigation.device_name != ""
+        assert "Device Facts:" in result
+        assert "Previous Investigation Context:" in result
+        assert "last_known_state: completed" in result
 
-    def test_create_investigations_preserves_device_names(self):
-        """Test that device names are preserved in investigations."""
-        result = create_investigations_from_response(
-            SAMPLE_INVESTIGATION_PLANNING_RESPONSE
+    def test_appends_history_when_present(self):
+        """Test that investigation history is appended when available."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
         )
+        history = [{"timestamp": "2026-01-01T00:00:00+00:00", "status": "completed", "summary": "All good"}]
+        result = _build_device_context(device, profile={}, history=history)
 
-        created_names = {inv.device_name for inv in result}
-        expected_names = set(SAMPLE_INVESTIGATION_PLANNING_RESPONSE.device_names)
-        assert created_names == expected_names
+        assert "Device Facts:" in result
+        assert "Previous Investigation Findings:" in result
+        assert "All good" in result
 
-    def test_create_investigations_with_empty_list(self):
-        """Test creation with empty device_names list."""
-        result = create_investigations_from_response(
-            EMPTY_INVESTIGATION_PLANNING_RESPONSE
+    def test_skips_static_facts_from_store(self):
+        """Test that stored static_facts are not included in device_context."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
         )
+        profile = {"static_facts": {"role": "PE"}, "dynamic_facts": {}}
+        result = _build_device_context(device, profile=profile, history=[])
 
-        assert isinstance(result, list)
-        assert len(result) == 0
+        assert "Static Device Facts:" not in result
 
-    def test_create_investigations_sets_default_values(self):
-        """Test that investigations have appropriate default values."""
-        result = create_investigations_from_response(
-            SAMPLE_INVESTIGATION_PLANNING_RESPONSE
+
+class TestFormatMcpDeviceSection:
+    """Test cases for _format_mcp_device_section function."""
+
+    def test_formats_all_fields(self):
+        """Test that type, role, and neighbors are all included."""
+        device = DiscoveredDevice(
+            device_name="xrd-1",
+            type_model="Cisco IOS XR",
+            role="PE",
+            neighbors=["xrd-2", "xrd-3"],
         )
+        result = _format_mcp_device_section(device)
 
-        if result:
-            investigation = result[0]
-            assert investigation.device_profile == ""
-            assert investigation.role == ""
-            assert investigation.execution_results == []
-            assert investigation.report is None
-            assert investigation.error_details is None
+        assert "Device Facts:" in result
+        assert "Cisco IOS XR" in result
+        assert "PE" in result
+        assert "xrd-2" in result
+        assert "xrd-3" in result
+
+    def test_handles_missing_type_model(self):
+        """Test graceful handling of empty type_model."""
+        device = DiscoveredDevice(device_name="xrd-1", type_model="", role="PE")
+        result = _format_mcp_device_section(device)
+
+        assert "Unknown" in result
+
+    def test_omits_neighbors_line_when_empty(self):
+        """Test that neighbors line is omitted when there are no neighbors."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
+        )
+        result = _format_mcp_device_section(device)
+
+        assert "Neighbors:" not in result
+
+
+class TestHydrateSingleInvestigation:
+    """Test cases for _hydrate_single_investigation function."""
+
+    def test_populates_fields_from_discovered_device(self):
+        """Test that Investigation fields come from DiscoveredDevice."""
+        from langgraph.store.memory import InMemoryStore
+
+        store = InMemoryStore()
+        device = DiscoveredDevice(
+            device_name="xrd-1",
+            type_model="IOS XR",
+            role="PE",
+            neighbors=["xrd-2"],
+        )
+        result = _hydrate_single_investigation(device, store)
+
+        assert result.device_name == "xrd-1"
+        assert result.device_type == "IOS XR"
+        assert result.role == "PE"
+        assert result.neighbors == ["xrd-2"]
+
+    def test_device_context_contains_mcp_data(self):
+        """Test that device_context is populated with fresh MCP data."""
+        from langgraph.store.memory import InMemoryStore
+
+        store = InMemoryStore()
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
+        )
+        result = _hydrate_single_investigation(device, store)
+
+        assert "IOS XR" in result.device_context
+        assert "PE" in result.device_context
+
+    def test_enriches_with_stored_history(self):
+        """Test that stored history is included in device_context."""
+        from langgraph.store.memory import InMemoryStore
+
+        store = InMemoryStore()
+        store.put(
+            ("device_profiles", "xrd-1"),
+            "history",
+            {"entries": [{"timestamp": "t", "status": "completed", "summary": "prior run"}]},
+        )
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
+        )
+        result = _hydrate_single_investigation(device, store)
+
+        assert "prior run" in result.device_context
 
 
 class TestBuildFailedState:
@@ -230,30 +321,33 @@ class TestBuildFailedState:
 class TestInvestigationPlanningResponseDataClass:
     """Test cases for InvestigationPlanningResponse data class."""
 
-    def test_creation_with_device_names(self):
-        """Test InvestigationPlanningResponse creation with device names."""
+    def test_creation_with_discovered_devices(self):
+        """Test InvestigationPlanningResponse creation with DiscoveredDevice objects."""
         response = InvestigationPlanningResponse(
-            device_names=["xrd-1", "xrd-2", "xrd-3"]
+            devices=[
+                DiscoveredDevice(device_name="xrd-1", type_model="IOS XR", role="PE"),
+                DiscoveredDevice(device_name="xrd-2", type_model="IOS XR", role="P"),
+            ]
         )
 
-        assert len(response) == 3
-        assert response.device_names == ["xrd-1", "xrd-2", "xrd-3"]
+        assert len(response) == 2
 
     def test_len_method(self):
         """Test __len__ method of InvestigationPlanningResponse."""
         response = SAMPLE_INVESTIGATION_PLANNING_RESPONSE
 
-        assert len(response) == len(response.device_names)
+        assert len(response) == len(response.devices)
 
     def test_iter_method(self):
-        """Test __iter__ method yields device names as strings."""
+        """Test __iter__ method yields DiscoveredDevice objects."""
         response = SAMPLE_INVESTIGATION_PLANNING_RESPONSE
 
-        names = list(response)
-        assert names == response.device_names
+        devices = list(response)
+        assert len(devices) == len(response.devices)
+        assert all(isinstance(d, DiscoveredDevice) for d in devices)
 
     def test_empty_response(self):
-        """Test InvestigationPlanningResponse with empty device_names."""
+        """Test InvestigationPlanningResponse with empty devices list."""
         response = EMPTY_INVESTIGATION_PLANNING_RESPONSE
 
         assert len(response) == 0

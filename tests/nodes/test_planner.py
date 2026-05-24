@@ -91,7 +91,7 @@ class TestBuildPlanningContext:
 
         assert isinstance(result, str)
         assert "xrd-3" in result
-        assert "No profile available" in result
+        assert "No context available" in result
 
     def test_build_planning_context_with_empty_role(self):
         """Context shows 'Unknown' when role is empty."""

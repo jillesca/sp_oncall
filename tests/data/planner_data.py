@@ -10,7 +10,7 @@ from src.nodes.planner.planning import DevicePlan
 
 SAMPLE_INVESTIGATION_FOR_PLANNING = Investigation(
     device_name="xrd-1",
-    device_profile='{"role": "PE", "is_mpls_enabled": true}',
+    device_context='{"role": "PE", "is_mpls_enabled": true}',
     role="PE",
     objective=None,
     working_plan_steps="",
@@ -26,7 +26,7 @@ SAMPLE_GRAPH_STATE_FOR_PLANNING = GraphState(
         SAMPLE_INVESTIGATION_FOR_PLANNING,
         Investigation(
             device_name="xrd-2",
-            device_profile='{"role": "P", "is_mpls_enabled": true}',
+            device_context='{"role": "P", "is_mpls_enabled": true}',
             role="P",
             objective=None,
             working_plan_steps="",

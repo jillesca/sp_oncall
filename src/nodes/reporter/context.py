@@ -97,7 +97,7 @@ def _add_single_investigation_details(
         f"Investigation {index}: {investigation.device_name}"
     )
     builder.add_bullet(f"Status: {status_icon} {investigation.status.value}")
-    builder.add_bullet(f"Device Profile: {investigation.device_profile}")
+    builder.add_bullet(f"Device Type: {investigation.device_type}")
     builder.add_bullet(f"Role: {investigation.role}")
 
     if investigation.objective:

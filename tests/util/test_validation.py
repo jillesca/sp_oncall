@@ -34,12 +34,19 @@ class _DevicePlan:
 
 
 @dataclass
+class _DiscoveredDevice:
+    device_name: str = ""
+    type_model: str = ""
+    role: str = ""
+
+
+@dataclass
 class _InvestigationResponse:
-    device_names: List[str] = None
+    devices: List = None
 
     def __post_init__(self):
-        if self.device_names is None:
-            self.device_names = []
+        if self.devices is None:
+            self.devices = []
 
 
 # ---------------------------------------------------------------------------
@@ -251,36 +258,41 @@ class TestValidateInvestigationPlanning:
     """Tests for validate_investigation_planning validator."""
 
     def test_valid_response_returns_no_violations(self):
-        """A well-formed response with device names produces no violations."""
-        result = _InvestigationResponse(device_names=["xrd-1", "xrd-2"])
+        """A well-formed response with discovered devices produces no violations."""
+        result = _InvestigationResponse(
+            devices=[
+                _DiscoveredDevice(device_name="xrd-1"),
+                _DiscoveredDevice(device_name="xrd-2"),
+            ]
+        )
         assert validate_investigation_planning(result) == []
 
-    def test_empty_device_names_returns_violation(self):
-        """An empty device_names list triggers a violation."""
-        result = _InvestigationResponse(device_names=[])
+    def test_empty_devices_returns_violation(self):
+        """An empty devices list triggers a violation."""
+        result = _InvestigationResponse(devices=[])
         violations = validate_investigation_planning(result)
         assert any("empty" in v for v in violations)
 
     def test_empty_name_in_list_returns_violation(self):
-        """A device_names entry that is empty string triggers a violation."""
-        result = _InvestigationResponse(device_names=[""])
+        """A device entry with empty device_name triggers a violation."""
+        result = _InvestigationResponse(devices=[_DiscoveredDevice(device_name="")])
         violations = validate_investigation_planning(result)
         assert any("device_name" in v for v in violations)
 
     def test_works_with_dict_input(self):
         """Validator handles dict representation as returned by some LLM providers."""
-        result = {"device_names": [""]}
+        result = {"devices": [{"device_name": ""}]}
         violations = validate_investigation_planning(result)
         assert any("device_name" in v for v in violations)
 
-    def test_dict_empty_device_names_returns_violation(self):
-        """Dict with empty device_names list triggers violation."""
-        violations = validate_investigation_planning({"device_names": []})
+    def test_dict_empty_devices_returns_violation(self):
+        """Dict with empty devices list triggers violation."""
+        violations = validate_investigation_planning({"devices": []})
         assert any("empty" in v for v in violations)
 
-    def test_dict_valid_device_names_returns_no_violations(self):
+    def test_dict_valid_devices_returns_no_violations(self):
         """Dict with named devices returns no violations."""
-        result = {"device_names": ["xrd-1", "xrd-2"]}
+        result = {"devices": [{"device_name": "xrd-1"}, {"device_name": "xrd-2"}]}
         assert validate_investigation_planning(result) == []
 
 

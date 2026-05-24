@@ -26,8 +26,8 @@ def build_planning_context(investigation: Investigation) -> str:
     builder.add_section("Device")
     builder.add_subsection(f"Device: `{investigation.device_name}`")
     builder.add_bold_text("Role:", investigation.role or "Unknown")
-    builder.add_bold_text("Device Profile:")
-    builder.add_code_block(investigation.device_profile or "No profile available")
+    builder.add_bold_text("Device Context:")
+    builder.add_code_block(investigation.device_context or "No context available")
 
     context_string = builder.build()
     logger.debug(
