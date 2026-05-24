@@ -21,10 +21,9 @@ A trigger context — either:
 
 Return a structured list. For each device:
 
-Return a structured list. For each device:
-
 - `device_name`: exact inventory name
-- `device_profile`: type/model
+- `type_model`: device type and model (e.g. "Cisco IOS-XR Router")
 - `role`: network role (PE, P, PCE, vRR, or the discovered role)
+- `neighbors`: Optional. list of directly connected device names
 
-Do not create an investigation plan — that is the responsibility of another agent that will be call after you.
+Do not create an investigation plan — that is the responsibility of another agent that will be called after you.

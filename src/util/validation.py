@@ -97,15 +97,16 @@ def validate_planning_response(result: Any) -> List[str]:
 
 
 def validate_investigation_planning(result: Any) -> List[str]:
-    """Validate an InvestigationPlanningResponse: device_names list is non-empty, all names non-empty."""
+    """Validate an InvestigationPlanningResponse: devices list is non-empty, all device_names non-empty."""
     violations = []
-    device_names = _get_field(result, "device_names", [])
+    devices = _get_field(result, "devices", [])
 
-    if not device_names:
-        violations.append("device_names list is empty")
+    if not devices:
+        violations.append("devices list is empty")
         return violations
 
-    for name in device_names:
+    for device in devices:
+        name = _get_field(device, "device_name", "")
         if not name:
             violations.append("device_name is empty for one or more devices")
 

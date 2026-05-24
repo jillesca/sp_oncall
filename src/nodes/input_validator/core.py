@@ -90,14 +90,19 @@ def _extract_event_type(trigger_context: str) -> Optional[str]:
         return None
 
 
-def _log_successful_investigation_planning(devices) -> None:
+def _log_successful_investigation_planning(planning_response) -> None:
     """Log successful investigation planning details."""
     logger.info(
         "✅ Investigation planning successful: %d devices created",
-        len(devices),
+        len(planning_response),
     )
-    for device_name in devices:
-        logger.info("  📋 %s", device_name)
+    for device in planning_response:
+        logger.info(
+            "  📋 %s | role=%s | neighbors=%s",
+            device.device_name,
+            device.role or "unknown",
+            device.neighbors,
+        )
 
 
 def _build_failed_state(state: GraphState) -> GraphState:

@@ -30,7 +30,7 @@ Code must read like a book — a reader should be able to follow the flow top to
 
 ## Object Design and Boilerplate Avoidance
 
-Using dictionaries to encapsulate related data or behaviour **is prohibited** — use objects instead.
+Dictionaries to encapsulate related data or behaviour **is prohibited** — use objects instead.
 
 Before creating any new class or abstraction, ask:
 

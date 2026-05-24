@@ -131,6 +131,7 @@ class Investigation:
         device_name: Target device identifier extracted by input validator.
         device_profile: Device type/model information for context-aware planning.
         role: Device role in the topology (PE, P, PCE, vRR).
+        neighbors: Directly connected devices discovered during input validation.
         objective: Specific objective for this device investigation.
         working_plan_steps: Ordered execution steps tailored to this device.
         execution_results: Results from executing plan steps on this device.
@@ -142,6 +143,7 @@ class Investigation:
     device_name: str
     device_profile: str = ""
     role: str = ""
+    neighbors: List[str] = field(default_factory=list)
     objective: Optional[str] = None
     working_plan_steps: str = ""
     execution_results: List["ExecutedToolCall"] = field(default_factory=list)
