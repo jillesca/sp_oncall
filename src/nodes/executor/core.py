@@ -1,133 +1,111 @@
 """
-Core functionality for the Network Executor Nodes.
+Dispatch functions for the device sub-graph phases.
 
-Two dedicated nodes handle execution in sequence:
-1. context_executor_node — runs neighbor health-check investigations concurrently
-2. primary_executor_node — runs primary (alert target) investigations concurrently,
-   each receiving the original trigger and completed context device reports
+Replaces the former executor nodes. Each phase has two pieces:
+1. A dispatch function (conditional edge) — fans out via Send to device sub-graphs.
+2. For the primary phase: a dispatch node that first enriches investigations
+   with context reports before the conditional edge fans out.
 
-Both nodes use the same per-device sub-graph (plan → execute → assess → retry).
-The difference is the executor prompt and investigation role passed to each sub-graph.
+Context phase runs first (Send → context_device_subgraph × N).
+Primary phase runs second (Send → primary_device_subgraph × M), after all
+context sub-graphs have written their results to completed_context_investigations.
 """
 
-import asyncio
 from dataclasses import replace
-from typing import List, Optional
+from typing import List, Union
 
-from schemas import GraphState, Investigation, InvestigationStatus
+from langgraph.types import Send
+
+from schemas import GraphState, Investigation
 from src.configuration import Configuration
 from src.logging import get_logger, log_node_execution
 
 from .context import build_primary_investigation_context
-from .device_subgraph import DeviceState, device_subgraph
-from .state import (
-    update_context_investigations,
-    update_primary_investigations,
-    mark_all_failed,
-)
+from .device_subgraph import DeviceState
 
 logger = get_logger(__name__)
 
 
-@log_node_execution("Context Executor")
-def context_executor_node(state: GraphState) -> GraphState:
-    """
-    Execute neighbor health-check investigations concurrently.
+def dispatch_context_investigations(
+    state: GraphState,
+) -> Union[List[Send], str]:
+    """Fan out one Send per context investigation, or skip to primary dispatch.
 
-    Runs each context investigation through the per-device sub-graph using
-    the context_executor prompt. Results are stored in context_investigations
-    and made available to the primary executor node.
-
-    Args:
-        state: The current GraphState from the workflow
-
-    Returns:
-        Updated GraphState with completed context_investigations
+    Used as a conditional edge from input_validator_node. Returns a Send per
+    context device so LangGraph runs them all concurrently as separate
+    context_device_subgraph instances.
     """
     if not state.context_investigations:
-        logger.info("🔍 No context investigations to execute — skipping")
-        return state
+        logger.info("🔍 No context investigations — skipping to primary dispatch")
+        return "primary_dispatch_node"
 
     config = Configuration.from_context()
-
     logger.info(
-        "🚀 Starting context device sub-graphs for %s investigation(s)",
+        "🚀 Dispatching %s context device sub-graph(s)",
         len(state.context_investigations),
     )
-
-    try:
-        completed = asyncio.run(
-            _run_device_subgraphs_concurrently(
-                investigations=state.context_investigations,
+    return [
+        Send(
+            "context_device_subgraph",
+            DeviceState(
+                investigation=inv,
                 trigger_context=state.trigger_context,
                 investigation_role="context",
                 executor_prompt="context_executor",
                 max_retries=config.max_retries_per_device,
                 event_type=state.event_type,
-            )
-        )
-        return update_context_investigations(state, completed)
-
-    except Exception as e:
-        logger.error("❌ Context executor failed: %s", e)
-        return replace(
-            state,
-            context_investigations=mark_all_failed(
-                state.context_investigations, e
             ),
         )
+        for inv in state.context_investigations
+    ]
 
 
-@log_node_execution("Primary Executor")
-def primary_executor_node(state: GraphState) -> GraphState:
+@log_node_execution("Primary Dispatch")
+def primary_dispatch_node(state: GraphState) -> GraphState:
+    """Enrich primary investigations with completed context reports.
+
+    Runs after all context_device_subgraph instances have finished.
+    Injects neighbor health-check findings into each primary investigation's
+    device_context so the primary executor has full situational awareness.
     """
-    Execute primary (alert target) investigations concurrently.
+    enriched = _enrich_with_context_reports(
+        state.primary_investigations, state
+    )
+    return replace(state, primary_investigations=enriched)
 
-    Each primary investigation receives the original trigger context plus
-    the completed context device reports so it has full situational awareness.
 
-    Args:
-        state: The current GraphState from the workflow
+def dispatch_primary_investigations(
+    state: GraphState,
+) -> Union[List[Send], str]:
+    """Fan out one Send per primary investigation, or skip to RCA.
 
-    Returns:
-        Updated GraphState with completed primary_investigations
+    Used as a conditional edge from primary_dispatch_node. Returns a Send per
+    primary device so LangGraph runs them all concurrently as separate
+    primary_device_subgraph instances.
     """
     if not state.primary_investigations:
-        logger.info("🔍 No primary investigations to execute — skipping")
-        return state
+        logger.info("🔍 No primary investigations — skipping to RCA")
+        return "rca_assessor_node"
 
     config = Configuration.from_context()
-
     logger.info(
-        "🚀 Starting primary device sub-graphs for %s investigation(s)",
+        "🚀 Dispatching %s primary device sub-graph(s)",
         len(state.primary_investigations),
     )
-
-    try:
-        enriched_investigations = _enrich_with_context_reports(
-            state.primary_investigations, state
-        )
-
-        completed = asyncio.run(
-            _run_device_subgraphs_concurrently(
-                investigations=enriched_investigations,
+    return [
+        Send(
+            "primary_device_subgraph",
+            DeviceState(
+                investigation=inv,
                 trigger_context=state.trigger_context,
                 investigation_role="primary",
                 executor_prompt="network_executor",
                 max_retries=config.max_retries_per_device,
                 event_type=state.event_type,
-            )
-        )
-        return update_primary_investigations(state, completed)
-
-    except Exception as e:
-        logger.error("❌ Primary executor failed: %s", e)
-        return replace(
-            state,
-            primary_investigations=mark_all_failed(
-                state.primary_investigations, e
             ),
         )
+        for inv in state.primary_investigations
+    ]
 
 
 def _enrich_with_context_reports(
@@ -135,12 +113,12 @@ def _enrich_with_context_reports(
 ) -> List[Investigation]:
     """Append completed context device reports to each primary investigation's context.
 
-    This gives each primary executor agent full situational awareness of what
+    Gives each primary executor agent full situational awareness of what
     the neighbor health checks found before it begins its own investigation.
     """
     completed_context = [
         inv
-        for inv in state.context_investigations
+        for inv in state.completed_context_investigations
         if inv.report
     ]
 
@@ -156,67 +134,3 @@ def _enrich_with_context_reports(
         )
         for inv in investigations
     ]
-
-
-async def _run_device_subgraphs_concurrently(
-    investigations: List[Investigation],
-    trigger_context: str,
-    investigation_role: str,
-    executor_prompt: str,
-    max_retries: int,
-    event_type: Optional[str] = None,
-) -> List[Investigation]:
-    """
-    Run each device's sub-graph concurrently and collect results.
-
-    Args:
-        investigations: Investigations to execute
-        trigger_context: Original trigger content for prompt building
-        investigation_role: "primary" or "context" — shapes planning objective
-        executor_prompt: Prompt file name to use for execution
-        max_retries: Maximum execution attempts per device before giving up
-        event_type: Alert event type forwarded to per-device planning for skill routing
-
-    Returns:
-        List of investigations updated with execution results and assessments
-    """
-    tasks = [
-        device_subgraph.ainvoke(
-            DeviceState(
-                investigation=investigation,
-                trigger_context=trigger_context,
-                investigation_role=investigation_role,
-                executor_prompt=executor_prompt,
-                max_retries=max_retries,
-                event_type=event_type,
-            )
-        )
-        for investigation in investigations
-    ]
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-
-    return [
-        _extract_investigation_from_result(result, original)
-        for result, original in zip(results, investigations)
-    ]
-
-
-def _extract_investigation_from_result(
-    result, original_investigation: Investigation
-) -> Investigation:
-    """Extract the final investigation from a sub-graph result or handle failure."""
-    if isinstance(result, Exception):
-        logger.error(
-            "❌ Sub-graph failed for %s: %s",
-            original_investigation.device_name,
-            result,
-        )
-        return replace(
-            original_investigation,
-            status=InvestigationStatus.FAILED,
-            error_details=str(result),
-        )
-
-    final_state: DeviceState = result
-    return final_state.investigation

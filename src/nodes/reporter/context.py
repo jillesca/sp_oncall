@@ -25,12 +25,14 @@ def build_report_context(state: GraphState) -> str:
     Returns:
         Markdown-formatted context string for the LLM
     """
-    total = len(state.primary_investigations) + len(state.context_investigations)
+    total = len(state.completed_primary_investigations) + len(
+        state.completed_context_investigations
+    )
     logger.debug(
         "📋 Building report context for %d investigations (%d primary, %d context)",
         total,
-        len(state.primary_investigations),
-        len(state.context_investigations),
+        len(state.completed_primary_investigations),
+        len(state.completed_context_investigations),
     )
 
     builder = MarkdownBuilder()
@@ -72,10 +74,10 @@ def _add_primary_investigation_details(
 ) -> None:
     """Add primary device investigation results."""
     builder.add_section("Primary Device Investigations")
-    if not state.primary_investigations:
+    if not state.completed_primary_investigations:
         builder.add_text("No primary device investigations were performed.")
         return
-    for i, investigation in enumerate(state.primary_investigations, 1):
+    for i, investigation in enumerate(state.completed_primary_investigations, 1):
         _add_single_investigation(builder, investigation, i)
 
 
@@ -84,10 +86,10 @@ def _add_context_investigation_details(
 ) -> None:
     """Add neighbor health check results."""
     builder.add_section("Neighbor Health Checks")
-    if not state.context_investigations:
+    if not state.completed_context_investigations:
         builder.add_text("No neighbor health checks were performed.")
         return
-    for i, investigation in enumerate(state.context_investigations, 1):
+    for i, investigation in enumerate(state.completed_context_investigations, 1):
         _add_single_investigation(builder, investigation, i)
 
 

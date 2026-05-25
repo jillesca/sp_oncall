@@ -43,14 +43,14 @@ def investigation_report_node(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with final report in messages and cleared investigations
     """
-    total_devices = len(state.primary_investigations) + len(
-        state.context_investigations
+    total_devices = len(state.completed_primary_investigations) + len(
+        state.completed_context_investigations
     )
     logger.info(
         "📄 Generating investigation report for %d devices (%d primary, %d context)",
         total_devices,
-        len(state.primary_investigations),
-        len(state.context_investigations),
+        len(state.completed_primary_investigations),
+        len(state.completed_context_investigations),
     )
 
     try:
@@ -88,7 +88,10 @@ def _persist_investigation_results(state: GraphState) -> None:
     This is the single store-write point for the entire graph run.
     """
     store = get_store()
-    all_investigations = state.primary_investigations + state.context_investigations
+    all_investigations = (
+        state.completed_primary_investigations
+        + state.completed_context_investigations
+    )
 
     for investigation in all_investigations:
         update_device_profile(

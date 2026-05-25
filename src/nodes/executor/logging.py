@@ -2,37 +2,12 @@
 Logging utilities for the executor nodes.
 
 This module handles logging operations for the executor workflow,
-providing debug information about incoming state and execution progress.
+providing debug information about execution progress.
 """
 
-from schemas import GraphState
 from src.logging import get_logger
 
 logger = get_logger(__name__)
-
-
-def log_incoming_state(state: GraphState) -> None:
-    """Log incoming state information for debugging purposes."""
-    logger.debug(
-        "📥 Executor received state: trigger='%s', primary=%s, context=%s",
-        state.trigger_context,
-        len(state.primary_investigations),
-        len(state.context_investigations),
-    )
-
-    for inv in state.primary_investigations:
-        logger.debug(
-            "  🎯 PRIMARY device=%s, status=%s",
-            inv.device_name,
-            inv.status,
-        )
-
-    for inv in state.context_investigations:
-        logger.debug(
-            "  📋 CONTEXT device=%s, status=%s",
-            inv.device_name,
-            inv.status,
-        )
 
 
 def log_processed_data(

@@ -37,8 +37,8 @@ def rca_assessor_node(state: GraphState) -> GraphState:
     """
     logger.info(
         "🔬 Starting RCA synthesis: %s primary, %s context investigations",
-        len(state.primary_investigations),
-        len(state.context_investigations),
+        len(state.completed_primary_investigations),
+        len(state.completed_context_investigations),
     )
 
     try:

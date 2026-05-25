@@ -24,8 +24,8 @@ def build_rca_context(state: GraphState) -> str:
     """
     logger.debug(
         "📋 Building RCA context: %s primary, %s context investigations",
-        len(state.primary_investigations),
-        len(state.context_investigations),
+        len(state.completed_primary_investigations),
+        len(state.completed_context_investigations),
     )
 
     builder = MarkdownBuilder()
@@ -48,11 +48,11 @@ def _add_primary_reports(builder: MarkdownBuilder, state: GraphState) -> None:
     """Add primary device investigation reports."""
     builder.add_section("Primary Device Investigation Reports")
 
-    if not state.primary_investigations:
+    if not state.completed_primary_investigations:
         builder.add_text("No primary device investigations available.")
         return
 
-    for inv in state.primary_investigations:
+    for inv in state.completed_primary_investigations:
         builder.add_subsection(f"{inv.device_name} (role: {inv.role})")
         builder.add_bold_text("Status:", inv.status.value)
         if inv.objective:
@@ -70,11 +70,11 @@ def _add_context_reports(builder: MarkdownBuilder, state: GraphState) -> None:
     """Add neighbor health check reports."""
     builder.add_section("Neighbor Health Check Reports")
 
-    if not state.context_investigations:
+    if not state.completed_context_investigations:
         builder.add_text("No neighbor health checks were performed.")
         return
 
-    for inv in state.context_investigations:
+    for inv in state.completed_context_investigations:
         builder.add_subsection(f"{inv.device_name} (role: {inv.role})")
         builder.add_bold_text("Status:", inv.status.value)
         if inv.report:

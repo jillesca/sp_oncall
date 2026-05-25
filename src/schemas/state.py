@@ -5,6 +5,7 @@ Define the state structures for the agent.
 from __future__ import annotations
 
 import json
+import operator
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import List, Dict, Any, Optional, Annotated
@@ -19,15 +20,21 @@ class GraphState:
 
     Attributes:
         messages: Conversation history using LangChain message format.
-        primary_investigations: Investigations for devices named in the trigger
-                                (alert target or explicitly requested devices).
-        context_investigations: Investigations for neighbor devices discovered
-                                by the input validator to verify network health.
+        primary_investigations: Pending investigations for devices named in the
+                                trigger (alert target or explicitly requested).
+        context_investigations: Pending investigations for neighbor devices
+                                discovered by the input validator.
         event_type: Alert event type extracted from the trigger context (e.g.
                     "interface_state", "bgp_session_state"). None for manual
                     queries.
         root_cause: Root cause analysis produced by the rca_assessor_node after
                     all investigations complete.
+        completed_context_investigations: Accumulates completed context device
+                                          results from parallel device sub-graphs
+                                          via operator.add reducer.
+        completed_primary_investigations: Accumulates completed primary device
+                                          results from parallel device sub-graphs
+                                          via operator.add reducer.
     """
 
     messages: Annotated[List[AnyMessage], add_messages] = field(
@@ -37,6 +44,12 @@ class GraphState:
     context_investigations: List[Investigation] = field(default_factory=list)
     event_type: Optional[str] = None
     root_cause: Optional[str] = None
+    completed_context_investigations: Annotated[
+        List[Investigation], operator.add
+    ] = field(default_factory=list)
+    completed_primary_investigations: Annotated[
+        List[Investigation], operator.add
+    ] = field(default_factory=list)
 
     @property
     def trigger_context(self) -> str:

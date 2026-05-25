@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-This module provides decorators for detailed logging of LangGraph node
-execution with comprehensive state tracking and transition monitoring.
+Decorators for detailed logging of LangGraph node execution with state
+tracking and transition monitoring.
 """
 
+import asyncio
 import time
 from functools import wraps
 from typing import Callable, Any
@@ -20,8 +21,8 @@ def log_node_execution(
     """
     Enhanced decorator for LangGraph node execution logging.
 
-    Creates clear visual boundaries and structured logging following
-    OpenTelemetry and Kubernetes best practices for easier debugging.
+    Works with both sync and async node functions. Detects the function type
+    at decoration time and wraps it with the appropriate sync or async wrapper.
 
     Args:
         node_name: Human-readable name of the node
@@ -33,23 +34,46 @@ def log_node_execution(
     """
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        @wraps(func)
-        def wrapper(state: Any, *args: Any, **kwargs: Any) -> Any:
-            logger = get_logger(func.__module__)
+        if asyncio.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(state: Any, *args: Any, **kwargs: Any) -> Any:
+                logger = get_logger(func.__module__)
+                start_time = time.time()
 
+                _log_node_start(logger, node_name, state, include_state_details)
+
+                try:
+                    result_state = await func(state, *args, **kwargs)
+                    execution_time = time.time() - start_time
+                    _log_node_success(
+                        logger,
+                        node_name,
+                        result_state,
+                        execution_time,
+                        include_state_details,
+                        include_performance_metrics,
+                    )
+                    if include_state_details:
+                        _log_state_changes(logger, node_name, state, result_state)
+                    return result_state
+
+                except Exception as e:
+                    execution_time = time.time() - start_time
+                    _log_node_error(logger, node_name, e, execution_time)
+                    raise
+
+            return async_wrapper
+
+        @wraps(func)
+        def sync_wrapper(state: Any, *args: Any, **kwargs: Any) -> Any:
+            logger = get_logger(func.__module__)
             start_time = time.time()
 
-            # Log node entry with clear visual boundary
             _log_node_start(logger, node_name, state, include_state_details)
 
             try:
-                # Execute the actual node function
                 result_state = func(state, *args, **kwargs)
-
-                # Calculate execution metrics
                 execution_time = time.time() - start_time
-
-                # Log successful completion
                 _log_node_success(
                     logger,
                     node_name,
@@ -58,11 +82,8 @@ def log_node_execution(
                     include_state_details,
                     include_performance_metrics,
                 )
-
-                # Log state changes if any
                 if include_state_details:
                     _log_state_changes(logger, node_name, state, result_state)
-
                 return result_state
 
             except Exception as e:
@@ -70,7 +91,7 @@ def log_node_execution(
                 _log_node_error(logger, node_name, e, execution_time)
                 raise
 
-        return wrapper
+        return sync_wrapper
 
     return decorator
 
@@ -84,48 +105,25 @@ def _log_node_start(
     """Log node start with clear visual boundary."""
     border = "═" * 80
 
-    # Main entry log with visual boundary
-    logger.info(f"╔{border}╗")
+    logger.info("╔%s╗", border)
     logger.info(
-        f"║ 🚀 NODE START: {node_name:<63} ║",
-        extra={
-            "node_name": node_name,
-            "event": "node_start",
-        },
+        "║ 🚀 NODE START: %-63s ║",
+        node_name,
+        extra={"node_name": node_name, "event": "node_start"},
     )
-    logger.info(f"╚{border}╝")
+    logger.info("╚%s╝", border)
 
     if include_details:
-        # Context information
-        device_name = getattr(state, "device_name", "N/A")
-        objective = getattr(state, "objective", "N/A")
-        current_retries = getattr(state, "current_retries", 0)
+        primary_count = len(getattr(state, "primary_investigations", []) or [])
+        context_count = len(getattr(state, "context_investigations", []) or [])
+        event_type = getattr(state, "event_type", None)
 
         logger.info(
-            f"📋 {node_name} Context:",
-            extra={
-                "device_name": device_name,
-                "objective": (
-                    objective[:100] + "..."
-                    if len(str(objective)) > 100
-                    else objective
-                ),
-                "retries": current_retries,
-            },
-        )
-
-        # State summary
-        working_plan_steps = getattr(state, "working_plan_steps", [])
-        execution_results = getattr(state, "execution_results", [])
-
-        logger.debug(f"   Device: {device_name}")
-        logger.debug(f"   Objective: {objective}")
-        logger.debug(f"   Retries: {current_retries}")
-        logger.debug(
-            f"   Working plan steps: {len(working_plan_steps) if working_plan_steps else 0}"
-        )
-        logger.debug(
-            f"   Execution results: {len(execution_results) if execution_results else 0}"
+            "📋 %s Context: primary_investigations=%s, context_investigations=%s, event_type=%s",
+            node_name,
+            primary_count,
+            context_count,
+            event_type,
         )
 
 
@@ -140,69 +138,49 @@ def _log_node_success(
     """Log successful node completion with metrics."""
     border = "═" * 80
 
-    # Performance metrics
-    metrics = {}
-    if include_metrics:
-        metrics = {
-            "execution_time_ms": round(execution_time * 1000, 2),
-            "execution_time_s": round(execution_time, 3),
-        }
-
-    # Main success log with visual boundary
-    logger.info(f"╔{border}╗")
+    logger.info("╔%s╗", border)
     if include_metrics:
         logger.info(
-            f"║ ✅ NODE COMPLETE: {node_name:<50} [{execution_time:.3f}s] ║",
+            "║ ✅ NODE COMPLETE: %-50s [%.3fs] ║",
+            node_name,
+            execution_time,
             extra={
                 "node_name": node_name,
                 "event": "node_complete",
-                **metrics,
+                "execution_time_ms": round(execution_time * 1000, 2),
+                "execution_time_s": round(execution_time, 3),
             },
         )
     else:
         logger.info(
-            f"║ ✅ NODE COMPLETE: {node_name:<58} ║",
-            extra={
-                "node_name": node_name,
-                "event": "node_complete",
-            },
+            "║ ✅ NODE COMPLETE: %-58s ║",
+            node_name,
+            extra={"node_name": node_name, "event": "node_complete"},
         )
-    logger.info(f"╚{border}╝")
+    logger.info("╚%s╝", border)
 
     if include_details:
-        # Result state summary
-        device_name = getattr(result_state, "device_name", "N/A")
-        current_retries = getattr(result_state, "current_retries", 0)
-        working_plan_steps = getattr(result_state, "working_plan_steps", [])
-        execution_results = getattr(result_state, "execution_results", [])
-        objective_achieved = getattr(
-            result_state, "objective_achieved_assessment", None
+        primary_count = len(
+            getattr(result_state, "completed_primary_investigations", []) or []
         )
+        context_count = len(
+            getattr(result_state, "completed_context_investigations", []) or []
+        )
+        root_cause_set = bool(getattr(result_state, "root_cause", None))
 
         logger.info(
-            f"📤 {node_name} Result:",
+            "📤 %s Result: completed_primary=%s, completed_context=%s, root_cause_set=%s",
+            node_name,
+            primary_count,
+            context_count,
+            root_cause_set,
             extra={
-                "device_name": device_name,
-                "retries": current_retries,
-                "plan_steps_count": (
-                    len(working_plan_steps) if working_plan_steps else 0
-                ),
-                "execution_results_count": (
-                    len(execution_results) if execution_results else 0
-                ),
-                "objective_achieved": objective_achieved,
+                "node_name": node_name,
+                "completed_primary_count": primary_count,
+                "completed_context_count": context_count,
+                "root_cause_set": root_cause_set,
             },
         )
-
-        logger.debug(f"   Device: {device_name}")
-        logger.debug(f"   Retries: {current_retries}")
-        logger.debug(
-            f"   Working plan steps: {len(working_plan_steps) if working_plan_steps else 0}"
-        )
-        logger.debug(
-            f"   Execution results: {len(execution_results) if execution_results else 0}"
-        )
-        logger.debug(f"   Objective achieved: {objective_achieved}")
 
 
 def _log_node_error(
@@ -214,9 +192,11 @@ def _log_node_error(
     """Log node execution error with clear boundary."""
     border = "═" * 80
 
-    logger.error(f"╔{border}╗")
+    logger.error("╔%s╗", border)
     logger.error(
-        f"║ ❌ NODE ERROR: {node_name:<55} [{execution_time:.3f}s] ║",
+        "║ ❌ NODE ERROR: %-55s [%.3fs] ║",
+        node_name,
+        execution_time,
         extra={
             "node_name": node_name,
             "event": "node_error",
@@ -225,52 +205,58 @@ def _log_node_error(
             "execution_time_ms": round(execution_time * 1000, 2),
         },
     )
-    logger.error(f"║ Error: {type(error).__name__}: {str(error)[:55]:<55} ║")
-    logger.error(f"╚{border}╝")
+    logger.error("║ Error: %s: %-55s ║", type(error).__name__, str(error)[:55])
+    logger.error("╚%s╝", border)
 
 
 def _log_state_changes(
     logger, node_name: str, input_state: Any, output_state: Any
 ) -> None:
-    """Log significant state changes during node execution."""
+    """Log significant GraphState changes during node execution."""
     changes = []
 
-    # Check working plan steps changes
-    input_steps = getattr(input_state, "working_plan_steps", [])
-    output_steps = getattr(output_state, "working_plan_steps", [])
-    if len(input_steps or []) != len(output_steps or []):
-        changes.append(
-            f"Working plan steps: {len(input_steps or [])} → {len(output_steps or [])}"
-        )
-
-    # Check execution results changes
-    input_results = getattr(input_state, "execution_results", [])
-    output_results = getattr(output_state, "execution_results", [])
-    if len(input_results or []) != len(output_results or []):
-        changes.append(
-            f"Execution results: {len(input_results or [])} → {len(output_results or [])}"
-        )
-
-    # Check objective achieved changes
-    input_achieved = getattr(
-        input_state, "objective_achieved_assessment", None
+    _check_list_change(
+        changes,
+        "primary_investigations",
+        getattr(input_state, "primary_investigations", []),
+        getattr(output_state, "primary_investigations", []),
     )
-    output_achieved = getattr(
-        output_state, "objective_achieved_assessment", None
+
+    _check_list_change(
+        changes,
+        "context_investigations",
+        getattr(input_state, "context_investigations", []),
+        getattr(output_state, "context_investigations", []),
     )
-    if input_achieved != output_achieved:
-        changes.append(
-            f"Objective achieved: {input_achieved} → {output_achieved}"
-        )
 
-    # Check retries changes
-    input_retries = getattr(input_state, "current_retries", 0)
-    output_retries = getattr(output_state, "current_retries", 0)
-    if input_retries != output_retries:
-        changes.append(f"Retries: {input_retries} → {output_retries}")
+    _check_list_change(
+        changes,
+        "completed_primary_investigations",
+        getattr(input_state, "completed_primary_investigations", []),
+        getattr(output_state, "completed_primary_investigations", []),
+    )
 
-    # Log changes if any
+    _check_list_change(
+        changes,
+        "completed_context_investigations",
+        getattr(input_state, "completed_context_investigations", []),
+        getattr(output_state, "completed_context_investigations", []),
+    )
+
+    input_root_cause = getattr(input_state, "root_cause", None)
+    output_root_cause = getattr(output_state, "root_cause", None)
+    if bool(input_root_cause) != bool(output_root_cause):
+        changes.append("root_cause: %s → %s" % (bool(input_root_cause), bool(output_root_cause)))
+
     if changes:
-        logger.info(f"📊 {node_name} State Changes:")
+        logger.info("📊 %s State Changes:", node_name)
         for change in changes:
-            logger.info(f"   {change}")
+            logger.info("   %s", change)
+
+
+def _check_list_change(changes: list, field: str, before: Any, after: Any) -> None:
+    """Append a change entry when the length of a list field differs."""
+    before_len = len(before or [])
+    after_len = len(after or [])
+    if before_len != after_len:
+        changes.append("%s: %s → %s" % (field, before_len, after_len))
