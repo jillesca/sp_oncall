@@ -1,9 +1,11 @@
 """
 Assessment context building functionality.
 
-This module handles building assessment context for a single device investigation,
-used by the per-device sub-graph in the executor.
+This module handles building assessment context for investigations,
+used by the phase sub-graphs in the executor.
 """
+
+from typing import List
 
 from schemas.state import Investigation
 from nodes.markdown_builder import MarkdownBuilder
@@ -106,3 +108,40 @@ def _add_execution_results_to_builder(
         builder.add_bold_text(
             "Execution Results:", "No execution results available"
         )
+
+
+def build_phase_assessment_context(
+    investigations: List[Investigation],
+    trigger_context: str,
+) -> str:
+    """Build combined assessment context for all devices in a phase.
+
+    Used by the phase-level assess_device node to evaluate whether the
+    objectives for ALL devices in the phase have been sufficiently achieved
+    by the single-agent execution.
+
+    Args:
+        investigations: All device investigations in the phase.
+        trigger_context: Original trigger content.
+
+    Returns:
+        Markdown-formatted context string for the LLM assessor.
+    """
+    logger.debug(
+        "📋 Building phase assessment context for %s device(s)",
+        len(investigations),
+    )
+
+    builder = MarkdownBuilder()
+    builder.add_header("Phase Investigation Assessment Context")
+    builder.add_section("Trigger Context")
+    builder.add_text(trigger_context)
+
+    for inv in investigations:
+        _add_investigation_details(builder, inv)
+
+    context_string = builder.build()
+    logger.debug(
+        "📤 Phase assessment context prepared (%d characters)", len(context_string)
+    )
+    return context_string

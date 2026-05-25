@@ -29,12 +29,14 @@ class GraphState:
                     queries.
         root_cause: Root cause analysis produced by the rca_assessor_node after
                     all investigations complete.
-        completed_context_investigations: Accumulates completed context device
-                                          results from parallel device sub-graphs
-                                          via operator.add reducer.
-        completed_primary_investigations: Accumulates completed primary device
-                                          results from parallel device sub-graphs
-                                          via operator.add reducer.
+        completed_context_investigations: Completed context device results produced
+                                          by the context_investigation subgraph.
+                                          Uses operator.add so subgraph output is
+                                          appended rather than overwritten.
+        completed_primary_investigations: Completed primary device results produced
+                                          by the primary_investigation subgraph.
+                                          Uses operator.add so subgraph output is
+                                          appended rather than overwritten.
     """
 
     messages: Annotated[List[AnyMessage], add_messages] = field(

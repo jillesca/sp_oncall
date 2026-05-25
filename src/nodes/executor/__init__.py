@@ -1,23 +1,26 @@
 """
-Network Executor — device sub-graph dispatch.
+Network Executor — investigation phase sub-graphs and enrichment.
+
+Each sub-graph exposes the same four internal nodes visible in LangGraph Studio:
+  plan_device → execute_device → assess_device → [retry] → collect_device_result
+
+Both sub-graphs handle all devices for their phase in a single agent call
+(Option B), with the phase helper logic shared via phase.py.
 
 Exports:
-- context_device_subgraph / primary_device_subgraph: compiled LangGraph
-  sub-graphs added as named nodes in the orchestrator so they appear as
-  expandable boxes in LangSmith Studio.
-- context_dispatcher / primary_dispatcher: graph nodes that fan out via
-  Command(goto=[Send(...)]) to the respective sub-graphs.
-- route_from_input_validator / route_after_context_phase: conditional edge
-  functions that return plain strings for readable routing decisions.
+  context_investigation_subgraph  : compiled sub-graph for context device phase
+  enrich_primary_investigations   : parent-graph node injecting context findings
+  primary_investigation_subgraph  : compiled sub-graph for primary device phase
 """
 
-from .core import (
-    context_dispatcher,
-    primary_dispatcher,
-    route_from_input_validator,
-    route_after_context_phase,
+from .context_investigation import context_investigation_subgraph
+from .primary_investigation import (
+    enrich_primary_investigations,
+    primary_investigation_subgraph,
 )
-from .device_subgraph import (
-    context_device_subgraph,
-    primary_device_subgraph,
-)
+
+__all__ = [
+    "context_investigation_subgraph",
+    "enrich_primary_investigations",
+    "primary_investigation_subgraph",
+]

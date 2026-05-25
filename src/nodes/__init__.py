@@ -1,17 +1,20 @@
 """
 Node modules for the SP On-Call LangGraph workflow.
 
-This package contains all the node implementations that form the graph workflow:
+Graph flow (linear, no conditional edges):
+  input_validator
+      → context_investigation   (subgraph: one agent for all context devices)
+      → enrich_primary_investigations   (node: injects context findings)
+      → primary_investigation   (subgraph: one agent for all primary devices)
+      → rca_assessor
+      → report_generator
+
+Modules:
 - input_validator: Validates input, discovers devices, splits primary vs context
-- executor: Dispatch functions and compiled device sub-graphs.
-            context_device_subgraph / primary_device_subgraph are the expandable
-            sub-graphs visible in LangSmith Studio.
-            dispatch_context_investigations / dispatch_primary_investigations fan
-            out via Send; primary_dispatch_node enriches primaries with context
-            reports before the primary phase.
+- executor: Phase sub-graphs (context_investigation, primary_investigation) and
+            the enrich_primary_investigations enrichment node.
 - rca_assessor: Synthesizes all reports into a root cause determination
 - reporter: Generates the final formatted report and persists to store
-- assessor: Per-device objective assessment (used inside device_subgraph)
 - markdown_builder: Utility for building markdown content
 - common: Shared utilities across all nodes
 """
