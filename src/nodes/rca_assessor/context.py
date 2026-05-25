@@ -1,27 +1,28 @@
 """
 Context building for root cause analysis assessment.
 
-Assembles all investigation reports into a structured prompt for the
-rca_assessor_node to synthesize a definitive root cause determination.
+The RCA assessor synthesizes investigation reports into a root cause.
+It only needs: the trigger, the final reports, and device capabilities.
+Raw tool JSON, working plans, and device context are excluded — the executor
+already distilled these into the report.
 """
 
 from schemas import GraphState
 from schemas.device_capability_profile import format_capability_profile_for_context
-from nodes.markdown_builder import MarkdownBuilder
+from src.util.xml_helpers import xml_wrap
 from src.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 def build_rca_context(state: GraphState) -> str:
-    """
-    Build the full context for root cause analysis from all investigation reports.
+    """Build the full context for root cause analysis from all investigation reports.
 
     Args:
-        state: Current workflow state with all completed investigations
+        state: Current workflow state with all completed investigations.
 
     Returns:
-        Markdown-formatted context string for the RCA LLM
+        Formatted context string for the RCA LLM.
     """
     logger.debug(
         "📋 Building RCA context: %s primary, %s context investigations",
@@ -29,65 +30,40 @@ def build_rca_context(state: GraphState) -> str:
         len(state.completed_context_investigations),
     )
 
-    builder = MarkdownBuilder()
-    builder.add_header("Root Cause Analysis Context")
+    sections = [xml_wrap("TRIGGER_CONTEXT", state.trigger_context)]
 
-    builder.add_section("Trigger Context")
-    builder.add_text(state.trigger_context)
+    primary_content = _format_reports(state.completed_primary_investigations)
+    sections.append(xml_wrap("PRIMARY_INVESTIGATION_REPORTS", primary_content))
 
-    _add_primary_reports(builder, state)
-    _add_context_reports(builder, state)
+    if state.completed_context_investigations:
+        context_content = _format_reports(state.completed_context_investigations)
+        sections.append(xml_wrap("NEIGHBOR_HEALTH_CHECK_REPORTS", context_content))
 
-    context_string = builder.build()
+    context_string = "\n\n".join(sections)
     logger.debug(
         "📤 RCA context prepared (%d characters)", len(context_string)
     )
     return context_string
 
 
-def _add_primary_reports(builder: MarkdownBuilder, state: GraphState) -> None:
-    """Add primary device investigation reports."""
-    builder.add_section("Primary Device Investigation Reports")
-
-    if not state.completed_primary_investigations:
-        builder.add_text("No primary device investigations available.")
-        return
-
-    for inv in state.completed_primary_investigations:
-        builder.add_subsection(f"{inv.device_name} (role: {inv.role})")
-        builder.add_bold_text("Status:", inv.status.value)
+def _format_reports(investigations) -> str:
+    """Format investigation final reports, one per device."""
+    parts = []
+    for inv in investigations:
         capability_context = format_capability_profile_for_context(inv.capability_profile)
+
+        lines = [f"### {inv.device_name} (role: {inv.role}, status: {inv.status.value})"]
+
         if capability_context:
-            builder.add_code_block(capability_context)
-        if inv.objective:
-            builder.add_bold_text("Objective:", inv.objective)
+            lines.append(capability_context)
+
         if inv.report:
-            builder.add_text(inv.report)
+            lines.append(inv.report)
         elif inv.error_details:
-            builder.add_bold_text("Error:", inv.error_details)
+            lines.append(f"**Error:** {inv.error_details}")
         else:
-            builder.add_text("No report available.")
-        builder.add_empty_line()
+            lines.append("No report available.")
 
+        parts.append("\n".join(lines))
 
-def _add_context_reports(builder: MarkdownBuilder, state: GraphState) -> None:
-    """Add neighbor health check reports."""
-    builder.add_section("Neighbor Health Check Reports")
-
-    if not state.completed_context_investigations:
-        builder.add_text("No neighbor health checks were performed.")
-        return
-
-    for inv in state.completed_context_investigations:
-        builder.add_subsection(f"{inv.device_name} (role: {inv.role})")
-        builder.add_bold_text("Status:", inv.status.value)
-        capability_context = format_capability_profile_for_context(inv.capability_profile)
-        if capability_context:
-            builder.add_code_block(capability_context)
-        if inv.report:
-            builder.add_text(inv.report)
-        elif inv.error_details:
-            builder.add_bold_text("Error:", inv.error_details)
-        else:
-            builder.add_text("No report available.")
-        builder.add_empty_line()
+    return "\n\n---\n\n".join(parts)

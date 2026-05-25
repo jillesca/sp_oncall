@@ -12,6 +12,7 @@ from schemas.state import Investigation
 from src.logging import get_logger
 from nodes.common import load_model, load_fast_model
 from src.util.prompt_loader import load_prompt
+from src.util.prompt_logger import log_prompt
 
 from .planning import (
     DevicePlan,
@@ -60,13 +61,28 @@ def plan_single_device(
     planning_context = build_planning_context(
         investigation, trigger_context, investigation_role
     )
+    system_prompt = load_prompt("planner")
+
+    human_message = "\n\n---\n\n".join(
+        [
+            f"request: {investigation.device_name}",
+            f"#available_plans:\n{available_skills}",
+            f"#context:\n{planning_context}",
+        ]
+    )
+    log_prompt(
+        node_name="planner",
+        system_prompt=system_prompt,
+        human_message=human_message,
+        device_name=investigation.device_name,
+    )
 
     response = execute_plan_selection(
         model,
         investigation.device_name,
         available_skills,
         planning_context,
-        load_prompt("planner"),
+        system_prompt,
     )
 
     device_plan = process_device_plan_response(

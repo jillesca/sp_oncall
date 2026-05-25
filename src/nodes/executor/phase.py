@@ -23,6 +23,7 @@ from nodes.planner.core import plan_single_device
 from schemas import Investigation, InvestigationStatus
 from schemas.assessment_schema import AssessmentOutput
 from src.util.prompt_loader import load_prompt
+from src.util.prompt_logger import log_prompt
 from src.logging import get_logger
 
 from .execution import execute_phase_investigations
@@ -78,6 +79,7 @@ async def execute_investigations(
     investigations: List[Investigation],
     trigger_context: str,
     executor_prompt: str,
+    attempt: int = 1,
 ) -> List[Investigation]:
     """Run one MCP agent for all devices in the phase (Option B).
 
@@ -97,6 +99,7 @@ async def execute_investigations(
         investigations=active,
         trigger_context=trigger_context,
         executor_prompt=executor_prompt,
+        attempt=attempt,
     )
     return executed + failed
 
@@ -105,6 +108,7 @@ def assess_investigations(
     investigations: List[Investigation],
     trigger_context: str,
     current_retry: int,
+    phase_name: str = "unknown",
 ) -> Tuple[AssessmentOutput, int]:
     """Assess whether the phase objective has been achieved for all devices.
 
@@ -121,9 +125,16 @@ def assess_investigations(
     )
     assessment_context = build_phase_assessment_context(investigations, trigger_context)
     model = load_fast_model()
-    assessment = execute_assessment(
-        model, assessment_context, load_prompt("objective_assessor")
+    system_prompt = load_prompt("objective_assessor")
+
+    log_prompt(
+        node_name=f"objective_assessor_{phase_name}",
+        system_prompt=system_prompt,
+        human_message=assessment_context,
+        attempt=current_retry + 1,
     )
+
+    assessment = execute_assessment(model, assessment_context, system_prompt)
     logger.info(
         "📋 Phase assessment: achieved=%s",
         assessment.is_objective_achieved,

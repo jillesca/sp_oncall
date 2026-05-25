@@ -13,6 +13,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from schemas import GraphState
 from nodes.common import load_model
 from src.util.prompt_loader import load_prompt
+from src.util.prompt_logger import log_prompt
 from src.logging import get_logger, log_node_execution
 
 from .context import build_rca_context
@@ -44,10 +45,17 @@ def rca_assessor_node(state: GraphState) -> GraphState:
     try:
         rca_context = build_rca_context(state)
         model = load_model()
+        system_prompt = load_prompt("rca_assessor")
+
+        log_prompt(
+            node_name="rca_assessor",
+            system_prompt=system_prompt,
+            human_message=rca_context,
+        )
 
         response = model.invoke(
             [
-                SystemMessage(content=load_prompt("rca_assessor")),
+                SystemMessage(content=system_prompt),
                 HumanMessage(content=rca_context),
             ]
         )

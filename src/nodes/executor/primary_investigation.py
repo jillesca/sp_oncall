@@ -22,7 +22,7 @@ from schemas import GraphState, Investigation
 from schemas.assessment_schema import AssessmentOutput
 from src.logging import get_logger
 
-from .context import build_primary_investigation_context
+from .context import build_neighbor_context
 from .phase import (
     plan_investigations,
     execute_investigations,
@@ -87,6 +87,7 @@ async def execute_device(state: PrimarySubgraphState) -> PrimarySubgraphState:
         investigations=state.primary_investigations,
         trigger_context=state.trigger_context,
         executor_prompt=_EXECUTOR_PROMPT,
+        attempt=state.current_retry + 1,
     )
     return replace(state, primary_investigations=executed)
 
@@ -97,6 +98,7 @@ def assess_device(state: PrimarySubgraphState) -> PrimarySubgraphState:
         investigations=state.primary_investigations,
         trigger_context=state.trigger_context,
         current_retry=state.current_retry,
+        phase_name=_INVESTIGATION_ROLE,
     )
     return replace(state, assessment=assessment, current_retry=retry_count)
 
@@ -162,13 +164,9 @@ def enrich_primary_investigations(state: GraphState) -> GraphState:
         len(completed_context),
     )
 
+    neighbor_context = build_neighbor_context(completed_context)
     enriched = [
-        replace(
-            inv,
-            device_context=build_primary_investigation_context(
-                inv.device_context, completed_context
-            ),
-        )
+        replace(inv, neighbor_context=neighbor_context)
         for inv in state.primary_investigations
     ]
     return replace(state, primary_investigations=enriched)

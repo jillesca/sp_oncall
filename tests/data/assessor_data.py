@@ -35,7 +35,7 @@ SAMPLE_INVESTIGATION_XRD2 = Investigation(
 
 SAMPLE_GRAPH_STATE_WITH_INVESTIGATIONS = GraphState(
     messages=[HumanMessage(content=SAMPLE_TRIGGER_CONTEXT)],
-    investigations=[SAMPLE_INVESTIGATION_XRD1, SAMPLE_INVESTIGATION_XRD2],
+    primary_investigations=[SAMPLE_INVESTIGATION_XRD1, SAMPLE_INVESTIGATION_XRD2],
 )
 
 SAMPLE_ASSESSMENT_OUTPUT = AssessmentOutput(
@@ -52,5 +52,4 @@ SAMPLE_ASSESSMENT_DICT = {
 
 EMPTY_GRAPH_STATE = GraphState(
     messages=[HumanMessage(content="test query")],
-    investigations=[],
 )

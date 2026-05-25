@@ -123,6 +123,10 @@ class Investigation:
         device_name: Target device identifier extracted by input validator.
         device_context: Pre-formatted prompt-ready string assembled by the input validator
                         from fresh MCP data plus stored dynamic facts and investigation history.
+                        Contains only facts about this device — never neighbor reports.
+        neighbor_context: Pre-formatted markdown of completed neighbor health check reports.
+                          Populated by enrich_primary_investigations before the primary phase.
+                          Empty for context investigations.
         role: Device role in the topology (PE, P, PCE, vRR).
         neighbors: Directly connected devices discovered during input validation.
         capability_profile: Protocol and feature flags from the get_device_profile_api MCP
@@ -138,6 +142,7 @@ class Investigation:
 
     device_name: str
     device_context: str = ""
+    neighbor_context: str = ""
     role: str = ""
     neighbors: List[str] = field(default_factory=list)
     capability_profile: Optional[DeviceCapabilityProfile] = None

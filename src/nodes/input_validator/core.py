@@ -26,6 +26,7 @@ from src.util.device_store import (
     format_history_for_context,
 )
 from nodes.common import load_fast_model
+from src.util.prompt_logger import start_run
 
 from .extraction import (
     execute_investigation_planning,
@@ -60,6 +61,7 @@ def input_validator_node(state: GraphState) -> GraphState:
         and event_type populated, or error state
     """
     try:
+        start_run()
         logger.info("🔍 Starting multi-device investigation setup")
         fast_model = load_fast_model()
         mcp_response = execute_investigation_planning(state)

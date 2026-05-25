@@ -13,6 +13,7 @@ from langchain_core.messages import HumanMessage
 from schemas import Investigation, InvestigationStatus
 from mcp_client import mcp_node
 from src.util.prompt_loader import load_prompt
+from src.util.prompt_logger import log_prompt
 from src.logging import get_logger
 
 from .context import build_phase_context
@@ -26,6 +27,7 @@ async def execute_phase_investigations(
     investigations: List[Investigation],
     trigger_context: str,
     executor_prompt: str,
+    attempt: int = 1,
 ) -> List[Investigation]:
     """Execute a phase's investigations using a single MCP agent call.
 
@@ -37,25 +39,32 @@ async def execute_phase_investigations(
         investigations: Devices to investigate in this phase.
         trigger_context: Original trigger content for prompt assembly.
         executor_prompt: Name of the prompt file to use as the system prompt.
+        attempt: Retry attempt number (1-based), used for prompt log filenames.
 
     Returns:
         Updated investigations marked completed or failed.
     """
     device_names = [inv.device_name for inv in investigations]
     logger.info(
-        "🔍 Executing phase for device(s): %s (prompt=%s)",
+        "🔍 Executing phase for device(s): %s (prompt=%s, attempt=%s)",
         device_names,
         executor_prompt,
+        attempt,
     )
 
     try:
         context = build_phase_context(investigations, trigger_context)
-        message = HumanMessage(content=context)
+        system_prompt = load_prompt(executor_prompt)
 
-        mcp_response = await mcp_node(
-            message=message,
-            system_prompt=load_prompt(executor_prompt),
+        log_prompt(
+            node_name=executor_prompt,
+            system_prompt=system_prompt,
+            human_message=context,
+            attempt=attempt,
         )
+
+        message = HumanMessage(content=context)
+        mcp_response = await mcp_node(message=message, system_prompt=system_prompt)
 
         llm_analysis, executed_tool_calls = extract_response_content(mcp_response)
         log_processed_data(llm_analysis, executed_tool_calls)

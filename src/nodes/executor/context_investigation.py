@@ -84,6 +84,7 @@ async def execute_device(state: ContextSubgraphState) -> ContextSubgraphState:
         investigations=state.context_investigations,
         trigger_context=state.trigger_context,
         executor_prompt=_EXECUTOR_PROMPT,
+        attempt=state.current_retry + 1,
     )
     return replace(state, context_investigations=executed)
 
@@ -94,6 +95,7 @@ def assess_device(state: ContextSubgraphState) -> ContextSubgraphState:
         investigations=state.context_investigations,
         trigger_context=state.trigger_context,
         current_retry=state.current_retry,
+        phase_name=_INVESTIGATION_ROLE,
     )
     return replace(state, assessment=assessment, current_retry=retry_count)
 

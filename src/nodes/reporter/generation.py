@@ -4,6 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.language_models import BaseChatModel
 
 from src.util.prompt_loader import load_prompt
+from src.util.prompt_logger import log_prompt
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -22,8 +23,16 @@ def generate_report(model: BaseChatModel, report_context: str) -> str:
     """
     logger.debug("🚀 Generating final report from LLM")
 
+    system_prompt = load_prompt("report_generator")
+
+    log_prompt(
+        node_name="report_generator",
+        system_prompt=system_prompt,
+        human_message=report_context,
+    )
+
     messages = [
-        SystemMessage(content=load_prompt("report_generator")),
+        SystemMessage(content=system_prompt),
         HumanMessage(content=report_context),
     ]
 
