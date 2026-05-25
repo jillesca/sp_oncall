@@ -31,5 +31,12 @@ Return a structured list. For each device:
 - `type_model`: device type and model (e.g. "Cisco IOS-XR Router")
 - `role`: network role (PE, P, PCE, vRR, or the discovered role)
 - `neighbors`: Optional. list of directly connected device names
+- `capability_profile`: Optional. Extract from the `get_device_profile_api` response if available, otherwise omit (null). Fields:
+  - `nos`: Network Operating System variant (e.g. `"iosxr"`, `"iosxe"`, `"nxos"`)
+  - `is_mpls_enabled`: true/false
+  - `is_isis_enabled`: true/false
+  - `is_bgp_l3vpn_enabled`: true/false
+  - `is_route_reflector`: true/false
+  - `has_vpn_ipv4_unicast_bgp`: true/false
 
 Do not create an investigation plan — that is the responsibility of another agent that will be called after you.

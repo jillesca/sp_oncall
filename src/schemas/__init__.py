@@ -5,6 +5,7 @@ throughout the application (graph state, planner output, assessor output, etc.).
 """
 
 from .assessment_schema import AssessmentOutput
+from .device_capability_profile import DeviceCapabilityProfile
 from .state import (
     GraphState,
     ExecutedToolCall,
@@ -16,6 +17,7 @@ from .learning_insights_schema import LearningInsights
 __all__ = [
     "GraphState",
     "AssessmentOutput",
+    "DeviceCapabilityProfile",
     "ExecutedToolCall",
     "Investigation",
     "InvestigationStatus",

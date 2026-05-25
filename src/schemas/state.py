@@ -13,6 +13,8 @@ from typing import List, Dict, Any, Optional, Annotated
 from langchain_core.messages import AnyMessage, HumanMessage
 from langgraph.graph.message import add_messages
 
+from .device_capability_profile import DeviceCapabilityProfile
+
 
 @dataclass
 class GraphState:
@@ -123,6 +125,9 @@ class Investigation:
                         from fresh MCP data plus stored dynamic facts and investigation history.
         role: Device role in the topology (PE, P, PCE, vRR).
         neighbors: Directly connected devices discovered during input validation.
+        capability_profile: Protocol and feature flags from the get_device_profile_api MCP
+                            call. None when the MCP call returned no data. Carried through
+                            the graph so the reporter can persist it to static_facts.
         objective: Specific objective for this device investigation.
         working_plan_steps: Ordered execution steps tailored to this device.
         execution_results: Results from executing plan steps on this device.
@@ -135,6 +140,7 @@ class Investigation:
     device_context: str = ""
     role: str = ""
     neighbors: List[str] = field(default_factory=list)
+    capability_profile: Optional[DeviceCapabilityProfile] = None
     objective: Optional[str] = None
     working_plan_steps: str = ""
     execution_results: List["ExecutedToolCall"] = field(default_factory=list)

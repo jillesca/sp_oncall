@@ -6,6 +6,7 @@ rca_assessor_node to synthesize a definitive root cause determination.
 """
 
 from schemas import GraphState
+from schemas.device_capability_profile import format_capability_profile_for_context
 from nodes.markdown_builder import MarkdownBuilder
 from src.logging import get_logger
 
@@ -55,6 +56,9 @@ def _add_primary_reports(builder: MarkdownBuilder, state: GraphState) -> None:
     for inv in state.completed_primary_investigations:
         builder.add_subsection(f"{inv.device_name} (role: {inv.role})")
         builder.add_bold_text("Status:", inv.status.value)
+        capability_context = format_capability_profile_for_context(inv.capability_profile)
+        if capability_context:
+            builder.add_code_block(capability_context)
         if inv.objective:
             builder.add_bold_text("Objective:", inv.objective)
         if inv.report:
@@ -77,6 +81,9 @@ def _add_context_reports(builder: MarkdownBuilder, state: GraphState) -> None:
     for inv in state.completed_context_investigations:
         builder.add_subsection(f"{inv.device_name} (role: {inv.role})")
         builder.add_bold_text("Status:", inv.status.value)
+        capability_context = format_capability_profile_for_context(inv.capability_profile)
+        if capability_context:
+            builder.add_code_block(capability_context)
         if inv.report:
             builder.add_text(inv.report)
         elif inv.error_details:

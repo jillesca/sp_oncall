@@ -69,12 +69,32 @@ topology-agnostic.
 Two layers:
 
 - **Static facts** — role, IGP area, BGP AS, direct neighbours with interface names,
-  topology position. Discovered on first investigation via gNMIBuddy and cached.
+  topology position, and capability profile. Discovered on first investigation via
+  gNMIBuddy and cached.
 - **Dynamic facts** — last alert seen, last known issue, confirmed healthy/degraded
   state. Updated by the reporter at the end of each Run.
 
 Profiles build up organically: the first Run for a device is a discovery run; subsequent
 Runs benefit from cached profile data.
+
+---
+
+## Device Capability Profile
+
+Structured protocol and feature flags for a device, sourced from the `get_device_profile_api`
+MCP call during device discovery. Captures what the device *runs*, as opposed to what the
+device *is* (topology position and role).
+
+Fields: `nos` (Network OS variant), `is_mpls_enabled`, `is_isis_enabled`,
+`is_bgp_l3vpn_enabled`, `is_route_reflector`, `has_vpn_ipv4_unicast_bgp`.
+
+Treated as **static facts** — infrequently changing, same category as role and neighbours.
+Always sourced fresh from the current run's MCP data and formatted into `device_context`
+for prompt injection. Never read back from the store into prompts. Persisted to the store
+by the reporter at end of run so future runs have a cached copy.
+
+When the MCP call returns no data the profile is absent (`None`) and the `Device Capabilities`
+section is omitted from `device_context` entirely.
 
 ---
 

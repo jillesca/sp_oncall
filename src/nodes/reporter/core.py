@@ -97,10 +97,7 @@ def _persist_investigation_results(state: GraphState) -> None:
         update_device_profile(
             store,
             investigation.device_name,
-            static_facts={
-                "role": investigation.role,
-                "neighbors": investigation.neighbors,
-            },
+            static_facts=_build_static_facts(investigation),
             dynamic_facts={
                 "last_alert": state.trigger_context[:500],
                 "last_known_state": investigation.status.value,
@@ -115,6 +112,33 @@ def _persist_investigation_results(state: GraphState) -> None:
             "💾 Persisted facts and history for device: %s",
             investigation.device_name,
         )
+
+
+def _build_static_facts(investigation) -> dict:
+    """Assemble static_facts dict from an investigation for store persistence.
+
+    Capability profile fields are included when the profile was discovered,
+    so future runs have cached protocol/feature context alongside topology.
+    """
+    facts = {
+        "role": investigation.role,
+        "neighbors": investigation.neighbors,
+    }
+
+    if investigation.capability_profile is not None:
+        profile = investigation.capability_profile
+        facts.update(
+            {
+                "nos": profile.nos,
+                "is_mpls_enabled": profile.is_mpls_enabled,
+                "is_isis_enabled": profile.is_isis_enabled,
+                "is_bgp_l3vpn_enabled": profile.is_bgp_l3vpn_enabled,
+                "is_route_reflector": profile.is_route_reflector,
+                "has_vpn_ipv4_unicast_bgp": profile.has_vpn_ipv4_unicast_bgp,
+            }
+        )
+
+    return facts
 
 
 def _log_successful_report_generation(report: str) -> None:

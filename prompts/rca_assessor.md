@@ -21,6 +21,7 @@ Analyze all reports together and determine:
 - If the reports are contradictory or insufficient to determine a root cause, state that clearly and explain what additional investigation would be needed.
 - Be specific: name devices, interfaces, protocol sessions, and error codes where the data supports it.
 - Keep the root cause statement concise — one to three sentences. Expand in the evidence section.
+- Respect Device Capabilities: each device report includes a `Device Capabilities` block. If a protocol is listed as `disabled` on a device, do not treat its absence as a finding, do not count it as a gap, and do not reduce confidence because of it — it was never configured on that device.
 
 ## Output Structure
 

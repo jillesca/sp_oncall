@@ -17,6 +17,7 @@ from typing import Optional, List, Tuple
 from langgraph.config import get_store
 
 from schemas.state import GraphState, Investigation
+from schemas.device_capability_profile import format_capability_profile_for_context
 from src.logging import get_logger, log_node_execution
 from src.util.device_store import (
     get_device_profile,
@@ -132,12 +133,13 @@ def _hydrate_single_investigation(
     device_context = _build_device_context(device, profile, history)
 
     logger.debug(
-        "  ✅ Hydrated investigation for %s (role=%s, neighbors=%s, has_history=%s, is_primary=%s)",
+        "  ✅ Hydrated investigation for %s (role=%s, neighbors=%s, has_history=%s, is_primary=%s, has_capability_profile=%s)",
         device.device_name,
         device.role or "unknown",
         device.neighbors,
         bool(history),
         device.is_primary,
+        device.capability_profile is not None,
     )
 
     return Investigation(
@@ -145,6 +147,7 @@ def _hydrate_single_investigation(
         device_context=device_context,
         role=device.role,
         neighbors=device.neighbors,
+        capability_profile=device.capability_profile,
     )
 
 
@@ -153,11 +156,15 @@ def _build_device_context(
 ) -> str:
     """Assemble device_context from fresh MCP data and stored historical context.
 
-    Static topology (type, role, neighbors) always comes from the current MCP
-    response. The store contributes only dynamic facts and investigation history
-    to avoid stale topology data.
+    Static topology (type, role, neighbors) and capability profile always come
+    from the current MCP response. The store contributes only dynamic facts and
+    investigation history to avoid stale topology data.
     """
     sections = [_format_mcp_device_section(device)]
+
+    capability_context = format_capability_profile_for_context(device.capability_profile)
+    if capability_context:
+        sections.append(capability_context)
 
     dynamic_context = format_dynamic_facts_for_context(profile)
     if dynamic_context:
