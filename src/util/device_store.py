@@ -5,7 +5,7 @@ Provides read/write access to per-device profiles persisted across graph runs.
 Profiles hold both stable device metadata (static_facts) and recent investigation
 findings (dynamic_facts), enabling historical context across alert threads.
 History tracks the last N investigation summaries per device, surfaced as
-"previous findings" when the executor builds context for a new investigation.
+investigation history when the executor builds context for a new investigation.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import Any
 from langgraph.store.base import BaseStore
 
 from src.logging import get_logger
+from src.util.xml_helpers import xml_wrap
 
 logger = get_logger(__name__)
 
@@ -95,9 +96,9 @@ def update_device_profile(
 
 
 def format_dynamic_facts_for_context(profile: dict[str, Any]) -> str:
-    """Format stored dynamic facts as human-readable text for prompt injection.
+    """Format stored dynamic facts as XML-wrapped text for prompt injection.
 
-    Only formats dynamic_facts (recent investigation findings). Static facts are
+    Only formats dynamic_facts (recent investigation outcome). Static facts are
     always sourced fresh from MCP discovery and never read back from the store
     into prompts to avoid stale topology data.
 
@@ -105,7 +106,7 @@ def format_dynamic_facts_for_context(profile: dict[str, Any]) -> str:
         profile: Profile dict from get_device_profile
 
     Returns:
-        Formatted string for inclusion in investigation context, or empty string
+        XML-wrapped string for inclusion in investigation context, or empty string
         if no dynamic facts exist.
     """
     if not profile:
@@ -115,11 +116,11 @@ def format_dynamic_facts_for_context(profile: dict[str, Any]) -> str:
     if not dynamic:
         return ""
 
-    lines = ["Previous Investigation Context:"]
+    lines = []
     for key, value in dynamic.items():
         lines.append(f"  {key}: {value}")
 
-    return "\n".join(lines)
+    return xml_wrap("DEVICE_PROFILE", "\n".join(lines))
 
 
 def get_device_history(
@@ -200,19 +201,19 @@ def build_history_summary(status: str, report: str | None) -> dict[str, Any]:
 
 
 def format_history_for_context(history: list[dict[str, Any]]) -> str:
-    """Format device investigation history as human-readable text for prompt injection.
+    """Format device investigation history as XML-wrapped text for prompt injection.
 
     Args:
         history: List of history entry dicts from get_device_history
 
     Returns:
-        Formatted string for inclusion in investigation context, or empty string
+        XML-wrapped string for inclusion in investigation context, or empty string
         if history is empty.
     """
     if not history:
         return ""
 
-    lines = ["Previous Investigation Findings:"]
+    lines = []
     for i, entry in enumerate(history, start=1):
         timestamp = entry.get("timestamp", "unknown")
         status = entry.get("status", "unknown")
@@ -220,4 +221,4 @@ def format_history_for_context(history: list[dict[str, Any]]) -> str:
         lines.append(f"  [{i}] {timestamp} (status: {status}):")
         lines.append(f"    {summary}")
 
-    return "\n".join(lines)
+    return xml_wrap("INVESTIGATION_HISTORY", "\n".join(lines))

@@ -22,7 +22,6 @@ from schemas import GraphState, Investigation
 from schemas.assessment_schema import AssessmentOutput
 from src.logging import get_logger
 
-from .context import build_neighbor_context
 from .phase import (
     plan_investigations,
     execute_investigations,
@@ -144,29 +143,24 @@ primary_investigation_subgraph = _workflow.compile()
 
 
 def enrich_primary_investigations(state: GraphState) -> GraphState:
-    """Inject completed context findings into each primary investigation's device context.
+    """Inject the context phase report into each primary investigation.
 
     Runs as a regular parent-graph node between context_investigation and
-    primary_investigation.  This gives the primary executor full situational
-    awareness of what the context phase discovered about the network neighbors
-    before it starts planning and executing.
+    primary_investigation.  The context_phase_report is a single combined
+    output covering all neighbor devices; it is injected verbatim into every
+    primary investigation's neighbor_context so the primary executor has full
+    situational awareness of the neighbor health check findings.
     """
-    completed_context = [
-        inv for inv in state.completed_context_investigations if inv.report
-    ]
-    if not completed_context:
-        logger.info("ℹ️ No context findings to inject into primary investigations")
+    if not state.context_phase_report:
+        logger.info("ℹ️ No context phase report to inject into primary investigations")
         return state
 
     logger.info(
-        "🔗 Enriching %s primary investigation(s) with %s context report(s)",
+        "🔗 Enriching %s primary investigation(s) with context phase report",
         len(state.primary_investigations),
-        len(completed_context),
     )
-
-    neighbor_context = build_neighbor_context(completed_context)
     enriched = [
-        replace(inv, neighbor_context=neighbor_context)
+        replace(inv, neighbor_context=state.context_phase_report)
         for inv in state.primary_investigations
     ]
     return replace(state, primary_investigations=enriched)

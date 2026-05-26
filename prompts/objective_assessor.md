@@ -2,10 +2,13 @@ You are assessing whether a completed device investigation met its objective. De
 
 ## What You Receive
 
-For each investigated device, wrapped in `<INVESTIGATION>` tags:
 - `<TRIGGER_CONTEXT>` — the alert or query that initiated this investigation
-- The investigation objective
-- The investigation report (the executor's final output)
+
+**For phases where each device has its own report** (primary phase):
+- One `<INVESTIGATION>` block per device containing the objective and the investigation report
+
+**For phases with a single combined report** (context/neighbor phase):
+- One `<PHASE_REPORT>` block listing all device objectives and the single combined report that covers all devices at once
 
 ## Assessment Rules
 

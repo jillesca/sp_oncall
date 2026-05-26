@@ -44,7 +44,8 @@ class ContextSubgraphState:
       - context_investigations   ← read from parent (set by input_validator)
       - trigger_context          ← read from parent
       - event_type               ← read from parent
-      - completed_context_investigations → merged into parent via operator.add
+      - completed_context_investigations → written to parent via replace-wins reducer
+      - context_phase_report     → written to parent (single combined executor output)
     """
 
     context_investigations: List[Investigation]
@@ -56,6 +57,7 @@ class ContextSubgraphState:
     completed_context_investigations: List[Investigation] = field(
         default_factory=list
     )
+    context_phase_report: str = ""
 
 
 def plan_device(state: ContextSubgraphState) -> ContextSubgraphState:
@@ -101,18 +103,26 @@ def assess_device(state: ContextSubgraphState) -> ContextSubgraphState:
 
 
 def collect_device_result(state: ContextSubgraphState) -> ContextSubgraphState:
-    """Write completed investigations to the output field.
+    """Write completed investigations and the combined phase report to the output fields.
 
-    LangGraph merges completed_context_investigations into GraphState via the
-    operator.add reducer when this sub-graph exits.
+    The context executor produces one combined report for all context devices.
+    That report is stored in context_phase_report so downstream nodes (RCA, reporter,
+    primary enrichment) can reference it without iterating and duplicating across
+    the per-device Investigation objects.
     """
     logger.info(
         "📦 Collecting %s context investigation result(s)",
         len(state.context_investigations),
     )
+    combined_report = (
+        state.context_investigations[0].report
+        if state.context_investigations
+        else ""
+    )
     return replace(
         state,
         completed_context_investigations=state.context_investigations,
+        context_phase_report=combined_report or "",
     )
 
 

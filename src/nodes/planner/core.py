@@ -13,6 +13,7 @@ from src.logging import get_logger
 from nodes.common import load_model, load_fast_model
 from src.util.prompt_loader import load_prompt
 from src.util.prompt_logger import log_prompt
+from src.util.xml_helpers import xml_wrap
 
 from .planning import (
     DevicePlan,
@@ -63,11 +64,11 @@ def plan_single_device(
     )
     system_prompt = load_prompt("planner")
 
-    human_message = "\n\n---\n\n".join(
+    human_message = "\n\n".join(
         [
-            f"request: {investigation.device_name}",
-            f"#available_plans:\n{available_skills}",
-            f"#context:\n{planning_context}",
+            xml_wrap("INVESTIGATION_REQUEST", investigation.device_name),
+            xml_wrap("AVAILABLE_PLANS", available_skills),
+            xml_wrap("INVESTIGATION_CONTEXT", planning_context),
         ]
     )
     log_prompt(

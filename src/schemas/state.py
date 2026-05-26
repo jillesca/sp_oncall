@@ -5,7 +5,6 @@ Define the state structures for the agent.
 from __future__ import annotations
 
 import json
-import operator
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import List, Dict, Any, Optional, Annotated
@@ -14,6 +13,17 @@ from langchain_core.messages import AnyMessage, HumanMessage
 from langgraph.graph.message import add_messages
 
 from .device_capability_profile import DeviceCapabilityProfile
+
+
+def _replace_list(_existing: list, new: list) -> list:
+    """Replace-wins reducer: always take the incoming value.
+
+    Prevents accumulation across graph runs. Nodes that carry state forward
+    via replace(state, ...) pass the existing list as the new value, so the
+    result is unchanged. The reporter clears these fields by returning a fresh
+    GraphState with the default empty list.
+    """
+    return new
 
 
 @dataclass
@@ -31,14 +41,18 @@ class GraphState:
                     queries.
         root_cause: Root cause analysis produced by the rca_assessor_node after
                     all investigations complete.
-        completed_context_investigations: Completed context device results produced
-                                          by the context_investigation subgraph.
-                                          Uses operator.add so subgraph output is
-                                          appended rather than overwritten.
+        context_phase_report: Single combined report produced by the context
+                              executor covering all neighbor devices at once.
+                              Set by collect_device_result in the context subgraph.
+                              Used by downstream nodes instead of iterating
+                              completed_context_investigations for report content.
+        completed_context_investigations: Completed context Investigation objects
+                                          from the context subgraph. Carries device
+                                          metadata (name, role, capability_profile,
+                                          status) but not used for report content
+                                          — use context_phase_report instead.
         completed_primary_investigations: Completed primary device results produced
                                           by the primary_investigation subgraph.
-                                          Uses operator.add so subgraph output is
-                                          appended rather than overwritten.
     """
 
     messages: Annotated[List[AnyMessage], add_messages] = field(
@@ -48,11 +62,12 @@ class GraphState:
     context_investigations: List[Investigation] = field(default_factory=list)
     event_type: Optional[str] = None
     root_cause: Optional[str] = None
+    context_phase_report: str = ""
     completed_context_investigations: Annotated[
-        List[Investigation], operator.add
+        List[Investigation], _replace_list
     ] = field(default_factory=list)
     completed_primary_investigations: Annotated[
-        List[Investigation], operator.add
+        List[Investigation], _replace_list
     ] = field(default_factory=list)
 
     @property

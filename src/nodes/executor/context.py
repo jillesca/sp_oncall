@@ -46,12 +46,24 @@ def build_phase_context(
     return "\n\n".join(sections)
 
 
-def _build_neighbor_results_section(investigations: List[Investigation]) -> str:
-    """Return the NEIGHBOR_HEALTH_CHECK_RESULTS section, or empty string if absent."""
-    neighbor_parts = [inv.neighbor_context for inv in investigations if inv.neighbor_context]
-    if not neighbor_parts:
+def _build_neighbor_results_section(
+    investigations: List[Investigation],
+) -> str:
+    """Return the NEIGHBOR_HEALTH_CHECK_RESULTS section, or empty string if absent.
+
+    All primary investigations share the same context_phase_report as their
+    neighbor_context. Deduplication ensures the combined report appears once
+    even when multiple primary devices are investigated.
+    """
+    seen: set = set()
+    parts = []
+    for inv in investigations:
+        if inv.neighbor_context and inv.neighbor_context not in seen:
+            seen.add(inv.neighbor_context)
+            parts.append(inv.neighbor_context)
+    if not parts:
         return ""
-    return xml_wrap("NEIGHBOR_HEALTH_CHECK_RESULTS", "\n\n".join(neighbor_parts))
+    return xml_wrap("NEIGHBOR_HEALTH_CHECK_RESULTS", "\n\n".join(parts))
 
 
 def _build_device_section(inv: Investigation) -> str:
@@ -62,26 +74,11 @@ def _build_device_section(inv: Investigation) -> str:
     ]
 
     if inv.working_plan_steps:
-        lines.append("\n**Working Plan Steps:**")
         lines.append(xml_wrap("WORKING_PLAN", inv.working_plan_steps))
 
     lines.append(xml_wrap("DEVICE_CONTEXT", inv.device_context))
-    lines.append(f"</DEVICE>")
+    lines.append("</DEVICE>")
 
     return "\n".join(lines)
 
 
-def build_neighbor_context(
-    completed_context_investigations: List[Investigation],
-) -> str:
-    """Format completed neighbor health check reports into a markdown string.
-
-    Produces the content that goes inside <NEIGHBOR_HEALTH_CHECK_RESULTS>.
-    Called by enrich_primary_investigations before the primary phase launches.
-    """
-    lines = []
-    for inv in completed_context_investigations:
-        lines.append(f"### {inv.device_name} (role={inv.role})")
-        lines.append(inv.report or "No report available.")
-        lines.append("")
-    return "\n".join(lines)
