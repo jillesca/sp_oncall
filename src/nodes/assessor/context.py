@@ -5,13 +5,10 @@ The assessor only needs to know whether the investigation report addresses
 the objective — it does not need raw tool call JSON or full device context.
 Keeping the context minimal reduces noise and token cost.
 
-For the context phase, the executor produces ONE combined report for all
-neighbor devices.  In that case all Investigation objects share the same
-report text, so we present it once inside a PHASE_REPORT block rather than
-repeating it per device.
+The executor produces ONE combined report for all devices in the phase.
+Device plans (objectives and steps) are shown alongside the report so the
+assessor can verify each device's objective was addressed.
 """
-
-from typing import List
 
 from schemas.state import Investigation
 from src.util.xml_helpers import xml_wrap
@@ -21,21 +18,17 @@ logger = get_logger(__name__)
 
 
 def build_phase_assessment_context(
-    investigations: List[Investigation],
+    investigation: Investigation,
     trigger_context: str,
 ) -> str:
-    """Build minimal assessment context for all devices in a phase.
+    """Build minimal assessment context for the phase investigation.
 
-    Passes only what the assessor needs: trigger, objective, and the final
-    report. Raw tool call results are excluded — they are too noisy and the
-    assessor cannot act on them.
-
-    When all investigations share the same report (combined context phase
-    output), the report is shown once in a PHASE_REPORT block to avoid
-    redundant duplication.
+    Passes only what the assessor needs: trigger, per-device plans
+    (which include objectives), and the final combined report.
+    Raw tool call results are excluded — too noisy, assessor cannot act on them.
 
     Args:
-        investigations: All device investigations in the phase.
+        investigation: The phase investigation to assess.
         trigger_context: Original trigger content.
 
     Returns:
@@ -43,16 +36,11 @@ def build_phase_assessment_context(
     """
     logger.debug(
         "📋 Building phase assessment context for %s device(s)",
-        len(investigations),
+        len(investigation.device_contexts),
     )
 
     sections = [xml_wrap("TRIGGER_CONTEXT", trigger_context)]
-
-    if _is_combined_phase_report(investigations):
-        sections.append(_format_combined_phase_assessment(investigations))
-    else:
-        for inv in investigations:
-            sections.append(_format_investigation_summary(inv))
+    sections.append(_format_phase_assessment_block(investigation))
 
     context_string = "\n\n".join(sections)
     logger.debug(
@@ -61,48 +49,25 @@ def build_phase_assessment_context(
     return context_string
 
 
-def _is_combined_phase_report(investigations: List[Investigation]) -> bool:
-    """True when all investigations share one combined report (context phase pattern)."""
-    if len(investigations) <= 1:
-        return False
-    reports = [inv.report for inv in investigations if inv.report]
-    return len(reports) == len(investigations) and len(set(reports)) == 1
+def _format_phase_assessment_block(investigation: Investigation) -> str:
+    """Format the combined phase assessment block for the assessor."""
+    plan_lines = []
+    for device_name, plan in investigation.device_plans.items():
+        plan_lines.append(f"<DEVICE name=\"{device_name}\">")
+        plan_lines.append(plan or "No plan available.")
+        plan_lines.append("</DEVICE>")
 
+    plan_section = "\n".join(plan_lines) if plan_lines else "No device plans available."
 
-def _format_combined_phase_assessment(investigations: List[Investigation]) -> str:
-    """Format a combined phase report for the assessor — show the shared report once."""
-    objectives = "\n".join(
-        f"- **{inv.device_name}** ({inv.role}): {inv.objective or 'Not specified'}"
-        for inv in investigations
-    )
-    report = investigations[0].report
+    report = investigation.report or "No report available."
+
     lines = [
-        "<PHASE_REPORT>",
-        "**Devices and Objectives:**",
-        objectives,
+        "<PHASE_ASSESSMENT>",
+        "**Investigation Plans (one per device):**",
+        plan_section,
         "",
-        "**Combined Report:**",
+        "**Combined Report (covers all devices above):**",
         report,
-        "</PHASE_REPORT>",
+        "</PHASE_ASSESSMENT>",
     ]
-    return "\n".join(lines)
-
-
-def _format_investigation_summary(investigation: Investigation) -> str:
-    """Format only the essential investigation fields for the assessor."""
-    lines = [
-        f"<INVESTIGATION device=\"{investigation.device_name}\" role=\"{investigation.role}\">",
-        f"**Objective:** {investigation.objective or 'Not specified'}",
-        "",
-    ]
-
-    if investigation.report:
-        lines.append("**Report:**")
-        lines.append(investigation.report)
-    elif investigation.error_details:
-        lines.append(f"**Error:** {investigation.error_details}")
-    else:
-        lines.append("**Report:** No report available.")
-
-    lines.append("</INVESTIGATION>")
     return "\n".join(lines)

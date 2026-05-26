@@ -8,7 +8,6 @@ from nodes import (
 )
 from nodes.executor import (
     context_investigation_subgraph,
-    enrich_primary_investigations,
     primary_investigation_subgraph,
 )
 from schemas import GraphState
@@ -27,14 +26,10 @@ orchestrator = StateGraph(
     state_schema=GraphState, context_schema=Configuration
 )
 
-orchestrator.set_entry_point(key="input_validator_node")
 
 orchestrator.add_node(node="input_validator_node", action=input_validator_node)
 orchestrator.add_node(
     node="context_investigation", action=context_investigation_subgraph
-)
-orchestrator.add_node(
-    node="enrich_primary_investigations", action=enrich_primary_investigations
 )
 orchestrator.add_node(
     node="primary_investigation", action=primary_investigation_subgraph
@@ -44,14 +39,12 @@ orchestrator.add_node(
     node="report_generator", action=investigation_report_node
 )
 
+orchestrator.set_entry_point(key="input_validator_node")
 orchestrator.add_edge(
     start_key="input_validator_node", end_key="context_investigation"
 )
 orchestrator.add_edge(
-    start_key="context_investigation", end_key="enrich_primary_investigations"
-)
-orchestrator.add_edge(
-    start_key="enrich_primary_investigations", end_key="primary_investigation"
+    start_key="context_investigation", end_key="primary_investigation"
 )
 orchestrator.add_edge(
     start_key="primary_investigation", end_key="rca_assessor_node"
@@ -65,6 +58,6 @@ app = orchestrator.compile(store=InMemoryStore())
 
 logger.info(
     "✅ LangGraph workflow compiled: "
-    "input_validator → context_investigation → enrich_primary_investigations "
+    "input_validator → context_investigation "
     "→ primary_investigation → rca_assessor → report_generator"
 )

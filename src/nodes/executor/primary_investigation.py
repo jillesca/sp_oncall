@@ -1,14 +1,16 @@
 """
-Primary investigation sub-graph and pre-investigation enrichment.
+Primary investigation sub-graph.
 
 Encapsulates the plan → execute → assess → retry loop for ALL primary devices
-(usually one) in a single sub-graph instance.  Before the sub-graph is invoked,
-the parent graph runs enrich_primary_investigations to inject context phase
-findings into each primary investigation's device context.
+in a single sub-graph instance.  One MCP agent call handles every primary
+device so the agent can investigate them holistically.
 
-Exported:
-  - primary_investigation_subgraph : compiled sub-graph (subgraph-as-node)
-  - enrich_primary_investigations  : parent-graph node (runs before the sub-graph)
+The context_phase_report is automatically mapped from GraphState by LangGraph
+(matching field name), so the primary executor receives neighbor health check
+findings without a separate enrichment node.
+
+Exported as a compiled sub-graph that the parent graph adds as a node
+(subgraph-as-node pattern).
 """
 
 from __future__ import annotations
@@ -18,8 +20,7 @@ from typing import List, Optional
 
 from langgraph.graph import StateGraph, END
 
-from schemas import GraphState, Investigation
-from schemas.assessment_schema import AssessmentOutput
+from schemas import Investigation
 from src.logging import get_logger
 
 from .phase import (
@@ -43,18 +44,20 @@ class PrimarySubgraphState:
 
     Field names match GraphState so LangGraph automatically maps them when
     this compiled sub-graph is used as a node in the parent graph:
-      - primary_investigations          ← read from parent (already enriched)
-      - trigger_context                 ← read from parent
+      - primary_investigations          ← read from parent (already set)
+      - trigger_context                 ← read from parent (property → field mapping)
+      - context_phase_report            ← read from parent (neighbor findings)
       - event_type                      ← read from parent
-      - completed_primary_investigations → merged into parent via operator.add
+      - completed_primary_investigations → written to parent via replace-wins reducer
     """
 
     primary_investigations: List[Investigation]
     trigger_context: str
+    context_phase_report: str = ""
     event_type: Optional[str] = None
     max_retries: int = 3
     current_retry: int = 0
-    assessment: Optional[AssessmentOutput] = None
+    assessment_passed: Optional[bool] = None
     completed_primary_investigations: List[Investigation] = field(
         default_factory=list
     )
@@ -62,55 +65,73 @@ class PrimarySubgraphState:
 
 def plan_device(state: PrimarySubgraphState) -> PrimarySubgraphState:
     """Generate investigation plans for all primary devices."""
+    if not state.primary_investigations:
+        logger.warning("⚠️ No primary investigation found — skipping planning")
+        return state
+
     logger.info(
         "📋 Planning primary phase for %s device(s)",
-        len(state.primary_investigations),
+        len(state.primary_investigations[0].device_contexts),
     )
     planned = plan_investigations(
-        investigations=state.primary_investigations,
+        investigation=state.primary_investigations[0],
         trigger_context=state.trigger_context,
         investigation_role=_INVESTIGATION_ROLE,
         event_type=state.event_type,
     )
-    return replace(state, primary_investigations=planned)
+    return replace(state, primary_investigations=[planned])
 
 
 async def execute_device(state: PrimarySubgraphState) -> PrimarySubgraphState:
     """Run one MCP agent for all primary devices."""
+    if not state.primary_investigations:
+        logger.warning("⚠️ No primary investigation found — skipping execution")
+        return state
+
     logger.info(
         "🔁 Executing primary phase (attempt %s/%s)",
         state.current_retry + 1,
         state.max_retries,
     )
     executed = await execute_investigations(
-        investigations=state.primary_investigations,
+        investigation=state.primary_investigations[0],
         trigger_context=state.trigger_context,
         executor_prompt=_EXECUTOR_PROMPT,
+        context_phase_report=state.context_phase_report,
         attempt=state.current_retry + 1,
     )
-    return replace(state, primary_investigations=executed)
+    return replace(state, primary_investigations=[executed])
 
 
 def assess_device(state: PrimarySubgraphState) -> PrimarySubgraphState:
     """Assess whether all primary device objectives have been achieved."""
-    assessment, retry_count = assess_investigations(
-        investigations=state.primary_investigations,
+    if not state.primary_investigations:
+        logger.warning("⚠️ No primary investigation found — marking as passed")
+        return replace(state, assessment_passed=True)
+
+    passed, retry_count = assess_investigations(
+        investigation=state.primary_investigations[0],
         trigger_context=state.trigger_context,
         current_retry=state.current_retry,
         phase_name=_INVESTIGATION_ROLE,
     )
-    return replace(state, assessment=assessment, current_retry=retry_count)
+    return replace(state, assessment_passed=passed, current_retry=retry_count)
 
 
 def collect_device_result(state: PrimarySubgraphState) -> PrimarySubgraphState:
-    """Write completed investigations to the output field.
+    """Write completed investigation to the output field.
 
     LangGraph merges completed_primary_investigations into GraphState via the
-    operator.add reducer when this sub-graph exits.
+    replace-wins reducer when this sub-graph exits.
     """
+    if not state.primary_investigations:
+        logger.warning("⚠️ No primary investigation to collect")
+        return state
+
+    investigation = state.primary_investigations[0]
     logger.info(
-        "📦 Collecting %s primary investigation result(s)",
-        len(state.primary_investigations),
+        "📦 Collecting primary investigation result for %s device(s)",
+        len(investigation.device_contexts),
     )
     return replace(
         state,
@@ -120,7 +141,7 @@ def collect_device_result(state: PrimarySubgraphState) -> PrimarySubgraphState:
 
 def should_retry(state: PrimarySubgraphState) -> str:
     """Decide whether to retry execution or proceed to result collection."""
-    return decide_retry(state.assessment, state.current_retry, state.max_retries)
+    return decide_retry(state.assessment_passed, state.current_retry, state.max_retries)
 
 
 _workflow = StateGraph(PrimarySubgraphState)
@@ -140,27 +161,3 @@ _workflow.add_conditional_edges(
 _workflow.add_edge("collect_device_result", END)
 
 primary_investigation_subgraph = _workflow.compile()
-
-
-def enrich_primary_investigations(state: GraphState) -> GraphState:
-    """Inject the context phase report into each primary investigation.
-
-    Runs as a regular parent-graph node between context_investigation and
-    primary_investigation.  The context_phase_report is a single combined
-    output covering all neighbor devices; it is injected verbatim into every
-    primary investigation's neighbor_context so the primary executor has full
-    situational awareness of the neighbor health check findings.
-    """
-    if not state.context_phase_report:
-        logger.info("ℹ️ No context phase report to inject into primary investigations")
-        return state
-
-    logger.info(
-        "🔗 Enriching %s primary investigation(s) with context phase report",
-        len(state.primary_investigations),
-    )
-    enriched = [
-        replace(inv, neighbor_context=state.context_phase_report)
-        for inv in state.primary_investigations
-    ]
-    return replace(state, primary_investigations=enriched)

@@ -163,21 +163,21 @@ def _log_node_success(
         primary_count = len(
             getattr(result_state, "completed_primary_investigations", []) or []
         )
-        context_count = len(
-            getattr(result_state, "completed_context_investigations", []) or []
+        context_device_count = len(
+            getattr(result_state, "context_device_names", []) or []
         )
         root_cause_set = bool(getattr(result_state, "root_cause", None))
 
         logger.info(
-            "📤 %s Result: completed_primary=%s, completed_context=%s, root_cause_set=%s",
+            "📤 %s Result: completed_primary=%s, context_devices=%s, root_cause_set=%s",
             node_name,
             primary_count,
-            context_count,
+            context_device_count,
             root_cause_set,
             extra={
                 "node_name": node_name,
                 "completed_primary_count": primary_count,
-                "completed_context_count": context_count,
+                "context_device_count": context_device_count,
                 "root_cause_set": root_cause_set,
             },
         )
@@ -238,9 +238,9 @@ def _log_state_changes(
 
     _check_list_change(
         changes,
-        "completed_context_investigations",
-        getattr(input_state, "completed_context_investigations", []),
-        getattr(output_state, "completed_context_investigations", []),
+        "context_device_names",
+        getattr(input_state, "context_device_names", []),
+        getattr(output_state, "context_device_names", []),
     )
 
     input_root_cause = getattr(input_state, "root_cause", None)

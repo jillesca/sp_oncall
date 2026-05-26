@@ -12,8 +12,6 @@ from typing import List, Dict, Any, Optional, Annotated
 from langchain_core.messages import AnyMessage, HumanMessage
 from langgraph.graph.message import add_messages
 
-from .device_capability_profile import DeviceCapabilityProfile
-
 
 def _replace_list(_existing: list, new: list) -> list:
     """Replace-wins reducer: always take the incoming value.
@@ -32,27 +30,24 @@ class GraphState:
 
     Attributes:
         messages: Conversation history using LangChain message format.
-        primary_investigations: Pending investigations for devices named in the
-                                trigger (alert target or explicitly requested).
-        context_investigations: Pending investigations for neighbor devices
-                                discovered by the input validator.
+        primary_investigations: One Investigation covering all primary devices
+                                (alert target or explicitly requested). Typically
+                                a single-element list; empty when none found.
+        context_investigations: One Investigation covering all context (neighbor)
+                                devices. Typically a single-element list.
         event_type: Alert event type extracted from the trigger context (e.g.
                     "interface_state", "bgp_session_state"). None for manual
                     queries.
         root_cause: Root cause analysis produced by the rca_assessor_node after
                     all investigations complete.
         context_phase_report: Single combined report produced by the context
-                              executor covering all neighbor devices at once.
-                              Set by collect_device_result in the context subgraph.
-                              Used by downstream nodes instead of iterating
-                              completed_context_investigations for report content.
-        completed_context_investigations: Completed context Investigation objects
-                                          from the context subgraph. Carries device
-                                          metadata (name, role, capability_profile,
-                                          status) but not used for report content
-                                          — use context_phase_report instead.
-        completed_primary_investigations: Completed primary device results produced
-                                          by the primary_investigation subgraph.
+                              executor covering all neighbor devices. Set by
+                              collect_device_result in the context subgraph.
+        context_device_names: Names of all devices covered by the context phase.
+                              Used by downstream nodes (reporter, RCA) to build
+                              headers without needing the full Investigation objects.
+        completed_primary_investigations: Completed primary Investigation from
+                                          the primary subgraph.
     """
 
     messages: Annotated[List[AnyMessage], add_messages] = field(
@@ -63,9 +58,7 @@ class GraphState:
     event_type: Optional[str] = None
     root_cause: Optional[str] = None
     context_phase_report: str = ""
-    completed_context_investigations: Annotated[
-        List[Investigation], _replace_list
-    ] = field(default_factory=list)
+    context_device_names: List[str] = field(default_factory=list)
     completed_primary_investigations: Annotated[
         List[Investigation], _replace_list
     ] = field(default_factory=list)
@@ -109,7 +102,7 @@ class GraphState:
 
 
 class InvestigationStatus(Enum):
-    """Lifecycle state for a single device investigation.
+    """Lifecycle state for a phase investigation.
 
     Values:
     - PENDING: Not yet started.
@@ -132,41 +125,40 @@ class InvestigationStatus(Enum):
 
 @dataclass
 class Investigation:
-    """Encapsulates all work related to a specific device investigation.
+    """Encapsulates one investigation attempt for all devices in a phase.
+
+    Each Investigation covers every device assigned to the phase (context or
+    primary). The planner produces a per-device plan stored in device_plans;
+    the executor runs a single agent call across all devices and stores one
+    combined report.
 
     Attributes:
-        device_name: Target device identifier extracted by input validator.
-        device_context: Pre-formatted prompt-ready string assembled by the input validator
-                        from fresh MCP data plus stored dynamic facts and investigation history.
-                        Contains only facts about this device — never neighbor reports.
-        neighbor_context: Pre-formatted markdown of completed neighbor health check reports.
-                          Populated by enrich_primary_investigations before the primary phase.
-                          Empty for context investigations.
-        role: Device role in the topology (PE, P, PCE, vRR).
-        neighbors: Directly connected devices discovered during input validation.
-        capability_profile: Protocol and feature flags from the get_device_profile_api MCP
-                            call. None when the MCP call returned no data. Carried through
-                            the graph so the reporter can persist it to static_facts.
-        objective: Specific objective for this device investigation.
-        working_plan_steps: Ordered execution steps tailored to this device.
-        execution_results: Results from executing plan steps on this device.
+        device_contexts: Maps device_name to its pre-formatted context string.
+                         Assembled by the input validator from fresh MCP data,
+                         stored dynamic facts, and investigation history.
+                         Contains device facts, capabilities, and history for
+                         that device only.
+        device_plans: Maps device_name to its formatted investigation plan.
+                      Populated by the planner node. Each value is plain text
+                      containing the objective and ordered steps for that device.
+                      Empty until the planner runs.
+        execution_results: Results from all tool calls made by the executor agent.
         status: Current lifecycle state of this investigation.
-        report: Final investigation summary and findings.
-        error_details: Error information if investigation failed.
+        report: Single combined report produced by the executor covering all
+                devices in this investigation. None until execution completes.
+        error_details: Error information when the investigation failed.
     """
 
-    device_name: str
-    device_context: str = ""
-    neighbor_context: str = ""
-    role: str = ""
-    neighbors: List[str] = field(default_factory=list)
-    capability_profile: Optional[DeviceCapabilityProfile] = None
-    objective: Optional[str] = None
-    working_plan_steps: str = ""
+    device_contexts: Dict[str, str]
+    device_plans: Dict[str, str] = field(default_factory=dict)
     execution_results: List["ExecutedToolCall"] = field(default_factory=list)
     status: InvestigationStatus = InvestigationStatus.PENDING
     report: Optional[str] = None
     error_details: Optional[str] = None
+
+    def device_names(self) -> List[str]:
+        """Return the ordered list of device names in this investigation."""
+        return list(self.device_contexts.keys())
 
     def __str__(self) -> str:
         """Return a JSON representation of the investigation."""

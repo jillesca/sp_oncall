@@ -37,9 +37,9 @@ def rca_assessor_node(state: GraphState) -> GraphState:
         Updated GraphState with root_cause populated
     """
     logger.info(
-        "🔬 Starting RCA synthesis: %s primary, %s context investigations",
+        "🔬 Starting RCA synthesis: %s primary investigation(s), %s context device(s)",
         len(state.completed_primary_investigations),
-        len(state.completed_context_investigations),
+        len(state.context_device_names),
     )
 
     try:

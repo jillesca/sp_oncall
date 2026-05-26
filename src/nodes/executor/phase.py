@@ -14,16 +14,16 @@ state-specific functions.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 from nodes.assessor.context import build_phase_assessment_context
 from nodes.assessor.assessment import execute_assessment
 from nodes.common import load_fast_model
 from nodes.planner.core import plan_single_device
 from schemas import Investigation, InvestigationStatus
-from schemas.assessment_schema import AssessmentOutput
 from src.util.prompt_loader import load_prompt
 from src.util.prompt_logger import log_prompt
+from src.util.xml_helpers import xml_wrap
 from src.logging import get_logger
 
 from .execution import execute_phase_investigations
@@ -35,11 +35,11 @@ _RETRY_DECISION_RETRY = "execute_device"
 
 
 def plan_investigations(
-    investigations: List[Investigation],
+    investigation: Investigation,
     trigger_context: str,
     investigation_role: str,
     event_type: Optional[str],
-) -> List[Investigation]:
+) -> Investigation:
     """Generate investigation plans for every device in the phase.
 
     Planning is sequential within this node; each device gets its own tailored
@@ -47,83 +47,84 @@ def plan_investigations(
     Failures per device are caught individually so one bad device doesn't
     block the rest of the phase.
     """
-    planned = []
-    for inv in investigations:
+    device_plans = {}
+    any_succeeded = False
+
+    for device_name, device_context in investigation.device_contexts.items():
         try:
             device_plan = plan_single_device(
-                investigation=inv,
+                device_name=device_name,
+                device_context=device_context,
                 trigger_context=trigger_context,
                 investigation_role=investigation_role,
                 event_type=event_type,
             )
-            planned.append(
-                replace(
-                    inv,
-                    objective=device_plan.objective,
-                    working_plan_steps=device_plan.working_plan_steps,
-                )
-            )
+            device_plans[device_name] = _format_device_plan(device_plan)
+            any_succeeded = True
         except Exception as e:
             logger.error(
-                "❌ Planning failed for %s: %s — marking as failed",
-                inv.device_name,
+                "❌ Planning failed for %s: %s — skipping device plan",
+                device_name,
                 e,
             )
-            planned.append(
-                replace(inv, status=InvestigationStatus.FAILED, error_details=str(e))
-            )
-    return planned
+            device_plans[device_name] = ""
+
+    if not any_succeeded:
+        return replace(
+            investigation,
+            status=InvestigationStatus.FAILED,
+            error_details="All device plans failed during planning phase",
+        )
+
+    return replace(investigation, device_plans=device_plans)
 
 
 async def execute_investigations(
-    investigations: List[Investigation],
+    investigation: Investigation,
     trigger_context: str,
     executor_prompt: str,
+    context_phase_report: str = "",
     attempt: int = 1,
-) -> List[Investigation]:
-    """Run one MCP agent for all devices in the phase (Option B).
+) -> Investigation:
+    """Run one MCP agent for all devices in the phase.
 
     Passes combined device context to a single agent call so the agent can
     investigate all N devices and produce consolidated findings.
-    Only non-failed investigations are sent to the agent; already-failed ones
-    pass through unchanged.
+    Skips execution if the investigation is already marked as failed.
     """
-    active = [inv for inv in investigations if inv.status != InvestigationStatus.FAILED]
-    failed = [inv for inv in investigations if inv.status == InvestigationStatus.FAILED]
+    if investigation.status == InvestigationStatus.FAILED:
+        logger.warning("⚠️ Investigation already failed — skipping execution")
+        return investigation
 
-    if not active:
-        logger.warning("⚠️ All investigations already failed — skipping execution")
-        return investigations
-
-    executed = await execute_phase_investigations(
-        investigations=active,
+    return await execute_phase_investigations(
+        investigation=investigation,
         trigger_context=trigger_context,
         executor_prompt=executor_prompt,
+        context_phase_report=context_phase_report,
         attempt=attempt,
     )
-    return executed + failed
 
 
 def assess_investigations(
-    investigations: List[Investigation],
+    investigation: Investigation,
     trigger_context: str,
     current_retry: int,
     phase_name: str = "unknown",
-) -> Tuple[AssessmentOutput, int]:
+) -> Tuple[bool, int]:
     """Assess whether the phase objective has been achieved for all devices.
 
-    Builds a combined assessment context from all investigations and runs a
+    Builds a combined assessment context from the investigation and runs a
     single LLM call to determine if the phase is done.
 
     Returns:
-        Tuple of (assessment result, incremented retry counter).
+        Tuple of (objective_achieved, incremented retry counter).
     """
     logger.info(
         "🔍 Assessing phase (%s device(s), retry %s)",
-        len(investigations),
+        len(investigation.device_contexts),
         current_retry,
     )
-    assessment_context = build_phase_assessment_context(investigations, trigger_context)
+    assessment_context = build_phase_assessment_context(investigation, trigger_context)
     model = load_fast_model()
     system_prompt = load_prompt("objective_assessor")
 
@@ -134,16 +135,16 @@ def assess_investigations(
         attempt=current_retry + 1,
     )
 
-    assessment = execute_assessment(model, assessment_context, system_prompt)
+    objective_achieved = execute_assessment(model, assessment_context, system_prompt)
     logger.info(
         "📋 Phase assessment: achieved=%s",
-        assessment.is_objective_achieved,
+        objective_achieved,
     )
-    return assessment, current_retry + 1
+    return objective_achieved, current_retry + 1
 
 
 def decide_retry(
-    assessment: Optional[AssessmentOutput],
+    assessment_passed: Optional[bool],
     current_retry: int,
     max_retries: int,
 ) -> str:
@@ -152,7 +153,7 @@ def decide_retry(
     Returns _RETRY_DECISION_DONE when the objective is achieved or retries are
     exhausted; returns _RETRY_DECISION_RETRY to trigger another execution pass.
     """
-    if assessment and assessment.is_objective_achieved:
+    if assessment_passed:
         logger.info("✅ Phase objective achieved — collecting results")
         return _RETRY_DECISION_DONE
 
@@ -168,3 +169,11 @@ def decide_retry(
         max_retries,
     )
     return _RETRY_DECISION_RETRY
+
+
+def _format_device_plan(device_plan) -> str:
+    """Format a DevicePlan as plain text for injection into the executor prompt."""
+    parts = [f"**Objective:** {device_plan.objective}"]
+    if device_plan.working_plan_steps:
+        parts.append(xml_wrap("WORKING_PLAN", device_plan.working_plan_steps))
+    return "\n\n".join(parts)

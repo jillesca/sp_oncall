@@ -7,6 +7,8 @@ after generating the report it persists dynamic facts and investigation history
 for every device so future runs benefit from the context.
 """
 
+from typing import Optional
+
 from langchain_core.messages import AIMessage
 from langgraph.config import get_store
 
@@ -43,14 +45,16 @@ def investigation_report_node(state: GraphState) -> GraphState:
     Returns:
         Updated GraphState with final report in messages and cleared investigations
     """
-    total_devices = len(state.completed_primary_investigations) + len(
-        state.completed_context_investigations
+    primary_device_count = sum(
+        len(inv.device_contexts) for inv in state.completed_primary_investigations
     )
+    total_devices = primary_device_count + len(state.context_device_names)
+
     logger.info(
         "📄 Generating investigation report for %d devices (%d primary, %d context)",
         total_devices,
-        len(state.completed_primary_investigations),
-        len(state.completed_context_investigations),
+        primary_device_count,
+        len(state.context_device_names),
     )
 
     try:
@@ -83,62 +87,50 @@ def _persist_investigation_results(state: GraphState) -> None:
     """Persist all investigation data to the store.
 
     Writes dynamic facts (investigation outcome) and appends a history summary
-    for every device — both primary and context. Static topology facts (role,
-    neighbors) are stored so future runs benefit from cached context.
-    This is the single store-write point for the entire graph run.
+    for every device — both primary and context. This is the single store-write
+    point for the entire graph run.
     """
     store = get_store()
-    all_investigations = (
-        state.completed_primary_investigations
-        + state.completed_context_investigations
-    )
 
-    for investigation in all_investigations:
-        update_device_profile(
+    for device_name in state.context_device_names:
+        _persist_device(
             store,
-            investigation.device_name,
-            static_facts=_build_static_facts(investigation),
-            dynamic_facts={
-                "last_alert": state.trigger_context[:500],
-                "last_known_state": investigation.status.value,
-            },
-        )
-        summary = build_history_summary(
-            status=investigation.status.value,
-            report=investigation.report,
-        )
-        append_device_history(store, investigation.device_name, summary)
-        logger.debug(
-            "💾 Persisted facts and history for device: %s",
-            investigation.device_name,
+            device_name,
+            state.trigger_context,
+            status="completed",
+            report=state.context_phase_report,
         )
 
+    for investigation in state.completed_primary_investigations:
+        for device_name in investigation.device_contexts:
+            _persist_device(
+                store,
+                device_name,
+                state.trigger_context,
+                status=investigation.status.value,
+                report=investigation.report,
+            )
 
-def _build_static_facts(investigation) -> dict:
-    """Assemble static_facts dict from an investigation for store persistence.
 
-    Capability profile fields are included when the profile was discovered,
-    so future runs have cached protocol/feature context alongside topology.
-    """
-    facts = {
-        "role": investigation.role,
-        "neighbors": investigation.neighbors,
-    }
-
-    if investigation.capability_profile is not None:
-        profile = investigation.capability_profile
-        facts.update(
-            {
-                "nos": profile.nos,
-                "is_mpls_enabled": profile.is_mpls_enabled,
-                "is_isis_enabled": profile.is_isis_enabled,
-                "is_bgp_l3vpn_enabled": profile.is_bgp_l3vpn_enabled,
-                "is_route_reflector": profile.is_route_reflector,
-                "has_vpn_ipv4_unicast_bgp": profile.has_vpn_ipv4_unicast_bgp,
-            }
-        )
-
-    return facts
+def _persist_device(
+    store,
+    device_name: str,
+    trigger_context: str,
+    status: str,
+    report: Optional[str],
+) -> None:
+    """Write dynamic facts and history for a single device to the store."""
+    update_device_profile(
+        store,
+        device_name,
+        dynamic_facts={
+            "last_alert": trigger_context[:500],
+            "last_known_state": status,
+        },
+    )
+    summary = build_history_summary(status=status, report=report)
+    append_device_history(store, device_name, summary)
+    logger.debug("💾 Persisted facts and history for device: %s", device_name)
 
 
 def _log_successful_report_generation(report: str) -> None:

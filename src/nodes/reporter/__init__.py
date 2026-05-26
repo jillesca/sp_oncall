@@ -5,4 +5,4 @@ Generates the final investigation report, persists device facts and history
 to the store, and resets working state for the next request.
 """
 
-from .core import investigation_report_node
+from .core import investigation_report_node as investigation_report_node

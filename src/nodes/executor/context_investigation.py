@@ -17,7 +17,6 @@ from typing import List, Optional
 from langgraph.graph import StateGraph, END
 
 from schemas import Investigation
-from schemas.assessment_schema import AssessmentOutput
 from src.logging import get_logger
 
 from .phase import (
@@ -42,9 +41,9 @@ class ContextSubgraphState:
     Field names match GraphState so LangGraph automatically maps them when
     this compiled sub-graph is used as a node in the parent graph:
       - context_investigations   ← read from parent (set by input_validator)
-      - trigger_context          ← read from parent
+      - trigger_context          ← read from parent (property → field mapping)
       - event_type               ← read from parent
-      - completed_context_investigations → written to parent via replace-wins reducer
+      - context_device_names     → written to parent (names of all context devices)
       - context_phase_report     → written to parent (single combined executor output)
     """
 
@@ -53,82 +52,92 @@ class ContextSubgraphState:
     event_type: Optional[str] = None
     max_retries: int = 3
     current_retry: int = 0
-    assessment: Optional[AssessmentOutput] = None
-    completed_context_investigations: List[Investigation] = field(
-        default_factory=list
-    )
+    assessment_passed: Optional[bool] = None
+    context_device_names: List[str] = field(default_factory=list)
     context_phase_report: str = ""
 
 
 def plan_device(state: ContextSubgraphState) -> ContextSubgraphState:
     """Generate investigation plans for all context devices."""
+    if not state.context_investigations:
+        logger.warning("⚠️ No context investigation found — skipping planning")
+        return state
+
     logger.info(
         "📋 Planning context phase for %s device(s)",
-        len(state.context_investigations),
+        len(state.context_investigations[0].device_contexts),
     )
     planned = plan_investigations(
-        investigations=state.context_investigations,
+        investigation=state.context_investigations[0],
         trigger_context=state.trigger_context,
         investigation_role=_INVESTIGATION_ROLE,
         event_type=state.event_type,
     )
-    return replace(state, context_investigations=planned)
+    return replace(state, context_investigations=[planned])
 
 
 async def execute_device(state: ContextSubgraphState) -> ContextSubgraphState:
-    """Run one MCP agent for all context devices (attempt %s)."""
+    """Run one MCP agent for all context devices."""
+    if not state.context_investigations:
+        logger.warning("⚠️ No context investigation found — skipping execution")
+        return state
+
     logger.info(
         "🔁 Executing context phase (attempt %s/%s)",
         state.current_retry + 1,
         state.max_retries,
     )
     executed = await execute_investigations(
-        investigations=state.context_investigations,
+        investigation=state.context_investigations[0],
         trigger_context=state.trigger_context,
         executor_prompt=_EXECUTOR_PROMPT,
         attempt=state.current_retry + 1,
     )
-    return replace(state, context_investigations=executed)
+    return replace(state, context_investigations=[executed])
 
 
 def assess_device(state: ContextSubgraphState) -> ContextSubgraphState:
     """Assess whether all context device objectives have been achieved."""
-    assessment, retry_count = assess_investigations(
-        investigations=state.context_investigations,
+    if not state.context_investigations:
+        logger.warning("⚠️ No context investigation found — marking as passed")
+        return replace(state, assessment_passed=True)
+
+    passed, retry_count = assess_investigations(
+        investigation=state.context_investigations[0],
         trigger_context=state.trigger_context,
         current_retry=state.current_retry,
         phase_name=_INVESTIGATION_ROLE,
     )
-    return replace(state, assessment=assessment, current_retry=retry_count)
+    return replace(state, assessment_passed=passed, current_retry=retry_count)
 
 
 def collect_device_result(state: ContextSubgraphState) -> ContextSubgraphState:
-    """Write completed investigations and the combined phase report to the output fields.
+    """Write completed investigation and combined phase report to output fields.
 
     The context executor produces one combined report for all context devices.
-    That report is stored in context_phase_report so downstream nodes (RCA, reporter,
-    primary enrichment) can reference it without iterating and duplicating across
-    the per-device Investigation objects.
+    That report is stored in context_phase_report so downstream nodes (RCA,
+    reporter, primary enrichment) can reference it without needing Investigation
+    objects. The device names are stored in context_device_names for headers.
     """
+    if not state.context_investigations:
+        logger.warning("⚠️ No context investigation to collect")
+        return state
+
+    investigation = state.context_investigations[0]
     logger.info(
-        "📦 Collecting %s context investigation result(s)",
-        len(state.context_investigations),
-    )
-    combined_report = (
-        state.context_investigations[0].report
-        if state.context_investigations
-        else ""
+        "📦 Collecting context investigation result for %s device(s)",
+        len(investigation.device_contexts),
     )
     return replace(
         state,
-        completed_context_investigations=state.context_investigations,
-        context_phase_report=combined_report or "",
+        context_device_names=investigation.device_names(),
+        context_phase_report=investigation.report or "",
     )
 
 
 def should_retry(state: ContextSubgraphState) -> str:
     """Decide whether to retry execution or proceed to result collection."""
-    return decide_retry(state.assessment, state.current_retry, state.max_retries)
+    return decide_retry(state.assessment_passed, state.current_retry, state.max_retries)
 
 
 _workflow = StateGraph(ContextSubgraphState)

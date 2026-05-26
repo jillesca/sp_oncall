@@ -6,7 +6,6 @@ receiving combined device context and producing a single set of findings.
 """
 
 from dataclasses import replace
-from typing import List
 
 from langchain_core.messages import HumanMessage
 
@@ -24,27 +23,29 @@ logger = get_logger(__name__)
 
 
 async def execute_phase_investigations(
-    investigations: List[Investigation],
+    investigation: Investigation,
     trigger_context: str,
     executor_prompt: str,
+    context_phase_report: str = "",
     attempt: int = 1,
-) -> List[Investigation]:
-    """Execute a phase's investigations using a single MCP agent call.
+) -> Investigation:
+    """Execute a phase's investigation using a single MCP agent call.
 
     Builds combined context for all devices in the phase and runs one agent.
-    The agent investigates all N devices and produces combined findings
-    that are attributed to each investigation in the phase.
+    The agent investigates all devices and produces one combined report
+    attributed to this investigation.
 
     Args:
-        investigations: Devices to investigate in this phase.
+        investigation: Phase investigation covering all devices.
         trigger_context: Original trigger content for prompt assembly.
         executor_prompt: Name of the prompt file to use as the system prompt.
+        context_phase_report: Neighbor health check findings (primary phase only).
         attempt: Retry attempt number (1-based), used for prompt log filenames.
 
     Returns:
-        Updated investigations marked completed or failed.
+        Updated investigation marked completed or failed.
     """
-    device_names = [inv.device_name for inv in investigations]
+    device_names = investigation.device_names()
     logger.info(
         "🔍 Executing phase for device(s): %s (prompt=%s, attempt=%s)",
         device_names,
@@ -53,7 +54,9 @@ async def execute_phase_investigations(
     )
 
     try:
-        context = build_phase_context(investigations, trigger_context)
+        context = build_phase_context(
+            investigation, trigger_context, context_phase_report
+        )
         system_prompt = load_prompt(executor_prompt)
 
         log_prompt(
@@ -71,19 +74,15 @@ async def execute_phase_investigations(
 
         logger.info("✅ Phase investigation completed for: %s", device_names)
 
-        return [
-            replace(
-                inv,
-                status=InvestigationStatus.COMPLETED,
-                execution_results=inv.execution_results + executed_tool_calls,
-                report=llm_analysis,
-            )
-            for inv in investigations
-        ]
+        return replace(
+            investigation,
+            status=InvestigationStatus.COMPLETED,
+            execution_results=investigation.execution_results + executed_tool_calls,
+            report=llm_analysis,
+        )
 
     except Exception as e:
         logger.error("❌ Phase investigation failed for %s: %s", device_names, e)
-        return [
-            replace(inv, status=InvestigationStatus.FAILED, error_details=str(e))
-            for inv in investigations
-        ]
+        return replace(
+            investigation, status=InvestigationStatus.FAILED, error_details=str(e)
+        )

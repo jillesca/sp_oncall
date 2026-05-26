@@ -4,18 +4,18 @@ Node modules for the SP On-Call LangGraph workflow.
 Graph flow (linear, no conditional edges):
   input_validator
       → context_investigation   (subgraph: one agent for all context devices)
-      → enrich_primary_investigations   (node: injects context findings)
       → primary_investigation   (subgraph: one agent for all primary devices)
       → rca_assessor
       → report_generator
 
+The primary subgraph reads context_phase_report directly from GraphState via
+LangGraph field mapping, so no enrichment node is needed between phases.
+
 Modules:
-- input_validator: Validates input, discovers devices, splits primary vs context
-- executor: Phase sub-graphs (context_investigation, primary_investigation) and
-            the enrich_primary_investigations enrichment node.
+- input_validator: Validates input, discovers devices, builds phase Investigations
+- executor: Phase sub-graphs (context_investigation, primary_investigation)
 - rca_assessor: Synthesizes all reports into a root cause determination
 - reporter: Generates the final formatted report and persists to store
-- markdown_builder: Utility for building markdown content
 - common: Shared utilities across all nodes
 """
 

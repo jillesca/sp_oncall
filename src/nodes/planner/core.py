@@ -3,12 +3,11 @@ Per-device planning logic.
 
 Generates a tailored investigation plan for a single device by loading
 relevant skills, invoking the LLM, and parsing the structured response.
-Called from the per-device sub-graph rather than the outer graph.
+Called from the per-device loop inside phase.plan_investigations.
 """
 
 from typing import Optional
 
-from schemas.state import Investigation
 from src.logging import get_logger
 from nodes.common import load_model, load_fast_model
 from src.util.prompt_loader import load_prompt
@@ -27,7 +26,8 @@ logger = get_logger(__name__)
 
 
 def plan_single_device(
-    investigation: Investigation,
+    device_name: str,
+    device_context: str,
     trigger_context: str,
     investigation_role: str = "primary",
     event_type: Optional[str] = None,
@@ -35,11 +35,12 @@ def plan_single_device(
     """Generate an investigation plan for a single device.
 
     Args:
-        investigation: The device investigation to plan for.
+        device_name: Target device identifier.
+        device_context: Pre-formatted device context string assembled by the
+                        input validator (facts, capabilities, history).
         trigger_context: Original trigger content (alert or user request).
-        investigation_role: "primary" for alert targets, "context" for neighbor checks.
-                            Shapes the planning objective toward root-cause analysis
-                            (primary) or network health verification (context).
+        investigation_role: "primary" for alert targets, "context" for neighbor
+                            checks. Shapes the planning objective.
         event_type: Alert event type used to filter relevant skills.
                     None for manual queries (loads all skills).
 
@@ -47,12 +48,12 @@ def plan_single_device(
         A DevicePlan with objective and step-by-step instructions for this device.
 
     Raises:
-        Exception: If plan generation fails — callers should handle and mark
-                   the investigation as failed.
+        Exception: If plan generation fails — callers should handle and skip
+                   this device's plan.
     """
     logger.info(
         "📋 Planning for device: %s (investigation_role=%s)",
-        investigation.device_name,
+        device_name,
         investigation_role,
     )
 
@@ -60,13 +61,13 @@ def plan_single_device(
     model = load_model()
     fast_model = load_fast_model()
     planning_context = build_planning_context(
-        investigation, trigger_context, investigation_role
+        device_name, device_context, trigger_context, investigation_role
     )
     system_prompt = load_prompt("planner")
 
     human_message = "\n\n".join(
         [
-            xml_wrap("INVESTIGATION_REQUEST", investigation.device_name),
+            xml_wrap("INVESTIGATION_REQUEST", device_name),
             xml_wrap("AVAILABLE_PLANS", available_skills),
             xml_wrap("INVESTIGATION_CONTEXT", planning_context),
         ]
@@ -75,12 +76,12 @@ def plan_single_device(
         node_name="planner",
         system_prompt=system_prompt,
         human_message=human_message,
-        device_name=investigation.device_name,
+        device_name=device_name,
     )
 
     response = execute_plan_selection(
         model,
-        investigation.device_name,
+        device_name,
         available_skills,
         planning_context,
         system_prompt,
@@ -89,8 +90,8 @@ def plan_single_device(
     device_plan = process_device_plan_response(
         response_content=response,
         model=fast_model,
-        device_name=investigation.device_name,
+        device_name=device_name,
     )
 
-    logger.debug("📋 DevicePlan for %s: %s", investigation.device_name, device_plan)
+    logger.debug("📋 DevicePlan for %s: %s", device_name, device_plan)
     return device_plan
