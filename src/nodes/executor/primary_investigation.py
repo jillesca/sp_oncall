@@ -58,6 +58,7 @@ class PrimarySubgraphState:
     max_retries: int = 3
     current_retry: int = 0
     assessment_passed: Optional[bool] = None
+    assessor_feedback: str = ""
     completed_primary_investigations: List[Investigation] = field(
         default_factory=list
     )
@@ -98,6 +99,7 @@ async def execute_device(state: PrimarySubgraphState) -> PrimarySubgraphState:
         trigger_context=state.trigger_context,
         executor_prompt=_EXECUTOR_PROMPT,
         context_phase_report=state.context_phase_report,
+        assessor_feedback=state.assessor_feedback,
         attempt=state.current_retry + 1,
     )
     return replace(state, primary_investigations=[executed])
@@ -109,13 +111,18 @@ def assess_device(state: PrimarySubgraphState) -> PrimarySubgraphState:
         logger.warning("⚠️ No primary investigation found — marking as passed")
         return replace(state, assessment_passed=True)
 
-    passed, retry_count = assess_investigations(
+    passed, feedback, retry_count = assess_investigations(
         investigation=state.primary_investigations[0],
         trigger_context=state.trigger_context,
         current_retry=state.current_retry,
         phase_name=_INVESTIGATION_ROLE,
     )
-    return replace(state, assessment_passed=passed, current_retry=retry_count)
+    return replace(
+        state,
+        assessment_passed=passed,
+        assessor_feedback=feedback,
+        current_retry=retry_count,
+    )
 
 
 def collect_device_result(state: PrimarySubgraphState) -> PrimarySubgraphState:

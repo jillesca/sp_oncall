@@ -53,6 +53,7 @@ class ContextSubgraphState:
     max_retries: int = 3
     current_retry: int = 0
     assessment_passed: Optional[bool] = None
+    assessor_feedback: str = ""
     context_device_names: List[str] = field(default_factory=list)
     context_phase_report: str = ""
 
@@ -91,6 +92,7 @@ async def execute_device(state: ContextSubgraphState) -> ContextSubgraphState:
         investigation=state.context_investigations[0],
         trigger_context=state.trigger_context,
         executor_prompt=_EXECUTOR_PROMPT,
+        assessor_feedback=state.assessor_feedback,
         attempt=state.current_retry + 1,
     )
     return replace(state, context_investigations=[executed])
@@ -102,13 +104,18 @@ def assess_device(state: ContextSubgraphState) -> ContextSubgraphState:
         logger.warning("⚠️ No context investigation found — marking as passed")
         return replace(state, assessment_passed=True)
 
-    passed, retry_count = assess_investigations(
+    passed, feedback, retry_count = assess_investigations(
         investigation=state.context_investigations[0],
         trigger_context=state.trigger_context,
         current_retry=state.current_retry,
         phase_name=_INVESTIGATION_ROLE,
     )
-    return replace(state, assessment_passed=passed, current_retry=retry_count)
+    return replace(
+        state,
+        assessment_passed=passed,
+        assessor_feedback=feedback,
+        current_retry=retry_count,
+    )
 
 
 def collect_device_result(state: ContextSubgraphState) -> ContextSubgraphState:

@@ -84,6 +84,7 @@ async def execute_investigations(
     trigger_context: str,
     executor_prompt: str,
     context_phase_report: str = "",
+    assessor_feedback: str = "",
     attempt: int = 1,
 ) -> Investigation:
     """Run one MCP agent for all devices in the phase.
@@ -91,6 +92,10 @@ async def execute_investigations(
     Passes combined device context to a single agent call so the agent can
     investigate all N devices and produce consolidated findings.
     Skips execution if the investigation is already marked as failed.
+
+    When assessor_feedback is provided (on a retry), it is injected into the
+    executor context so the agent can address the specific gap identified by
+    the assessor rather than repeating the same investigation.
     """
     if investigation.status == InvestigationStatus.FAILED:
         logger.warning("⚠️ Investigation already failed — skipping execution")
@@ -101,6 +106,7 @@ async def execute_investigations(
         trigger_context=trigger_context,
         executor_prompt=executor_prompt,
         context_phase_report=context_phase_report,
+        assessor_feedback=assessor_feedback,
         attempt=attempt,
     )
 
@@ -110,14 +116,15 @@ def assess_investigations(
     trigger_context: str,
     current_retry: int,
     phase_name: str = "unknown",
-) -> Tuple[bool, int]:
+) -> Tuple[bool, str, int]:
     """Assess whether the phase objective has been achieved for all devices.
 
     Builds a combined assessment context from the investigation and runs a
     single LLM call to determine if the phase is done.
 
     Returns:
-        Tuple of (objective_achieved, incremented retry counter).
+        Tuple of (objective_achieved, assessor_feedback, incremented retry counter).
+        assessor_feedback is non-empty only when objective_achieved is False.
     """
     logger.info(
         "🔍 Assessing phase (%s device(s), retry %s)",
@@ -135,12 +142,13 @@ def assess_investigations(
         attempt=current_retry + 1,
     )
 
-    objective_achieved = execute_assessment(model, assessment_context, system_prompt)
+    objective_achieved, reason = execute_assessment(model, assessment_context, system_prompt)
     logger.info(
-        "📋 Phase assessment: achieved=%s",
+        "📋 Phase assessment: achieved=%s reason=%s",
         objective_achieved,
+        reason,
     )
-    return objective_achieved, current_retry + 1
+    return objective_achieved, reason, current_retry + 1
 
 
 def decide_retry(

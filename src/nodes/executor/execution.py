@@ -27,6 +27,7 @@ async def execute_phase_investigations(
     trigger_context: str,
     executor_prompt: str,
     context_phase_report: str = "",
+    assessor_feedback: str = "",
     attempt: int = 1,
 ) -> Investigation:
     """Execute a phase's investigation using a single MCP agent call.
@@ -40,6 +41,7 @@ async def execute_phase_investigations(
         trigger_context: Original trigger content for prompt assembly.
         executor_prompt: Name of the prompt file to use as the system prompt.
         context_phase_report: Neighbor health check findings (primary phase only).
+        assessor_feedback: Specific gap identified by the assessor on a retry.
         attempt: Retry attempt number (1-based), used for prompt log filenames.
 
     Returns:
@@ -55,7 +57,7 @@ async def execute_phase_investigations(
 
     try:
         context = build_phase_context(
-            investigation, trigger_context, context_phase_report
+            investigation, trigger_context, context_phase_report, assessor_feedback
         )
         system_prompt = load_prompt(executor_prompt)
 

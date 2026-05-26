@@ -20,6 +20,7 @@ def build_phase_context(
     investigation: Investigation,
     trigger_context: str,
     context_phase_report: str = "",
+    assessor_feedback: str = "",
 ) -> str:
     """Build combined context for all devices in an investigation phase.
 
@@ -29,8 +30,9 @@ def build_phase_context(
     Structure:
     1. TRIGGER_CONTEXT — what triggered this investigation
     2. NEIGHBOR_HEALTH_CHECK_RESULTS — neighbor findings (primary phase only)
-    3. Summary line listing all devices under investigation
-    4. One DEVICE block per device — plan and device context, clearly labelled
+    3. ASSESSOR_FEEDBACK — specific gap to address on a retry (retry attempts only)
+    4. Summary line listing all devices under investigation
+    5. One DEVICE block per device — plan and device context, clearly labelled
     """
     sections = [xml_wrap("TRIGGER_CONTEXT", trigger_context)]
 
@@ -38,6 +40,9 @@ def build_phase_context(
         sections.append(
             xml_wrap("NEIGHBOR_HEALTH_CHECK_RESULTS", context_phase_report)
         )
+
+    if assessor_feedback:
+        sections.append(xml_wrap("ASSESSOR_FEEDBACK", assessor_feedback))
 
     device_names = investigation.device_names()
     sections.append(f"**Devices to investigate:** {', '.join(device_names)}")
