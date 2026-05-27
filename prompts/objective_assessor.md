@@ -7,6 +7,7 @@ You are assessing whether a completed phase investigation met its objectives. De
 - One `<PHASE_ASSESSMENT>` block containing:
   - **Device Objectives** — one `<DEVICE>` block per device with only its objective
   - **Combined Report** — a single report produced by the executor covering all devices in this phase
+  - Report that cover all `DEVICES` block listed
 
 ## Assessment Rules
 

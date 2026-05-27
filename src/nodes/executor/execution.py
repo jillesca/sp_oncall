@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage
 from schemas import Investigation, InvestigationStatus
 from mcp_client import mcp_node
 from src.util.prompt_loader import load_prompt
-from src.util.prompt_logger import log_prompt
+from src.util.prompt_logger import log_prompt, log_agent_response
 from src.logging import get_logger
 
 from .context import build_phase_context
@@ -48,6 +48,7 @@ async def execute_phase_investigations(
         Updated investigation marked completed or failed.
     """
     device_names = investigation.device_names()
+    device_name = device_names[0] if len(device_names) == 1 else None
     logger.info(
         "🔍 Executing phase for device(s): %s (prompt=%s, attempt=%s)",
         device_names,
@@ -65,11 +66,19 @@ async def execute_phase_investigations(
             node_name=executor_prompt,
             system_prompt=system_prompt,
             human_message=context,
+            device_name=device_name,
             attempt=attempt,
         )
 
         message = HumanMessage(content=context)
         mcp_response = await mcp_node(message=message, system_prompt=system_prompt)
+
+        log_agent_response(
+            node_name=executor_prompt,
+            response=mcp_response,
+            device_name=device_name,
+            attempt=attempt,
+        )
 
         llm_analysis, executed_tool_calls = extract_response_content(mcp_response)
         log_processed_data(llm_analysis, executed_tool_calls)

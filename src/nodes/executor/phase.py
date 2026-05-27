@@ -3,9 +3,10 @@ Shared helpers for phase-level investigation nodes.
 
 Both context_investigation and primary_investigation sub-graphs expose the
 same four nodes (plan_device, execute_device, assess_device,
-collect_device_result) and the same retry routing.  The state schemas differ
-by field name so that LangGraph can automatically map them to/from GraphState,
-but the implementation logic is identical — so it lives here once.
+collect_device_result) and the Send-based parallel fan-out pattern.
+The state schemas differ by field name so that LangGraph can automatically
+map them to/from GraphState, but the core logic is identical — so it lives
+here once.
 
 Each sub-graph imports the helpers it needs and wraps them in thin
 state-specific functions.
@@ -30,8 +31,27 @@ from .execution import execute_phase_investigations
 
 logger = get_logger(__name__)
 
-_RETRY_DECISION_DONE = "collect_device_result"
-_RETRY_DECISION_RETRY = "execute_device"
+
+def _merge_dicts(existing: dict, new: dict) -> dict:
+    """Merge two dicts, letting new values overwrite existing ones.
+
+    Used as the LangGraph reducer for device_reports so that parallel
+    Send instances each write their own device key, and retry waves
+    overwrite the previous report for the same device.
+    """
+    return {**existing, **new}
+
+
+def slice_investigation(investigation: Investigation, device_name: str) -> Investigation:
+    """Create a single-device Investigation from a multi-device one.
+
+    The slice carries only the context and plan for the requested device so
+    that a Send-dispatched execute_device node has a clean, focused scope.
+    """
+    return Investigation(
+        device_contexts={device_name: investigation.device_contexts[device_name]},
+        device_plans={device_name: investigation.device_plans.get(device_name, "")},
+    )
 
 
 def plan_investigations(
@@ -149,34 +169,6 @@ def assess_investigations(
         reason,
     )
     return objective_achieved, reason, current_retry + 1
-
-
-def decide_retry(
-    assessment_passed: Optional[bool],
-    current_retry: int,
-    max_retries: int,
-) -> str:
-    """Return the next node name based on the assessment outcome.
-
-    Returns _RETRY_DECISION_DONE when the objective is achieved or retries are
-    exhausted; returns _RETRY_DECISION_RETRY to trigger another execution pass.
-    """
-    if assessment_passed:
-        logger.info("✅ Phase objective achieved — collecting results")
-        return _RETRY_DECISION_DONE
-
-    if current_retry >= max_retries:
-        logger.warning(
-            "⚠️ Max retries (%s) reached — collecting results", max_retries
-        )
-        return _RETRY_DECISION_DONE
-
-    logger.info(
-        "🔄 Phase objective not yet achieved — retrying (retry %s/%s)",
-        current_retry,
-        max_retries,
-    )
-    return _RETRY_DECISION_RETRY
 
 
 def _format_device_plan(device_plan) -> str:

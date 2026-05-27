@@ -46,6 +46,10 @@ class GraphState:
         context_device_names: Names of all devices covered by the context phase.
                               Used by downstream nodes (reporter, RCA) to build
                               headers without needing the full Investigation objects.
+        context_device_reports: Per-device reports from the context phase, keyed
+                                by device name. Populated by collect_device_result
+                                so the reporter can persist each device's own report
+                                in its history rather than the full combined report.
         completed_primary_investigations: Completed primary Investigation from
                                           the primary subgraph.
     """
@@ -59,6 +63,7 @@ class GraphState:
     root_cause: Optional[str] = None
     context_phase_report: str = ""
     context_device_names: List[str] = field(default_factory=list)
+    context_device_reports: Dict[str, str] = field(default_factory=dict)
     completed_primary_investigations: Annotated[
         List[Investigation], _replace_list
     ] = field(default_factory=list)

@@ -92,13 +92,13 @@ def _persist_investigation_results(state: GraphState) -> None:
     """
     store = get_store()
 
-    for device_name in state.context_device_names:
+    for device_name, report in state.context_device_reports.items():
         _persist_device(
             store,
             device_name,
             state.trigger_context,
             status="completed",
-            report=state.context_phase_report,
+            report=report,
         )
 
     for investigation in state.completed_primary_investigations:

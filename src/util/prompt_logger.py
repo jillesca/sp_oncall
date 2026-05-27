@@ -72,6 +72,37 @@ def log_prompt(
     logger.debug("📝 Prompt logged: %s", filepath)
 
 
+def log_agent_response(
+    node_name: str,
+    response: dict,
+    device_name: Optional[str] = None,
+    attempt: int = 1,
+) -> None:
+    """Log the raw response returned by an MCP agent call.
+
+    Writes one file per call, named symmetrically with log_prompt so prompt
+    and response files sit next to each other in the run directory.
+
+    Args:
+        node_name: Name of the graph node or agent making the LLM call.
+        response: Raw response dict from mcp_node (contains a 'messages' key).
+        device_name: Device being investigated, when applicable.
+        attempt: Retry attempt number (1-based).
+    """
+    if _state.current_dir is None:
+        logger.warning(
+            "⚠️ Prompt logger not initialized — start_run() was not called before log_agent_response()"
+        )
+        return
+
+    filepath = _state.current_dir / _build_response_filename(node_name, device_name, attempt)
+    filepath.write_text(
+        _format_response_log(node_name, device_name, attempt, response),
+        encoding="utf-8",
+    )
+    logger.debug("📝 Agent response logged: %s", filepath)
+
+
 def _build_filename(
     node_name: str, device_name: Optional[str], attempt: int
 ) -> str:
@@ -80,6 +111,52 @@ def _build_filename(
         parts.append(device_name)
     parts.append(f"attempt-{attempt}")
     return "_".join(parts) + ".md"
+
+
+def _build_response_filename(
+    node_name: str, device_name: Optional[str], attempt: int
+) -> str:
+    parts = [node_name]
+    if device_name:
+        parts.append(device_name)
+    parts.append(f"response_attempt-{attempt}")
+    return "_".join(parts) + ".md"
+
+
+def _format_response_log(
+    node_name: str,
+    device_name: Optional[str],
+    attempt: int,
+    response: dict,
+) -> str:
+    title = node_name
+    if device_name:
+        title += f" — {device_name}"
+
+    messages = response.get("messages", []) if isinstance(response, dict) else []
+    message_sections = []
+    for i, msg in enumerate(messages, start=1):
+        msg_type = type(msg).__name__
+        content = getattr(msg, "content", "")
+        name = getattr(msg, "name", None)
+        header = f"### Message {i}: {msg_type}"
+        if name:
+            header += f" ({name})"
+        if isinstance(content, list):
+            content_str = "\n".join(str(item) for item in content)
+        else:
+            content_str = str(content)
+        message_sections.append(f"{header}\n\n{content_str}")
+
+    messages_body = "\n\n---\n\n".join(message_sections) if message_sections else "_No messages_"
+
+    return "\n\n".join(
+        [
+            f"# {title} — raw response (attempt {attempt})",
+            "## Agent Messages",
+            messages_body,
+        ]
+    )
 
 
 def _format_log(

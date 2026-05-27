@@ -179,16 +179,16 @@ Don't forget to `commit` your changes to XRd.
 
 All `SP_ONCALL_*` variables can be set in your `.env` file. See `.env.example` for the full list with comments.
 
-| Variable                          | Default            | Description                                                                                                       |
-| --------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `SP_ONCALL_MAX_RETRIES`           | `3`                | Max execution retries per device investigation. Also overridable from LangGraph Studio.                           |
-| `SP_ONCALL_FAST_MODEL`            | `openai/gpt-4o-mini` | Model used for structured output parsing — faster and cheaper than the main reasoning model.                    |
-| `SP_ONCALL_LOG_LEVEL`             | `info`             | Log level for sp_oncall modules (`debug` \| `info` \| `warning` \| `error`).                                     |
-| `SP_ONCALL_LANGCHAIN_DEBUG`       | `false`            | Enable verbose LangChain debug tracing.                                                                           |
-| `SP_ONCALL_MODULE_LEVELS`         | —                  | Per-module log overrides (e.g. `sp_oncall.nodes=debug,langgraph=error`). Run `make logger-names` to list modules. |
-| `SP_ONCALL_LOG_FILE`              | —                  | Write logs to a file in addition to stdout.                                                                       |
-| `SP_ONCALL_EXTERNAL_SUPPRESSION_MODE` | `langgraph`    | Suppress noisy external library logs (`langgraph` \| `none`).                                                    |
-| `OPENROUTER_API_KEY`              | —                  | Required only when using `openrouter/*` models (e.g. `openrouter/anthropic/claude-sonnet-4`).                    |
+| Variable                              | Default              | Description                                                                                                       |
+| ------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `SP_ONCALL_MAX_RETRIES`               | `3`                  | Max execution retries per device investigation. Also overridable from LangGraph Studio.                           |
+| `SP_ONCALL_FAST_MODEL`                | `openai/gpt-4o-mini` | Model used for structured output parsing — faster and cheaper than the main reasoning model.                      |
+| `SP_ONCALL_LOG_LEVEL`                 | `info`               | Log level for sp_oncall modules (`debug` \| `info` \| `warning` \| `error`).                                      |
+| `SP_ONCALL_LANGCHAIN_DEBUG`           | `false`              | Enable verbose LangChain debug tracing.                                                                           |
+| `SP_ONCALL_MODULE_LEVELS`             | —                    | Per-module log overrides (e.g. `sp_oncall.nodes=debug,langgraph=error`). Run `make logger-names` to list modules. |
+| `SP_ONCALL_LOG_FILE`                  | —                    | Write logs to a file in addition to stdout.                                                                       |
+| `SP_ONCALL_EXTERNAL_SUPPRESSION_MODE` | `langgraph`          | Suppress noisy external library logs (`langgraph` \| `none`).                                                     |
+| `OPENROUTER_API_KEY`                  | —                    | Required only when using `openrouter/*` models (e.g. `openrouter/anthropic/claude-sonnet-4`).                     |
 
 ### AI model selection
 
@@ -246,3 +246,13 @@ The webhook container must be running (`docker compose up webhook-receiver`) and
 - **gNMI**: [gRPC Network Management Interface](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md)
 - **LangGraph**: [LangChain's workflow framework](https://langchain-ai.github.io/langgraph/)
 - **DevNet Sandbox**: [Cisco's free network simulation environment](https://devnetsandbox.cisco.com/DevNet/)
+
+## Testing
+
+```bash
+# If you cloned the repo
+# Shutdown an interface for quick test
+ANSIBLE_HOST_KEY_CHECKING=False \
+uvx --from "ansible-core==2.19.2" --with "paramiko,ansible" \
+ansible-playbook ansible-helper/xrd_apply_config.yaml -i ansible-helper/hosts
+```

@@ -122,7 +122,9 @@ def _build_phase_investigations(
     for device in investigation_list:
         profile = get_device_profile(store, device.device_name)
         history = get_device_history(store, device.device_name, limit=3)
-        device_context = _build_device_context(device, profile, history)
+        device_context = _build_device_context(
+            device, profile, history, include_dynamic_facts=device.is_primary
+        )
 
         logger.debug(
             "  ✅ Hydrated context for %s (role=%s, is_primary=%s)",
@@ -143,13 +145,20 @@ def _build_phase_investigations(
 
 
 def _build_device_context(
-    device: DiscoveredDevice, profile: dict, history: list
+    device: DiscoveredDevice,
+    profile: dict,
+    history: list,
+    include_dynamic_facts: bool = True,
 ) -> str:
     """Assemble device_context from fresh MCP data and stored historical context.
 
     Static topology (type, role, neighbors) and capability profile always come
     from the current MCP response. The store contributes only dynamic facts and
     investigation history to avoid stale topology data.
+
+    Dynamic facts (DEVICE_PROFILE) are excluded for context devices because
+    they carry the last alert text — which references the primary device — and
+    confuse the context executor into thinking it is investigating that device.
     """
     sections = [_format_mcp_device_section(device)]
 
@@ -157,9 +166,10 @@ def _build_device_context(
     if capability_context:
         sections.append(capability_context)
 
-    dynamic_context = format_dynamic_facts_for_context(profile)
-    if dynamic_context:
-        sections.append(dynamic_context)
+    if include_dynamic_facts:
+        dynamic_context = format_dynamic_facts_for_context(profile)
+        if dynamic_context:
+            sections.append(dynamic_context)
 
     history_context = format_history_for_context(history)
     if history_context:
