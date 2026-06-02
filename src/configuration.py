@@ -22,6 +22,7 @@ class LLMModel(str, Enum):
 
     OPENAI_GPT5_NANO = "openai/gpt-5-nano"
     OPENAI_GPT5 = "openai/gpt-5"
+    OPENAI_GPT5_MINI = "openai/gpt-5-mini"
     OPENAI_GPT5_4_NANO = "openai/gpt-5.4-nano"
     OPENROUTER_CLAUDE_SONNET_4 = "openrouter/anthropic/claude-sonnet-4"
     OPENROUTER_CLAUDE_SONNET_4_5 = "openrouter/anthropic/claude-sonnet-4-5"
@@ -37,7 +38,7 @@ class Configuration:
 
     model: Annotated[LLMModel, {"__template_metadata__": {"kind": "llm"}}] = (
         field(
-            default=LLMModel.OPENAI_GPT5_NANO,
+            default=LLMModel.OPENAI_GPT5_MINI,
             metadata={
                 "description": "The language model to use for the agent's main interactions. "
                 "Select from the available models in the LLMModel enum."

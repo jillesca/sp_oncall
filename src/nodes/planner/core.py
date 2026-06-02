@@ -63,7 +63,8 @@ def plan_single_device(
     planning_context = build_planning_context(
         device_name, device_context, trigger_context, investigation_role
     )
-    system_prompt = load_prompt("planner")
+    prompt_name = f"{investigation_role}_planner"
+    system_prompt = load_prompt(prompt_name)
 
     human_message = "\n\n".join(
         [
@@ -73,7 +74,7 @@ def plan_single_device(
         ]
     )
     log_prompt(
-        node_name="planner",
+        node_name=prompt_name,
         system_prompt=system_prompt,
         human_message=human_message,
         device_name=device_name,
