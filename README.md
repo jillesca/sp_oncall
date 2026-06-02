@@ -14,52 +14,22 @@ Think of SP Oncall as a team of specialized AI agents that work together to inve
 - **RCA Assessor** — Reviews the completed investigation phases and extracts the most likely root cause.
 - **Report Generator** — Produces the final human-readable report and updates per-device history.
 
-## Quick Demo
-
-Watch [SP Oncall in Action](https://app.vidcast.io/share/71c7937d-645d-4226-87c6-883b49c0e4f3) (2:25) showing how to query the network using natural language.
-
 ## Architecture
 
 The graph is a linear orchestration pipeline: `input_validator_node → context_investigation → primary_investigation → rca_assessor_node → report_generator`. Each investigation phase is a sub-graph that handles its own retries internally.
 
 Inside each investigation sub-graph, you'll see four internal nodes in LangGraph Studio: `plan_device` (creates investigation strategy), `execute_device` (queries network devices), `collect_device_result` (aggregates findings), and `assess_device` (evaluates if objective is met). If assessment fails and retries remain, the phase loops back to execute.
 
-```mermaid
-flowchart TD
-  start([__start__]) --> iv[input_validator_node]
-  iv --> subgraph_context
-
-  subgraph subgraph_context[context_investigation]
-    cplan[plan_device] --> cexec[execute_device]
-    cexec --> ccollect[collect_device_result]
-    ccollect --> cassess[assess_device]
-    cassess -. retry .-> cexec
-  end
-
-  subgraph_context --> subgraph_primary
-
-  subgraph subgraph_primary[primary_investigation]
-    pplan[plan_device] --> pexec[execute_device]
-    pexec --> pcollect[collect_device_result]
-    pcollect --> passess[assess_device]
-    passess -. retry .-> pexec
-  end
-
-  subgraph_primary --> rca[rca_assessor_node]
-  rca --> report[report_generator]
-  report --> finish([__end__])
-```
+![graph](img/graph.png)
 
 ## Key Features
 
-- **Manual-first workflow**: Run investigations directly in LangGraph Studio using natural-language queries.
 - **Optional alert integration**: Connect to an external observability stack (like [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack)) for automated investigations triggered by network alerts.
 - **Per-device memory**: Device Profiles store role, BGP AS, neighbors, and topology facts across runs, plus last alert and health status — all in the LangGraph Store, no external DB required.
 - **Two-phase investigations**: Context phase investigates related devices (neighbors, topology) first; primary phase investigates target devices using context findings.
 - **Multi-device concurrency**: Multiple devices are investigated in parallel within each phase.
 - **Internal retry loop**: Each phase can retry up to `max_retries` times (default: 3) before moving on.
 - **Skill-based planning**: Investigation strategies live in `skills/` as Markdown files. Manual queries use all skills; alert-triggered investigations filter by event type.
-- **Follow-up questions**: After a run completes, continue the conversation in the same thread with full access to investigation state.
 
 ## Prerequisites
 
@@ -70,6 +40,7 @@ Before you can use SP Oncall, you'll need these tools installed on your system:
 - **[OpenAI API Key](https://platform.openai.com/)** — Required if using OpenAI models (default). OpenRouter is also supported.
 - **[LangSmith Account](https://smith.langchain.com/)** — For LangGraph Studio.
 - **Network Devices** — Your actual network equipment, or use the [DevNet XRd Sandbox](https://devnetsandbox.cisco.com/DevNet/) for testing.
+- **[gNMIBuddy](https://github.com/jillesca/gNMIBuddy)** — A gNMI MCP server that provides a simple interface to query network devices. SP Oncall uses it to interact with network devices.
 
 **Windows users**: This project requires a Unix-like environment. Install [WSL (Windows Subsystem for Linux)](https://docs.microsoft.com/en-us/windows/wsl/install) to run it on Windows.
 
