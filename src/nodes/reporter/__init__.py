@@ -1,26 +1,8 @@
 """
 Investigation Reporter Node.
 
-This module orchestrates the complete report generation workflow including
-learning insights generation and historical context management.
+Generates the final investigation report, persists device facts and history
+to the store, and resets working state for the next request.
 """
 
-# Import the main node function from core
-from .core import (
-    investigation_report_node,
-    _log_successful_report_generation,
-)
-
-# Import supporting functions
-from .context import (
-    build_report_context,
-    _add_single_investigation_details,
-    _add_historical_context,
-)
-from .generation import generate_report, _extract_report_content
-from .session import (
-    update_historical_context,
-    _build_learning_insights_context,
-    _generate_learning_insights_with_llm,
-)
-from nodes.common import load_model
+from .core import investigation_report_node as investigation_report_node

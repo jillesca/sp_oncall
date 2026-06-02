@@ -1,12 +1,11 @@
 """
-Unit tests for input_validator.py data extraction functions.
+Unit tests for input_validator node data processing functions.
 
-Tests focus on testing data processing logic, not LLM/MCP interactions.
+Tests focus on data processing logic, not LLM/MCP interactions.
 Functions that use mcp_node or with_structured_output are excluded.
 """
 
 import pytest
-import json
 from unittest.mock import Mock
 
 from src.nodes.input_validator.core import (
@@ -21,11 +20,14 @@ from src.nodes.input_validator.extraction import (
 )
 from src.nodes.input_validator.processing import (
     process_investigation_planning_response,
-    create_investigations_from_response,
-    DeviceToInvestigate,
     InvestigationPlanningResponse,
-    _normalize_device_profile,
 )
+from src.nodes.input_validator.core import (
+    _build_device_context,
+    _format_mcp_device_section,
+    _hydrate_single_investigation,
+)
+from src.nodes.input_validator.processing import DiscoveredDevice
 from schemas.state import GraphState, Investigation
 from langchain_core.messages import AIMessage, ToolMessage, HumanMessage
 from tests.data.input_validator_data import (
@@ -36,14 +38,13 @@ from tests.data.input_validator_data import (
     SAMPLE_INVESTIGATION_PLANNING_RESPONSE,
     EMPTY_INVESTIGATION_PLANNING_RESPONSE,
     SAMPLE_GRAPH_STATE,
-    DEVICE_PROFILE_TEST_CASES,
     SAMPLE_AI_MESSAGE,
     SAMPLE_AI_MESSAGE_LIST_CONTENT,
 )
 
 
 class TestExtractMcpResponseContent:
-    """Test cases for _extract_mcp_response_content function."""
+    """Test cases for extract_mcp_response_content function."""
 
     def test_extract_mcp_response_content_success(self):
         """Test successful extraction from valid MCP response."""
@@ -106,80 +107,15 @@ class TestExtractMcpResponseContent:
 
         result = extract_mcp_response_content(response_with_list_content)
         assert isinstance(result, AIMessage)
-        # Content should be preserved as-is when it's a list
         assert isinstance(result.content, list) or isinstance(
             result.content, str
         )
 
 
-class TestNormalizeDeviceProfile:
-    """Test cases for _normalize_device_profile function."""
-
-    @pytest.mark.parametrize(
-        "input_value,expected_output,description", DEVICE_PROFILE_TEST_CASES
-    )
-    def test_normalize_device_profile_cases(
-        self, input_value, expected_output, description
-    ):
-        """Test device profile normalization with various input types."""
-        result = _normalize_device_profile(input_value)
-
-        assert isinstance(
-            result, str
-        ), f"Result should be string for {description}"
-
-        if isinstance(input_value, dict) and input_value:
-            # For non-empty dicts, result should be valid JSON
-            try:
-                parsed = json.loads(result)
-                assert (
-                    parsed == input_value
-                ), f"Dict should round-trip for {description}"
-            except json.JSONDecodeError:
-                # Fallback case - should still be a string
-                assert isinstance(result, str)
-        else:
-            assert (
-                result == expected_output
-            ), f"Expected {expected_output} for {description}"
-
-    def test_normalize_device_profile_with_unserializable_dict(self):
-        """Test normalization handles unserializable dictionaries."""
-        # Create a dict with unserializable content
-        unserializable_dict = {
-            "key": set([1, 2, 3])
-        }  # sets are not JSON serializable
-
-        result = _normalize_device_profile(unserializable_dict)
-
-        assert isinstance(result, str)
-        assert len(result) > 0
-        # Should fallback to string representation
-        assert "set" in result or "key" in result
-
-    def test_normalize_device_profile_preserves_valid_json_structure(self):
-        """Test that valid dictionaries are preserved as proper JSON."""
-        test_dict = {
-            "is_mpls_enabled": True,
-            "role": "PE",
-            "interfaces": ["eth0", "eth1"],
-            "config": {"bgp": {"as": 65001}},
-        }
-
-        result = _normalize_device_profile(test_dict)
-
-        # Should be valid JSON
-        parsed = json.loads(result)
-        assert parsed == test_dict
-
-        # Should be sorted for consistency
-        assert result == json.dumps(test_dict, sort_keys=True)
-
-
 class TestLogSuccessfulInvestigationPlanning:
     """Test cases for _log_successful_investigation_planning function."""
 
-    def test_log_successful_investigation_planning_with_devices(self, caplog):
+    def test_log_with_devices(self, caplog):
         """Test logging successful investigation planning with devices."""
         caplog.clear()
 
@@ -187,12 +123,9 @@ class TestLogSuccessfulInvestigationPlanning:
             SAMPLE_INVESTIGATION_PLANNING_RESPONSE
         )
 
-        # Function should complete without error (logging tested by behavior)
         assert True
 
-    def test_log_successful_investigation_planning_with_empty_devices(
-        self, caplog
-    ):
+    def test_log_with_empty_devices(self, caplog):
         """Test logging with empty devices list."""
         caplog.clear()
 
@@ -200,101 +133,152 @@ class TestLogSuccessfulInvestigationPlanning:
             EMPTY_INVESTIGATION_PLANNING_RESPONSE
         )
 
-        # Function should complete without error
         assert True
 
-    def test_log_successful_investigation_planning_handles_none_gracefully(
-        self, caplog
-    ):
-        """Test logging handles None input gracefully."""
+    def test_log_handles_none_gracefully(self, caplog):
+        """Test logging raises TypeError on None input."""
         caplog.clear()
 
-        # This should raise TypeError when trying to get len() of None
-        try:
+        with pytest.raises(TypeError):
             _log_successful_investigation_planning(None)
-            assert False, "Should have raised a TypeError"
-        except TypeError:
-            # Expected when accessing len() on None
-            assert True
 
 
-class TestCreateInvestigationsFromResponse:
-    """Test cases for _create_investigations_from_response function."""
+class TestBuildDeviceContext:
+    """Test cases for _build_device_context function."""
 
-    def test_create_investigations_from_response_success(self):
-        """Test successful creation of investigations from response."""
-        result = create_investigations_from_response(
-            SAMPLE_INVESTIGATION_PLANNING_RESPONSE
+    def test_includes_mcp_section_for_new_device(self):
+        """Test that fresh MCP data is always included."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=["xrd-2"]
         )
+        result = _build_device_context(device, profile={}, history=[])
 
-        assert isinstance(result, list)
-        assert len(result) == len(
-            SAMPLE_INVESTIGATION_PLANNING_RESPONSE.devices
+        assert "Device Facts:" in result
+        assert "IOS XR" in result
+        assert "PE" in result
+        assert "xrd-2" in result
+
+    def test_appends_dynamic_facts_when_present(self):
+        """Test that stored dynamic facts are appended to the MCP section."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
         )
+        profile = {"dynamic_facts": {"last_known_state": "completed"}}
+        result = _build_device_context(device, profile=profile, history=[])
 
-        for investigation in result:
-            assert isinstance(investigation, Investigation)
-            assert investigation.device_name is not None
-            assert investigation.device_profile is not None
-            assert investigation.role is not None
+        assert "Device Facts:" in result
+        assert "Previous Investigation Context:" in result
+        assert "last_known_state: completed" in result
 
-    def test_create_investigations_from_response_preserves_device_info(self):
-        """Test that device information is preserved in investigations."""
-        result = create_investigations_from_response(
-            SAMPLE_INVESTIGATION_PLANNING_RESPONSE
+    def test_appends_history_when_present(self):
+        """Test that investigation history is appended when available."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
         )
+        history = [{"timestamp": "2026-01-01T00:00:00+00:00", "status": "completed", "summary": "All good"}]
+        result = _build_device_context(device, profile={}, history=history)
 
-        # Check first device
-        first_investigation = result[0]
-        first_device = SAMPLE_INVESTIGATION_PLANNING_RESPONSE.devices[0]
+        assert "Device Facts:" in result
+        assert "Previous Investigation Findings:" in result
+        assert "All good" in result
 
-        assert first_investigation.device_name == first_device.device_name
-        assert (
-            first_investigation.device_profile == first_device.device_profile
+    def test_skips_static_facts_from_store(self):
+        """Test that stored static_facts are not included in device_context."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
         )
-        assert first_investigation.role == first_device.role
+        profile = {"static_facts": {"role": "PE"}, "dynamic_facts": {}}
+        result = _build_device_context(device, profile=profile, history=[])
 
-    def test_create_investigations_from_response_with_empty_list(self):
-        """Test creation with empty devices list."""
-        result = create_investigations_from_response(
-            EMPTY_INVESTIGATION_PLANNING_RESPONSE
+        assert "Static Device Facts:" not in result
+
+
+class TestFormatMcpDeviceSection:
+    """Test cases for _format_mcp_device_section function."""
+
+    def test_formats_all_fields(self):
+        """Test that type, role, and neighbors are all included."""
+        device = DiscoveredDevice(
+            device_name="xrd-1",
+            type_model="Cisco IOS XR",
+            role="PE",
+            neighbors=["xrd-2", "xrd-3"],
         )
+        result = _format_mcp_device_section(device)
 
-        assert isinstance(result, list)
-        assert len(result) == 0
+        assert "Device Facts:" in result
+        assert "Cisco IOS XR" in result
+        assert "PE" in result
+        assert "xrd-2" in result
+        assert "xrd-3" in result
 
-    def test_create_investigations_from_response_sets_default_values(self):
-        """Test that investigations have appropriate default values."""
-        result = create_investigations_from_response(
-            SAMPLE_INVESTIGATION_PLANNING_RESPONSE
+    def test_handles_missing_type_model(self):
+        """Test graceful handling of empty type_model."""
+        device = DiscoveredDevice(device_name="xrd-1", type_model="", role="PE")
+        result = _format_mcp_device_section(device)
+
+        assert "Unknown" in result
+
+    def test_omits_neighbors_line_when_empty(self):
+        """Test that neighbors line is omitted when there are no neighbors."""
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
         )
+        result = _format_mcp_device_section(device)
 
-        if result:
-            investigation = result[0]
-            # Check default values are set
-            assert investigation.execution_results == []
-            assert investigation.dependencies == []
-            assert investigation.report is None
-            assert investigation.error_details is None
+        assert "Neighbors:" not in result
 
-    def test_create_investigations_from_response_with_minimal_device_data(
-        self,
-    ):
-        """Test creation with minimal device data."""
-        minimal_response = InvestigationPlanningResponse(
-            devices=[
-                DeviceToInvestigate(
-                    device_name="test-device", device_profile="test"
-                )
-            ]
+
+class TestHydrateSingleInvestigation:
+    """Test cases for _hydrate_single_investigation function."""
+
+    def test_populates_fields_from_discovered_device(self):
+        """Test that Investigation fields come from DiscoveredDevice."""
+        from langgraph.store.memory import InMemoryStore
+
+        store = InMemoryStore()
+        device = DiscoveredDevice(
+            device_name="xrd-1",
+            type_model="IOS XR",
+            role="PE",
+            neighbors=["xrd-2"],
         )
+        result = _hydrate_single_investigation(device, store)
 
-        result = create_investigations_from_response(minimal_response)
+        assert result.device_name == "xrd-1"
+        assert result.device_type == "IOS XR"
+        assert result.role == "PE"
+        assert result.neighbors == ["xrd-2"]
 
-        assert len(result) == 1
-        investigation = result[0]
-        assert investigation.device_name == "test-device"
-        assert investigation.device_profile == "test"
+    def test_device_context_contains_mcp_data(self):
+        """Test that device_context is populated with fresh MCP data."""
+        from langgraph.store.memory import InMemoryStore
+
+        store = InMemoryStore()
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
+        )
+        result = _hydrate_single_investigation(device, store)
+
+        assert "IOS XR" in result.device_context
+        assert "PE" in result.device_context
+
+    def test_enriches_with_stored_history(self):
+        """Test that stored history is included in device_context."""
+        from langgraph.store.memory import InMemoryStore
+
+        store = InMemoryStore()
+        store.put(
+            ("device_profiles", "xrd-1"),
+            "history",
+            {"entries": [{"timestamp": "t", "status": "completed", "summary": "prior run"}]},
+        )
+        device = DiscoveredDevice(
+            device_name="xrd-1", type_model="IOS XR", role="PE", neighbors=[]
+        )
+        result = _hydrate_single_investigation(device, store)
+
+        assert "prior run" in result.device_context
 
 
 class TestBuildFailedState:
@@ -306,8 +290,8 @@ class TestBuildFailedState:
 
         assert isinstance(result, GraphState)
         assert (
-            result.current_user_request
-            == SAMPLE_GRAPH_STATE.current_user_request
+            result.trigger_context
+            == SAMPLE_GRAPH_STATE.trigger_context
         )
 
     def test_build_failed_state_sets_empty_investigations(self):
@@ -316,104 +300,54 @@ class TestBuildFailedState:
 
         assert result.investigations == []
 
-    def test_build_failed_state_preserves_other_fields(self):
-        """Test that failed state preserves other state fields."""
-        result = _build_failed_state(SAMPLE_GRAPH_STATE)
-
-        assert result.max_retries == SAMPLE_GRAPH_STATE.max_retries
-        assert result.current_retries == SAMPLE_GRAPH_STATE.current_retries
-        assert (
-            result.historical_context == SAMPLE_GRAPH_STATE.historical_context
-        )
-
     def test_build_failed_state_with_existing_investigations(self):
         """Test failed state building when original state has investigations."""
         state_with_investigations = GraphState(
             messages=[HumanMessage(content="test query")],
             investigations=[
-                Investigation(
-                    device_name="existing-device",
-                    device_profile="existing profile",
-                    role="PE",
-                )
+                Investigation(device_name="existing-device")
             ],
-            historical_context=[],
-            max_retries=3,
-            current_retries=0,
-            assessment=None,
         )
 
         result = _build_failed_state(state_with_investigations)
 
-        # Should clear investigations even if they existed
         assert result.investigations == []
         assert (
-            result.current_user_request
-            == state_with_investigations.current_user_request
+            result.trigger_context
+            == state_with_investigations.trigger_context
         )
-
-
-class TestDeviceToInvestigateDataClass:
-    """Test cases for DeviceToInvestigate data class."""
-
-    def test_device_to_investigate_creation(self):
-        """Test DeviceToInvestigate creation with required fields."""
-        device = DeviceToInvestigate(
-            device_name="test-device", device_profile="test profile"
-        )
-
-        assert device.device_name == "test-device"
-        assert device.device_profile == "test profile"
-        assert device.role == ""  # Default value
-
-    def test_device_to_investigate_with_role(self):
-        """Test DeviceToInvestigate creation with role specified."""
-        device = DeviceToInvestigate(
-            device_name="test-device", device_profile="test profile", role="PE"
-        )
-
-        assert device.device_name == "test-device"
-        assert device.device_profile == "test profile"
-        assert device.role == "PE"
 
 
 class TestInvestigationPlanningResponseDataClass:
     """Test cases for InvestigationPlanningResponse data class."""
 
-    def test_investigation_planning_response_creation(self):
-        """Test InvestigationPlanningResponse creation."""
+    def test_creation_with_discovered_devices(self):
+        """Test InvestigationPlanningResponse creation with DiscoveredDevice objects."""
         response = InvestigationPlanningResponse(
             devices=[
-                DeviceToInvestigate(
-                    device_name="device1", device_profile="profile1"
-                ),
-                DeviceToInvestigate(
-                    device_name="device2", device_profile="profile2"
-                ),
+                DiscoveredDevice(device_name="xrd-1", type_model="IOS XR", role="PE"),
+                DiscoveredDevice(device_name="xrd-2", type_model="IOS XR", role="P"),
             ]
         )
 
         assert len(response) == 2
-        assert len(response.devices) == 2
 
-    def test_investigation_planning_response_len(self):
+    def test_len_method(self):
         """Test __len__ method of InvestigationPlanningResponse."""
         response = SAMPLE_INVESTIGATION_PLANNING_RESPONSE
 
         assert len(response) == len(response.devices)
 
-    def test_investigation_planning_response_iter(self):
-        """Test __iter__ method of InvestigationPlanningResponse."""
+    def test_iter_method(self):
+        """Test __iter__ method yields DiscoveredDevice objects."""
         response = SAMPLE_INVESTIGATION_PLANNING_RESPONSE
 
-        devices_list = list(response)
-        assert len(devices_list) == len(response.devices)
+        devices = list(response)
+        assert len(devices) == len(response.devices)
+        assert all(isinstance(d, DiscoveredDevice) for d in devices)
 
-        for i, device in enumerate(response):
-            assert device == response.devices[i]
-
-    def test_investigation_planning_response_empty(self):
-        """Test InvestigationPlanningResponse with empty devices."""
+    def test_empty_response(self):
+        """Test InvestigationPlanningResponse with empty devices list."""
         response = EMPTY_INVESTIGATION_PLANNING_RESPONSE
 
         assert len(response) == 0

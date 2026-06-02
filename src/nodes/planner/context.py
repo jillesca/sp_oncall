@@ -1,79 +1,46 @@
-"""Context building for planner investigations."""
+"""Context building for per-device planning."""
 
-from typing import List
-from schemas.state import Investigation, GraphState
-from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_historical_context_to_builder
+from src.util.xml_helpers import xml_wrap
 from src.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def extract_investigations_summary(investigations: List[Investigation]) -> str:
-    """
-    Extract relevant investigation data for LLM planning context in markdown format.
+def build_planning_context(
+    device_name: str,
+    device_context: str,
+    trigger_context: str,
+    investigation_role: str,
+) -> str:
+    """Build planning context for a single device investigation.
+
+    Data sections (trigger, device context) are XML-wrapped so the planner
+    LLM can distinguish injected data from its instructions.
 
     Args:
-        investigations: List of Investigation objects from the state
+        device_name: Target device identifier.
+        device_context: Pre-formatted context string for this device.
+        trigger_context: Original trigger content (alert or user request).
+        investigation_role: "primary" for alert targets, "context" for neighbor checks.
 
     Returns:
-        Markdown-formatted string containing device names and profiles for each investigation
-    """
-    if not investigations:
-        return (
-            MarkdownBuilder()
-            .add_section("Investigations")
-            .add_text("No investigations defined.")
-            .build()
-        )
-
-    builder = MarkdownBuilder().add_section("Devices")
-
-    for i, investigation in enumerate(investigations, 1):
-        # Device header with numbering
-        builder.add_subsection(f"{i}. Device: `{investigation.device_name}`")
-
-        # Device profile section
-        builder.add_bold_text("Device Profile:")
-        builder.add_bold_text("Role:", investigation.role)
-        builder.add_code_block(investigation.device_profile)
-
-    logger.debug(
-        "📊 Extracted markdown summary for %s devices",
-        len(investigations),
-    )
-    return builder.build()
-
-
-def build_planning_context(state: GraphState) -> str:
-    """
-    Build comprehensive planning context including investigations and session context.
-
-    Args:
-        state: Current GraphState with investigations and historical context
-
-    Returns:
-        Markdown-formatted string containing complete planning context
+        Formatted string containing device details for the planner.
     """
     logger.debug(
-        "📋 Building planning context for %d investigations",
-        len(state.investigations),
+        "📋 Building planning context for device: %s (role=%s)",
+        device_name,
+        investigation_role,
     )
 
-    builder = MarkdownBuilder()
-    builder.add_header("Planning Context")
-
-    # Add investigations summary
-    investigations_content = extract_investigations_summary(
-        state.investigations
-    )
-    builder.add_text(investigations_content)
-
-    add_historical_context_to_builder(
-        builder, state, section_title="Historical Context for Planning"
+    context_string = "\n\n".join(
+        [
+            f"**Investigation Role:** {investigation_role}",
+            f"**Device:** `{device_name}`",
+            xml_wrap("TRIGGER_CONTEXT", trigger_context),
+            xml_wrap("DEVICE_CONTEXT", device_context or "No context available"),
+        ]
     )
 
-    context_string = builder.build()
     logger.debug(
         "📤 Planning context prepared (%d characters)", len(context_string)
     )

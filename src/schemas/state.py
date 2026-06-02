@@ -12,63 +12,76 @@ from typing import List, Dict, Any, Optional, Annotated
 from langchain_core.messages import AnyMessage, HumanMessage
 from langgraph.graph.message import add_messages
 
-from .assessment_schema import AssessmentOutput
+
+def _replace_list(_existing: list, new: list) -> list:
+    """Replace-wins reducer: always take the incoming value.
+
+    Prevents accumulation across graph runs. Nodes that carry state forward
+    via replace(state, ...) pass the existing list as the new value, so the
+    result is unchanged. The reporter clears these fields by returning a fresh
+    GraphState with the default empty list.
+    """
+    return new
 
 
 @dataclass
 class GraphState:
-    """Enhanced workflow state supporting multi-device investigations.
+    """Workflow state for the sp_oncall agent.
 
     Attributes:
-        messages: Conversation history between user and LLM using LangChain message format.
-                 Supports proper integration with LangChain tools and maintains conversation context.
-        investigations: Collection of device-specific investigations.
-        historical_context: Historical context and learned patterns from previous investigations.
-
-        # Global workflow control
-        max_retries: Maximum retry attempts per investigation.
-        current_retries: Global retry counter for the entire workflow.
-
-        # Assessment results (composition with AssessmentOutput)
-        assessment: Assessment results from the objective assessor node.
-                   Contains is_objective_achieved, notes_for_final_report, and feedback_for_retry.
-
+        messages: Conversation history using LangChain message format.
+        primary_investigations: One Investigation covering all primary devices
+                                (alert target or explicitly requested). Typically
+                                a single-element list; empty when none found.
+        context_investigations: One Investigation covering all context (neighbor)
+                                devices. Typically a single-element list.
+        event_type: Alert event type extracted from the trigger context (e.g.
+                    "interface_state", "bgp_session_state"). None for manual
+                    queries.
+        root_cause: Root cause analysis produced by the rca_assessor_node after
+                    all investigations complete.
+        context_phase_report: Single combined report produced by the context
+                              executor covering all neighbor devices. Set by
+                              collect_device_result in the context subgraph.
+        context_device_names: Names of all devices covered by the context phase.
+                              Used by downstream nodes (reporter, RCA) to build
+                              headers without needing the full Investigation objects.
+        context_device_reports: Per-device reports from the context phase, keyed
+                                by device name. Populated by collect_device_result
+                                so the reporter can persist each device's own report
+                                in its history rather than the full combined report.
+        completed_primary_investigations: Completed primary Investigation from
+                                          the primary subgraph.
     """
 
-    # LangChain messages for proper tool integration and conversation history
     messages: Annotated[List[AnyMessage], add_messages] = field(
         default_factory=list
     )
-
-    investigations: List[Investigation] = field(default_factory=list)
-    historical_context: List[HistoricalContext] = field(default_factory=list)
-
-    # Global workflow control
-    max_retries: int = 3
-    current_retries: int = 0
-
-    assessment: Optional[AssessmentOutput] = None
+    primary_investigations: List[Investigation] = field(default_factory=list)
+    context_investigations: List[Investigation] = field(default_factory=list)
+    event_type: Optional[str] = None
+    root_cause: Optional[str] = None
+    context_phase_report: str = ""
+    context_device_names: List[str] = field(default_factory=list)
+    context_device_reports: Dict[str, str] = field(default_factory=dict)
+    completed_primary_investigations: Annotated[
+        List[Investigation], _replace_list
+    ] = field(default_factory=list)
 
     @property
-    def current_user_request(self) -> str:
-        """Extract the most recent user request content.
+    def trigger_context(self) -> str:
+        """Extract the most recent trigger content.
 
-        Returns the content of the most recent human message, which represents
-        the current user request being processed by the investigation workflow.
-
+        Returns the content of the most recent human message, whether it
+        originates from a user query, an alert from an observability system,
+        or an upstream agent.
         Handles both string content and structured content (list of content blocks).
-
-        Returns:
-            The content of the most recent human message, or empty string if none found.
         """
-        # Find the most recent human message
         for message in reversed(self.messages):
             if isinstance(message, HumanMessage):
                 content = message.content
 
-                # Handle structured content (list of content blocks)
                 if isinstance(content, list):
-                    # Extract text from content blocks
                     text_parts = []
                     for block in content:
                         if (
@@ -80,101 +93,28 @@ class GraphState:
                             text_parts.append(block)
                     return " ".join(text_parts)
 
-                # Handle simple string content
                 elif isinstance(content, str):
                     return content
 
-                # Fallback for other content types
                 else:
                     return str(content)
 
         return ""
-
-    def get_investigation_by_device(
-        self, device_name: str
-    ) -> Optional[Investigation]:
-        """Retrieve investigation for a specific device."""
-        return next(
-            (
-                inv
-                for inv in self.investigations
-                if inv.device_name == device_name
-            ),
-            None,
-        )
-
-    def get_pending_investigations(self) -> List[Investigation]:
-        """Get investigations that haven't been started."""
-        return [
-            inv
-            for inv in self.investigations
-            if inv.status == InvestigationStatus.PENDING
-        ]
-
-    def get_ready_investigations(self) -> List[Investigation]:
-        """Get investigations ready to execute (no unmet dependencies)."""
-        completed_devices = {
-            inv.device_name
-            for inv in self.investigations
-            if inv.status == InvestigationStatus.COMPLETED
-        }
-
-        return [
-            inv
-            for inv in self.investigations
-            if inv.status == InvestigationStatus.PENDING
-            and all(dep in completed_devices for dep in inv.dependencies)
-        ]
-
-    def all_investigations_complete(self) -> bool:
-        """Check if all investigations have reached a terminal state."""
-        terminal_statuses = {
-            InvestigationStatus.COMPLETED,
-            InvestigationStatus.FAILED,
-            InvestigationStatus.SKIPPED,
-        }
-        return all(
-            inv.status in terminal_statuses for inv in self.investigations
-        )
 
     def __str__(self) -> str:
         """Return a JSON representation of the graph state."""
         return json.dumps(asdict(self), indent=2, default=str)
 
 
-@dataclass
-class HistoricalContext:
-    """Represents historical context and learnings from a previous investigation session.
-
-    This class stores valuable insights from past investigations that can be used
-    to provide context to LLMs for improved decision-making in current investigations.
-
-    Attributes:
-        session_id: Unique identifier for the historical investigation session.
-        previous_report: Investigation report from the historical session.
-        learned_patterns: Patterns discovered from the historical investigation (markdown formatted).
-        device_relationships: Known relationships between devices discovered historically (markdown formatted).
-    """
-
-    session_id: str
-    previous_report: str = ""
-    learned_patterns: str = ""
-    device_relationships: str = ""
-
-    def __str__(self) -> str:
-        """Return a JSON representation of the historical context."""
-        return json.dumps(asdict(self), indent=2, default=str)
-
-
 class InvestigationStatus(Enum):
-    """Lifecycle state for a single device investigation.
+    """Lifecycle state for a phase investigation.
 
     Values:
     - PENDING: Not yet started.
     - IN_PROGRESS: Currently being executed.
     - COMPLETED: Finished successfully.
     - FAILED: Exhausted retries without success.
-    - SKIPPED: Not executed due to dependencies or plan changes.
+    - SKIPPED: Not executed due to plan changes.
     """
 
     PENDING = "pending"
@@ -188,49 +128,42 @@ class InvestigationStatus(Enum):
         return self.value
 
 
-class InvestigationPriority(Enum):
-    """Priority level for investigation execution."""
-
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-    def __str__(self) -> str:
-        """Return the string value of the enum."""
-        return self.value
-
-
 @dataclass
 class Investigation:
-    """Encapsulates all work related to a specific device investigation.
+    """Encapsulates one investigation attempt for all devices in a phase.
+
+    Each Investigation covers every device assigned to the phase (context or
+    primary). The planner produces a per-device plan stored in device_plans;
+    the executor runs a single agent call across all devices and stores one
+    combined report.
 
     Attributes:
-        device_name: Target device identifier extracted by input validator.
-        device_profile: Device type/model information for context-aware planning.
-        objective: Specific objective for this device investigation.
-        working_plan_steps: Ordered execution steps tailored to this device.
-        execution_results: Results from executing plan steps on this device.
-        status: Current state of this investigation.
-        priority: Execution priority level.
-        dependencies: Other investigation device names this depends on.
-        retry_count: Number of retries attempted for this specific investigation.
-        report: Final investigation summary and findings.
-        error_details: Error information if investigation failed.
+        device_contexts: Maps device_name to its pre-formatted context string.
+                         Assembled by the input validator from fresh MCP data,
+                         stored dynamic facts, and investigation history.
+                         Contains device facts, capabilities, and history for
+                         that device only.
+        device_plans: Maps device_name to its formatted investigation plan.
+                      Populated by the planner node. Each value is plain text
+                      containing the objective and ordered steps for that device.
+                      Empty until the planner runs.
+        execution_results: Results from all tool calls made by the executor agent.
+        status: Current lifecycle state of this investigation.
+        report: Single combined report produced by the executor covering all
+                devices in this investigation. None until execution completes.
+        error_details: Error information when the investigation failed.
     """
 
-    device_name: str
-    device_profile: str = ""
-    role: str = ""
-    objective: Optional[str] = None
-    working_plan_steps: str = ""
+    device_contexts: Dict[str, str]
+    device_plans: Dict[str, str] = field(default_factory=dict)
     execution_results: List["ExecutedToolCall"] = field(default_factory=list)
-
     status: InvestigationStatus = InvestigationStatus.PENDING
-    priority: InvestigationPriority = InvestigationPriority.MEDIUM
-    dependencies: List[str] = field(default_factory=list)
-
     report: Optional[str] = None
     error_details: Optional[str] = None
+
+    def device_names(self) -> List[str]:
+        """Return the ordered list of device names in this investigation."""
+        return list(self.device_contexts.keys())
 
     def __str__(self) -> str:
         """Return a JSON representation of the investigation."""

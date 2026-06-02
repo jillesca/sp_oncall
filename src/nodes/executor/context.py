@@ -1,83 +1,76 @@
 """
 Context building for executor investigations.
 
-This module handles building investigation context in markdown format
-for MCP agent execution.
+Builds the investigation context passed to the MCP executor agent.
+Data sections are wrapped in XML tags so the LLM has explicit scope
+boundaries between instructions (markdown) and injected data (XML+markdown).
+
+Each device's context is labelled with its name so the executor and the
+resulting report can clearly attribute findings per device.
 """
 
-from schemas import GraphState, Investigation
-from nodes.markdown_builder import MarkdownBuilder
-from nodes.common.session_context import add_historical_context_to_builder
+from schemas import Investigation
+from src.util.xml_helpers import xml_wrap
 from src.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def build_investigation_context(
-    investigation: Investigation, state: GraphState
+def build_phase_context(
+    investigation: Investigation,
+    trigger_context: str,
+    context_phase_report: str = "",
+    assessor_feedback: str = "",
 ) -> str:
+    """Build combined context for all devices in an investigation phase.
+
+    Produces a single document covering every device in the phase so the
+    executor agent has full situational awareness in one prompt.
+
+    Structure:
+    1. TRIGGER_CONTEXT — what triggered this investigation
+    2. NEIGHBOR_HEALTH_CHECK_RESULTS — neighbor findings (primary phase only)
+    3. ASSESSOR_FEEDBACK — specific gap to address on a retry (retry attempts only)
+    4. Summary line listing all devices under investigation
+    5. One DEVICE block per device — plan and device context, clearly labelled
     """
-    Build context string for a specific investigation in markdown format.
+    sections = [xml_wrap("TRIGGER_CONTEXT", trigger_context)]
 
-    Args:
-        investigation: Investigation to build context for
-        state: Current GraphState for workflow context
-
-    Returns:
-        Formatted context string in markdown for the MCP agent
-    """
-    builder = MarkdownBuilder()
-
-    _add_investigation_details(builder, investigation, state)
-    _add_historical_context_section(builder, state)
-    _add_retry_context(builder, state)
-
-    return builder.build()
-
-
-def _add_investigation_details(
-    builder: MarkdownBuilder, investigation: Investigation, state: GraphState
-) -> None:
-    """Add main investigation details to the context."""
-    builder.add_header("Investigation Context")
-    builder.add_bold_text("User Query:", state.current_user_request)
-    builder.add_bold_text("Device Name:", investigation.device_name)
-    builder.add_bold_text("Role:", investigation.role)
-    builder.add_bold_text(
-        "Objective:", investigation.objective or "Not specified"
-    )
-
-    builder.add_section("Device Profile")
-    builder.add_code_block(investigation.device_profile)
-
-    builder.add_section("Working Plan Steps")
-    builder.add_text(
-        investigation.working_plan_steps or "No plan steps defined"
-    )
-
-
-def _add_historical_context_section(
-    builder: MarkdownBuilder, state: GraphState
-) -> None:
-    """Add historical context using the common historical context module."""
-    add_historical_context_to_builder(
-        builder, state, section_title="Previous Investigation Context"
-    )
-
-
-def _add_retry_context(builder: MarkdownBuilder, state: GraphState) -> None:
-    """Add retry context if this is a retry."""
-    if state.current_retries > 0:
-        builder.add_separator()
-        builder.add_section("Retry Context")
-        builder.add_bold_text(
-            "Retry Number:", f"#{state.current_retries} of {state.max_retries}"
+    if context_phase_report:
+        sections.append(
+            xml_wrap("NEIGHBOR_HEALTH_CHECK_RESULTS", context_phase_report)
         )
 
-        feedback = (
-            state.assessment.feedback_for_retry
-            if state.assessment and state.assessment.feedback_for_retry
-            else "No specific feedback provided from assessor"
-        )
-        builder.add_subsection("Previous Execution Feedback")
-        builder.add_text(feedback)
+    if assessor_feedback:
+        sections.append(xml_wrap("ASSESSOR_FEEDBACK", assessor_feedback))
+
+    device_names = investigation.device_names()
+    sections.append(f"**Devices to investigate:** {', '.join(device_names)}")
+
+    for device_name, device_context in investigation.device_contexts.items():
+        device_plan = investigation.device_plans.get(device_name, "")
+        sections.append(_build_device_section(device_name, device_context, device_plan))
+
+    return "\n\n".join(sections)
+
+
+def _build_device_section(
+    device_name: str,
+    device_context: str,
+    device_plan: str,
+) -> str:
+    """Build a self-contained XML block for one device investigation.
+
+    The device name in the opening tag makes it unambiguous which device
+    each block belongs to so the executor report can clearly identify findings
+    per device.
+    """
+    lines = [f'<DEVICE name="{device_name}">']
+
+    if device_plan:
+        lines.append(device_plan)
+
+    lines.append(xml_wrap("DEVICE_CONTEXT", device_context))
+    lines.append("</DEVICE>")
+
+    return "\n".join(lines)

@@ -24,7 +24,6 @@ from schemas.state import (
     Investigation,
     InvestigationStatus,
     ExecutedToolCall,
-    HistoricalContext,
 )
 from langchain_core.messages import AIMessage, ToolMessage
 from tests.data.executor_data import (
@@ -63,16 +62,6 @@ class TestLogIncomingState:
         log_incoming_state(empty_state)
         assert True  # Function should complete without error
 
-    def test_log_incoming_state_with_retries(self, caplog):
-        """Test logging includes retry information."""
-        retry_state = replace(
-            SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS, current_retries=2
-        )
-
-        caplog.clear()
-        log_incoming_state(retry_state)
-        assert True  # Function should complete without error
-
 
 class TestBuildInvestigationContext:
     """Test cases for build_investigation_context function."""
@@ -82,62 +71,20 @@ class TestBuildInvestigationContext:
         state = SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS
         investigation = state.investigations[0]
 
-        result = build_investigation_context(investigation, state)
+        result = build_investigation_context(investigation, state.trigger_context)
 
         assert isinstance(result, str)
-        assert f"**User Query:** {state.current_user_request}" in result
+        assert f"**Trigger Context:** {state.trigger_context}" in result
         assert f"**Device Name:** {investigation.device_name}" in result
-        assert investigation.device_profile in result
+        assert investigation.device_context in result
         assert f"**Role:** {investigation.role}" in result
         assert f"**Objective:** {investigation.objective}" in result
-
-    def testbuild_investigation_context_with_historical_context(self):
-        """Test context building includes historical context data."""
-
-        context = HistoricalContext(
-            session_id="test-session",
-            previous_report="Previous investigation report",
-            learned_patterns="Pattern 1: Test pattern",
-            device_relationships="device1 -> device2",
-        )
-
-        state_with_context = replace(
-            SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS,
-            historical_context=[context],
-        )
-        investigation = state_with_context.investigations[0]
-
-        result = build_investigation_context(investigation, state_with_context)
-
-        assert "Previous Investigation Context" in result
-        assert "**Total Previous Sessions:** 1" in result
-        assert "Previous Investigation Report" in result
-
-    def testbuild_investigation_context_with_retry(self):
-        """Test context building includes retry information."""
-        from schemas.assessment_schema import AssessmentOutput
-
-        retry_state = replace(
-            SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS,
-            current_retries=2,
-            assessment=AssessmentOutput(
-                is_objective_achieved=False,
-                notes_for_final_report="Failed",
-                feedback_for_retry="Try different approach",
-            ),
-        )
-        investigation = retry_state.investigations[0]
-
-        result = build_investigation_context(investigation, retry_state)
-
-        assert "Retry Context" in result
-        assert "**Retry Number:** #2 of 3" in result
-        assert "Try different approach" in result
 
     def testbuild_investigation_context_returns_valid_string(self):
         """Test that context building returns a valid non-empty string."""
         result = build_investigation_context(
-            SAMPLE_INVESTIGATION, SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS
+            SAMPLE_INVESTIGATION,
+            SAMPLE_GRAPH_STATE_WITH_READY_INVESTIGATIONS.trigger_context,
         )
 
         assert isinstance(result, str)

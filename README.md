@@ -1,121 +1,81 @@
-# 🚀 SP Oncall: Multi-Agent Network Investigation
+# SP Oncall: Multi-Agent Network Investigation
 
 [![published](https://static.production.devnetcloud.com/codeexchange/assets/images/devnet-published.svg)](https://developer.cisco.com/codeexchange/github/repo/jillesca/sp_oncall)
 
-SP Oncall is an experiment about a network investigation system that automates complex network diagnostics and troubleshooting for Service Provider (SP) networks. It uses artificial intelligence to analyze network devices, identify issues, and provide detailed reports. I'm mostly using it to learn and demo about AI solutions for networking.
+SP Oncall is an experimental AI-driven network investigation system for Service Provider (SP) networks. It automates network diagnostics and troubleshooting by analyzing device state, identifying issues, and generating detailed root-cause reports. I'm mostly using it to learn and demo about AI solutions for networking.
 
-## 🤖 What Does It Do?
+## What Does It Do?
 
 Think of SP Oncall as a team of specialized AI agents that work together to investigate network problems:
 
-- 🔍 **Input Validator** - Understands your questions and identifies which network devices to investigate.
-- 📋 **Planner** - Creates a customized investigation strategy for each device.
-- ⚡ **Executor** - Runs the actual network commands and collects data from your devices.
-- 🎯 **Assessor** - Checks if the investigation found what you were looking for.
-- 📊 **Reporter** - Creates easy-to-understand reports and remembers what it learned.
+- **Input Validator** — Understands the incoming query or alert and decides which devices belong to the investigation.
+- **Context Investigation** — Investigates related devices first, such as neighbors or surrounding topology, to build supporting context.
+- **Primary Investigation** — Investigates the main target devices using the context-phase findings.
+- **RCA Assessor** — Reviews the completed investigation phases and extracts the most likely root cause.
+- **Report Generator** — Produces the final human-readable report and updates per-device history.
 
-## 🎥 Quick Demo
+## Architecture
 
-📹 Watch [SP Oncall in Action](https://app.vidcast.io/share/71c7937d-645d-4226-87c6-883b49c0e4f3) (2:25) showing how to query the network using natural language.
+The graph is a linear orchestration pipeline: `input_validator_node → context_investigation → primary_investigation → rca_assessor_node → report_generator`. Each investigation phase is a sub-graph that handles its own retries internally.
+
+Inside each investigation sub-graph, you'll see four internal nodes in LangGraph Studio: `plan_device` (creates investigation strategy), `execute_device` (queries network devices), `collect_device_result` (aggregates findings), and `assess_device` (evaluates if objective is met). If assessment fails and retries remain, the phase loops back to execute.
 
 ![graph](img/graph.png)
 
-## 🏗️ Architecture
+## Key Features
 
-The system uses a multi-agent architecture where specialized AI agents collaborate to investigate network issues. Here's how the workflow operates from user query to final report:
+- **Optional alert integration**: Connect to an external observability stack (like [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack)) for automated investigations triggered by network alerts.
+- **Per-device memory**: Device Profiles store role, BGP AS, neighbors, and topology facts across runs, plus last alert and health status — all in the LangGraph Store, no external DB required.
+- **Two-phase investigations**: Context phase investigates related devices (neighbors, topology) first; primary phase investigates target devices using context findings.
+- **Multi-device concurrency**: Multiple devices are investigated in parallel within each phase.
+- **Internal retry loop**: Each phase can retry up to `max_retries` times (default: 3) before moving on.
+- **Skill-based planning**: Investigation strategies live in `skills/` as Markdown files. Manual queries use all skills; alert-triggered investigations filter by event type.
 
-```mermaid
-sequenceDiagram
-    participant User
-    participant SPOncall as SP Oncall
-    participant MCP as gNMIBuddy MCP Server
-    participant Devices as Network Devices
-
-    User->>SPOncall: User query
-    activate SPOncall
-
-    Note over SPOncall: 1. Input Validator<br/>Validates query and scope
-    SPOncall->>MCP: Get available devices
-    activate MCP
-    MCP-->>SPOncall: Device list
-    deactivate MCP
-
-    Note over SPOncall: 2. Planner<br/>Creates investigation strategy
-
-    Note over SPOncall: 3. Executor<br/>Runs network operations
-    SPOncall->>MCP: Network operations (BGP, interfaces, etc.)
-    activate MCP
-    MCP->>Devices: gNMI requests
-    activate Devices
-    Devices-->>MCP: gNMI responses
-    deactivate Devices
-    MCP-->>SPOncall: Structured data
-    deactivate MCP
-
-    Note over SPOncall: 4. Assessor<br/>Evaluates results
-
-    loop Until objective achieved
-        Note over SPOncall: If more data needed
-        SPOncall->>MCP: Additional operations
-        activate MCP
-        MCP->>Devices: gNMI requests
-        activate Devices
-        Devices-->>MCP: gNMI responses
-        deactivate Devices
-        MCP-->>SPOncall: Additional data
-        deactivate MCP
-    end
-
-    Note over SPOncall: 5. Reporter<br/>Generates final report
-    SPOncall->>User: Investigation Report
-    deactivate SPOncall
-```
-
-## 🎯 Key Features
-
-- **Learning**: Remembers past investigations and uses that knowledge to plan better future investigations.
-- **Multi-Device Processing**: Can investigate multiple network devices at the same time.
-- **Flexible Targeting**: Can target devices by name, role (like "edge routers" or "core switches"), or pattern matching.
-- **Self-Checking**: Automatically retries if it doesn't get the information it needs.
-- **Detailed Reporting**: Creates comprehensive reports while saving insights for future use.
-
-## 🛠️ Prerequisites
+## Prerequisites
 
 Before you can use SP Oncall, you'll need these tools installed on your system:
 
-- **Make** - A build automation tool that helps run common commands (install via your package manager).
-- **[uv](https://docs.astral.sh/uv/#installation)** - A fast Python package manager (alternative to pip).
-- **[OpenAI API Key](https://platform.openai.com/)** - Required if using OpenAI models (default).
-- **[LangSmith Account](https://smith.langchain.com/)** - For Langgraph Studio.
-- **Network Devices** - Your actual network equipment, or use [DevNet sandbox](https://devnetsandbox.cisco.com/DevNet/) for testing
+- **Make** — A build automation tool that helps run common commands (install via your package manager).
+- **[uv](https://docs.astral.sh/uv/#installation)** — A fast Python package manager (alternative to pip).
+- **[OpenAI API Key](https://platform.openai.com/)** — Required if using OpenAI models (default). OpenRouter is also supported.
+- **[LangSmith Account](https://smith.langchain.com/)** — For LangGraph Studio.
+- **Network Devices** — Your actual network equipment, or use the [DevNet XRd Sandbox](https://devnetsandbox.cisco.com/DevNet/) for testing.
+- **[gNMIBuddy](https://github.com/jillesca/gNMIBuddy)** — A gNMI MCP server that provides a simple interface to query network devices. SP Oncall uses it to interact with network devices.
 
 **Windows users**: This project requires a Unix-like environment. Install [WSL (Windows Subsystem for Linux)](https://docs.microsoft.com/en-us/windows/wsl/install) to run it on Windows.
 
-## ⚡️ Quick Start Guide
+## Quick Start
 
-### 1. 📁 Clone and Setup
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/jillesca/sp_oncall
 cd sp_oncall
+make install
 ```
 
-### 2. 🔐 Environment Configuration
+### 2. Configure environment
 
-Create a `.env` file in the project root with your API keys:
+Copy `.env.example` to `.env` and fill in the required values:
 
 ```bash
-# .env file - Required for operation
-OPENAI_API_KEY=your-openai-api-key-here
-LANGSMITH_API_KEY=your-langsmith-api-key-here
-LANGSMITH_PROJECT=your-project-name
-LANGSMITH_TRACING=true
-LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+cp .env.example .env
 ```
 
-### 3. 🔌 Network Device Access
+Required keys:
 
-SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to extract data from network devices. The MCP configuration is defined in [mcp_config.json](mcp_config.json).
+| Variable            | Description                               |
+| ------------------- | ----------------------------------------- |
+| `OPENAI_API_KEY`    | OpenAI API key                            |
+| `LANGSMITH_API_KEY` | LangSmith API key (for tracing)           |
+| `LANGSMITH_PROJECT` | LangSmith project name (e.g. `sp_oncall`) |
+| `LANGSMITH_TRACING` | Set to `true` to enable tracing           |
+
+See the [Configuration Reference](#configuration-reference) below for all available options.
+
+### 3. Configure network device access
+
+SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to query network devices. Point `mcp_config.json` at your running gNMIBuddy instance:
 
 ```json
 {
@@ -126,65 +86,37 @@ SP Oncall uses [gNMIBuddy](https://github.com/jillesca/gNMIBuddy) MCP server to 
 }
 ```
 
-> [!NOTE]
-> If you're not using the DevNet Sandbox, replace `xrd_sandbox.json` with your own device inventory file.
-
-### 4. 🚀 Installation and Launch
-
-Install dependencies and start the investigation system:
+### 4. Start
 
 ```bash
-# First time only - installs all required Python packages
-make install
-
-# Start the investigation system (opens a web interface)
 make run
 ```
 
-The `make install` command will:
+This starts the LangGraph development server. Open LangGraph Studio at the URL shown in the terminal.
 
-- Install all Python dependencies using the exact versions specified in `uv.lock` (ensures consistency).
+### 5. Send a query
 
-The `make run` command will:
-
-- Start the LangGraph development server (a web interface for interacting with the AI agents).
-
-### 5. 💻 Usage Examples
-
-Once running, you can ask the system to investigate your network in various ways:
-
-**Single Device Investigation:**
+In LangGraph Studio, start a new thread and type a query:
 
 ```text
-"Check BGP neighbors on xrd-1"
-"Review the health of xrd-8"
+Check BGP neighbors on xrd-1
+How are my PE routers performing?
+Investigate all core P devices
 ```
 
-**Multi-Device by Role:**
+For the optional alert-driven companion flow, see [Optional Observability Integration](#optional-observability-integration) below.
 
-```text
-"How are my PE routers performing?" (PE = Provider Edge - routers that connect to customer networks)
-"Check all route reflectors" (Route reflectors help distribute routing information)
-"Investigate all core P devices" (P = Provider - core network routers)
-```
+## Testing with DevNet Sandbox
 
-**Pattern-Based Investigation:**
+Don't have network devices? No problem! Use the [DevNet XRd Sandbox](https://devnetsandbox.cisco.com/DevNet/) — a free environment for testing.
 
-```text
-"Check interfaces on devices matching 'xrd-*'"
-```
+### Sandbox Setup
 
-## 🧪 Testing with DevNet Sandbox
+1. Reserve the DevNet **XRd Sandbox** (free account required).
+2. Follow the sandbox instructions to start the containerized SR MPLS network using Docker.
+3. Configure gNMI on the simulated devices.
 
-Don't have network devices? No problem! Use the [DevNet XRd Sandbox](https://devnetsandbox.cisco.com/DevNet/) - a free environment for testing.
-
-### 🏗️ Sandbox Setup
-
-1. Reserve the DevNet **XRd Sandbox** (free account required)
-2. Follow the sandbox instructions to start the containerized SR MPLS network using Docker
-3. Configure gNMI on the simulated devices (gNMI is like a modern replacement for SSH/CLI access)
-
-To automatically configure gNMI on the XRd DevNet sandbox, you can use this helper script:
+To automatically configure gNMI on the XRd DevNet sandbox, run this helper script:
 
 ```bash
 ANSIBLE_HOST_KEY_CHECKING=False \
@@ -210,45 +142,85 @@ Don't forget to `commit` your changes to XRd.
 
 </details>
 
-## 🔧 Configuration
+## Configuration Reference
 
-### AI Language Models
+All `SP_ONCALL_*` variables can be set in your `.env` file. See `.env.example` for the full list with comments.
 
-On the _Manage Assistants_ button in the web interface, you can select different AI models to try:
+| Variable                              | Default              | Description                                                                                                       |
+| ------------------------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `SP_ONCALL_MAX_RETRIES`               | `3`                  | Max execution retries per device investigation. Also overridable from LangGraph Studio.                           |
+| `SP_ONCALL_FAST_MODEL`                | `openai/gpt-4o-mini` | Model used for structured output parsing — faster and cheaper than the main reasoning model.                      |
+| `SP_ONCALL_LOG_LEVEL`                 | `info`               | Log level for sp_oncall modules (`debug` \| `info` \| `warning` \| `error`).                                      |
+| `SP_ONCALL_LANGCHAIN_DEBUG`           | `false`              | Enable verbose LangChain debug tracing.                                                                           |
+| `SP_ONCALL_MODULE_LEVELS`             | —                    | Per-module log overrides (e.g. `sp_oncall.nodes=debug,langgraph=error`). Run `make logger-names` to list modules. |
+| `SP_ONCALL_LOG_FILE`                  | —                    | Write logs to a file in addition to stdout.                                                                       |
+| `SP_ONCALL_EXTERNAL_SUPPRESSION_MODE` | `langgraph`          | Suppress noisy external library logs (`langgraph` \| `none`).                                                     |
+| `OPENROUTER_API_KEY`                  | —                    | Required only when using `openrouter/*` models (e.g. `openrouter/anthropic/claude-sonnet-4`).                     |
 
-- **OpenAI**: `gpt-5`, `gpt-5.4-nano`, `gpt-5-nano` (default - most capable)
+### AI model selection
 
-![llms](img/llms.png)
+In LangGraph Studio, click **Manage Assistants** to select the main reasoning model. Available models are defined in `src/configuration.py` under `LLMModel` and include OpenAI and OpenRouter options.
 
-### Investigation Plans
+### Investigation skills
 
-The system uses predefined investigation strategies stored as JSON files in the `/plans` directory:
+Investigation strategies live in `skills/` as Markdown files following the agentskills.io specification. Alert-triggered runs filter by `event_type` via `src/util/skill_routing.py`; manual queries use all available skills.
 
-- Device health checks, BGP analysis, interface monitoring, MPLS state verification
-- Role-specific flows for different types of network devices (PE, P, route reflectors)
-- These plans are starting points - the AI executor adapts them based on your specific situation
+For detailed logging configuration, see [src/logging/README.md](src/logging/README.md).
 
-### Debug & Monitoring
+For domain terminology (Alert, Investigation, Device Profile, Thread, etc.), see [CONTEXT.md](CONTEXT.md).
 
-The system includes comprehensive logging to help you understand what's happening:
+---
 
-- **Environment Control**:
-  - Set `SP_ONCALL_LOG_LEVEL=debug` for detailed logging
-  - Set `SP_ONCALL_LANGCHAIN_DEBUG=true` for LangChain framework logging
-- **Module-Specific Levels**: Configure individual component verbosity (e.g., `SP_ONCALL_MODULE_LEVELS="sp_oncall.nodes=debug,langgraph=error"`)
-  - Use `make logger-names` to see all available logging modules
-- **Object Debug Capture**: Use `SP_ONCALL_DEBUG_CAPTURE=1` to automatically save complex objects to log files for offline analysis
+## Optional Observability Integration
 
-For detailed logging configuration and advanced features, see [src/logging/README.md](src/logging/README.md). For debug capture objects, see [docs/DEBUG_CAPTURE.md](docs/DEBUG_CAPTURE.md).
+SP Oncall works on its own with manual queries in LangGraph Studio. If you want to experiment with an observability-driven workflow, use it together with [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack), which provides Grafana, Alertmanager, Prometheus, and the external `webhook-receiver` service that forwards alerts into SP Oncall.
 
-## 🆘 Getting Help
+### Alert-Driven Workflow
+
+1. **Alert fires** — the observability stack detects a network event and routes it to the external `webhook-receiver` service.
+2. **Webhook receiver** — transforms the Grafana payload into a `NetworkAlert` and calls `POST /runs` on the LangGraph API.
+3. **Investigation runs** in the background, executing the full graph: validator → context phase → primary phase → RCA → report.
+4. **Open LangGraph Studio** and join the thread by its ID to watch the investigation progress in real-time.
+5. **Ask follow-up questions** in the same thread — agents have full access to the investigation state and can dive deeper.
+
+### Testing with Sample Alerts
+
+The `scripts/test_alert.sh` helper sends sample Grafana-style alerts to a webhook endpoint (useful for testing with `xrd-observability-stack`). It is experimental and not required for manual usage.
+
+```bash
+# Show the curl commands without sending (dry run)
+bash scripts/test_alert.sh --dry-run
+
+# Send a specific alert type
+bash scripts/test_alert.sh interface_down
+bash scripts/test_alert.sh bgp_down
+bash scripts/test_alert.sh isis_down
+bash scripts/test_alert.sh topology_degraded
+bash scripts/test_alert.sh interface_flapping
+bash scripts/test_alert.sh interface_errors
+```
+
+By default the script posts to `http://localhost:8080/alert`. Override with `WEBHOOK_URL=` if your receiver is running elsewhere. The receiver is not part of this repository — start it from [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack).
+
+## Getting Help
 
 - **Issues**: Check the [GitHub issues](https://github.com/jillesca/sp_oncall/issues) page
 - **Questions**: Open a new issue with your question
-- **Contributing**: Right now this is proof of concept experiment. Feel free to fork.
+- **Contributing**: This is a proof-of-concept experiment. Contributions and forks welcome.
 
-## 📚 Learn More
+## Learn More
 
 - **gNMI**: [gRPC Network Management Interface](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md)
 - **LangGraph**: [LangChain's workflow framework](https://langchain-ai.github.io/langgraph/)
+- **XRd Observability Stack**: [Companion project for Grafana, Alertmanager, Prometheus, and webhook integration](https://github.com/jillesca/xrd-observability-stack)
 - **DevNet Sandbox**: [Cisco's free network simulation environment](https://devnetsandbox.cisco.com/DevNet/)
+
+## Testing
+
+```bash
+# If you cloned the repo
+# Shutdown an interface for quick test
+ANSIBLE_HOST_KEY_CHECKING=False \
+uvx --from "ansible-core==2.19.2" --with "paramiko,ansible" \
+ansible-playbook ansible-helper/xrd_apply_config.yaml -i ansible-helper/hosts
+```

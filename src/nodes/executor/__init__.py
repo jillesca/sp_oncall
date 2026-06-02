@@ -1,27 +1,24 @@
 """
-Network Executor Node.
+Network Executor — investigation phase sub-graphs.
 
-This module orchestrates network operations for multiple device investigations
-by executing commands concurrently via MCP agent and processing responses.
+Each sub-graph exposes the same four internal nodes visible in LangGraph Studio:
+  plan_device → execute_device → assess_device → [retry] → collect_device_result
+
+Both sub-graphs handle all devices for their phase in a single agent call,
+with the phase helper logic shared via phase.py.
+
+The primary sub-graph reads context_phase_report directly from GraphState via
+LangGraph field mapping, eliminating the need for a separate enrichment node.
+
+Exports:
+  context_investigation_subgraph  : compiled sub-graph for context device phase
+  primary_investigation_subgraph  : compiled sub-graph for primary device phase
 """
 
-# Import the main node function from core
-from .core import llm_network_executor
+from .context_investigation import context_investigation_subgraph
+from .primary_investigation import primary_investigation_subgraph
 
-# Import supporting functions
-from .logging import log_incoming_state, log_processed_data
-from .execution import (
-    execute_investigations_concurrently,
-    execute_single_investigation,
-)
-from .state import (
-    update_state_with_investigations,
-    update_state_with_global_error,
-)
-from .context import build_investigation_context
-from .processing import (
-    extract_response_content,
-    extract_last_ai_message,
-    extract_tool_messages,
-    convert_tool_message_to_executed_call,
-)
+__all__ = [
+    "context_investigation_subgraph",
+    "primary_investigation_subgraph",
+]

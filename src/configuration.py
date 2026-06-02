@@ -1,14 +1,15 @@
 """Define the configurable parameters for the agent."""
 
 from __future__ import annotations
+
+import os
+from dataclasses import dataclass, field, fields
 from enum import Enum
 from typing import Annotated
-from dataclasses import dataclass, field, fields
 
-from langgraph.config import get_config
 from langchain_core.runnables import ensure_config
+from langgraph.config import get_config
 
-# Add logging
 from src.logging import get_logger
 
 logger = get_logger(__name__)
@@ -22,6 +23,9 @@ class LLMModel(str, Enum):
     OPENAI_GPT5_NANO = "openai/gpt-5-nano"
     OPENAI_GPT5 = "openai/gpt-5"
     OPENAI_GPT5_4_NANO = "openai/gpt-5.4-nano"
+    OPENROUTER_CLAUDE_SONNET_4 = "openrouter/anthropic/claude-sonnet-4"
+    OPENROUTER_CLAUDE_SONNET_4_5 = "openrouter/anthropic/claude-sonnet-4-5"
+    OPENROUTER_GEMINI_2_5_PRO = "openrouter/google/gemini-2.5-pro"
 
     def __str__(self) -> str:
         return self.value
@@ -41,10 +45,22 @@ class Configuration:
         )
     )
 
-    max_search_results: int = field(
-        default=10,
+    fast_model: str = field(
+        default_factory=lambda: os.getenv(
+            "SP_ONCALL_FAST_MODEL", "openai/gpt-4o-mini"
+        ),
         metadata={
-            "description": "The maximum number of search results to return for each search query."
+            "description": "The language model for structured output parsing. "
+            "Faster and cheaper than the main model. "
+            "Override with SP_ONCALL_FAST_MODEL env var."
+        },
+    )
+
+    max_retries_per_device: int = field(
+        default_factory=lambda: int(os.getenv("SP_ONCALL_MAX_RETRIES", "3")),
+        metadata={
+            "description": "Maximum number of execution retries per device investigation. "
+            "Override with SP_ONCALL_MAX_RETRIES env var."
         },
     )
 

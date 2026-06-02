@@ -1,33 +1,40 @@
 """
 Response processing for input validation.
 
-This module handles processing MCP responses to extract device information
-and create Investigation objects.
+This module handles parsing MCP agent responses into structured device data.
+Investigation object creation and store hydration are handled by core.py.
 """
 
-import json
-from typing import List
-from dataclasses import dataclass
+from typing import Any, List, Optional
+from dataclasses import dataclass, field, replace
 
 from langchain_core.messages import BaseMessage
 from langchain_core.language_models import BaseChatModel
 
-from schemas.state import Investigation
+from schemas.device_capability_profile import DeviceCapabilityProfile
+from src.util.validation import validate_structured_output, validate_investigation_planning
 from src.logging import get_logger, debug_capture_object
 
 logger = get_logger(__name__)
 
 
 @dataclass
-class DeviceToInvestigate:
+class DiscoveredDevice:
+    """Device information returned by the device discovery MCP agent."""
+
     device_name: str
-    device_profile: str
+    is_primary: bool = False
+    type_model: str = ""
     role: str = ""
+    neighbors: List[str] = field(default_factory=list)
+    capability_profile: Optional[DeviceCapabilityProfile] = None
 
 
 @dataclass
 class InvestigationPlanningResponse:
-    devices: List[DeviceToInvestigate]
+    """Schema for device discovery output from the input validator."""
+
+    devices: List[DiscoveredDevice]
 
     def __len__(self) -> int:
         return len(self.devices)
@@ -40,168 +47,98 @@ def process_investigation_planning_response(
     response_content: BaseMessage, model: BaseChatModel
 ) -> InvestigationPlanningResponse:
     """
-    Parses the MCP agent response content for investigation planning.
+    Parses the MCP agent response content for device discovery.
 
     Args:
         response_content: Content from MCP agent response
-        model: LLM model for processing the response
+        model: LLM model for structured output parsing
 
     Returns:
-        InvestigationPlanningResponse with extracted device information
+        InvestigationPlanningResponse with discovered devices and their profiles
     """
     logger.debug("🧠 Getting structured output")
 
-    try:
-        # Use the model to process the response and extract device names
-        response = model.with_structured_output(
-            schema=InvestigationPlanningResponse
-        ).invoke(input=response_content.content)
-
-        logger.debug("📋 Structured output captured: %s", response)
-        debug_capture_object(
-            response, label="_process_investigation_planning_response"
-        )
-
-        logger.debug("🎯 Extracted device names: %s", response)
-
-        # Ensure we have a proper InvestigationPlanningResponse object
-        if isinstance(response, InvestigationPlanningResponse):
-            return _normalize_investigation_response(response)
-        elif isinstance(response, dict) and "devices" in response:
-            return _create_response_from_dict(response)
-        else:
-            logger.error("❌ Unexpected response format: %s", type(response))
-            return InvestigationPlanningResponse(devices=[])
-
-    except Exception as e:
-        logger.error("❌ LLM processing failed: %s", e)
-        return InvestigationPlanningResponse(devices=[])
-
-
-def create_investigations_from_response(
-    planning_response: InvestigationPlanningResponse,
-) -> List[Investigation]:
-    """
-    Create Investigation objects from the planning response.
-
-    Args:
-        planning_response: The parsed response containing device information
-
-    Returns:
-        List of Investigation objects, one for each device
-    """
-    logger.debug(
-        "🏗️ Creating %d Investigation objects from planning response",
-        len(planning_response),
+    result, violations = validate_structured_output(
+        raw_text=response_content.content,
+        schema=InvestigationPlanningResponse,
+        model=model,
+        validators=[validate_investigation_planning],
     )
 
-    investigations = []
-    for device in planning_response:
-        investigation = Investigation(
-            device_name=device.device_name,
-            device_profile=device.device_profile,
-            role=device.role,
-        )
-        investigations.append(investigation)
-        logger.debug(
-            "  ✅ Created investigation for device: %s (role: %s)",
-            device.device_name,
-            device.role,
+    logger.debug("📋 Structured output captured: %s", result)
+    debug_capture_object(result, label="_process_investigation_planning_response")
+
+    if violations:
+        logger.warning(
+            "⚠️ Investigation planning validation violations: %s", violations
         )
 
-    return investigations
-
-
-def _normalize_investigation_response(
-    response: InvestigationPlanningResponse,
-) -> InvestigationPlanningResponse:
-    """Normalize device profiles in investigation response."""
-    normalized_devices = []
-    for device in response.devices:
-        normalized_device = DeviceToInvestigate(
-            device_name=device.device_name,
-            device_profile=_normalize_device_profile(device.device_profile),
-            role=device.role,
+    if isinstance(result, InvestigationPlanningResponse):
+        return InvestigationPlanningResponse(
+            devices=[_to_discovered_device(d) for d in result.devices]
         )
-        normalized_devices.append(normalized_device)
-    return InvestigationPlanningResponse(devices=normalized_devices)
-
-
-def _create_response_from_dict(
-    response: dict,
-) -> InvestigationPlanningResponse:
-    """Create InvestigationPlanningResponse from dictionary."""
-    investigations_data = response["devices"]
-    devices = [
-        (
-            DeviceToInvestigate(
-                device_name=item["device_name"],
-                device_profile=_normalize_device_profile(
-                    item["device_profile"]
-                ),
-                role=item.get("role", ""),
-            )
-            if isinstance(item, dict)
-            else item
+    elif isinstance(result, dict) and "devices" in result:
+        return InvestigationPlanningResponse(
+            devices=[_to_discovered_device(d) for d in result["devices"] if d]
         )
-        for item in investigations_data
-    ]
-    return InvestigationPlanningResponse(devices=devices)
+
+    logger.error("❌ Unexpected response format: %s", type(result))
+    return InvestigationPlanningResponse(devices=[])
 
 
-def _normalize_device_profile(device_profile) -> str:
+def _to_discovered_device(device_data: Any) -> DiscoveredDevice:
+    """Convert device data from the LLM parser into a typed DiscoveredDevice.
+
+    LangChain's structured output parser does not coerce nested dicts into
+    dataclass instances. This function handles both cases — a dict coming
+    from the JSON branch and a DiscoveredDevice whose capability_profile
+    field may still be a raw dict from the dataclass branch.
     """
-    Normalize device_profile to a consistent string format.
+    if isinstance(device_data, DiscoveredDevice):
+        return replace(
+            device_data,
+            capability_profile=_to_capability_profile(device_data.capability_profile),
+        )
 
-    Args:
-        device_profile: The device profile value from LLM response
+    if isinstance(device_data, dict):
+        return DiscoveredDevice(
+            device_name=device_data.get("device_name", ""),
+            is_primary=device_data.get("is_primary", False),
+            type_model=device_data.get("type_model", ""),
+            role=device_data.get("role", ""),
+            neighbors=device_data.get("neighbors", []),
+            capability_profile=_to_capability_profile(
+                device_data.get("capability_profile")
+            ),
+        )
 
-    Returns:
-        String representation of the device profile
+    logger.warning("⚠️ Unexpected device data type: %s", type(device_data))
+    return DiscoveredDevice(device_name="")
+
+
+def _to_capability_profile(data: Any) -> Optional[DeviceCapabilityProfile]:
+    """Convert a raw dict or existing object into a DeviceCapabilityProfile.
+
+    Returns None when no profile data is present so callers can treat the
+    absence of a profile as an optional section without special-casing.
     """
-    if device_profile is None:
-        logger.debug("🔄 Normalizing None device_profile to 'unknown'")
-        return "unknown"
+    if data is None:
+        return None
 
-    if isinstance(device_profile, str):
-        normalized = device_profile.strip()
-        if not normalized:
-            logger.debug(
-                "🔄 Normalizing empty string device_profile to 'unknown'"
-            )
-            return "unknown"
-        logger.debug("🔄 Using string device_profile: %s", normalized)
-        return normalized
+    if isinstance(data, DeviceCapabilityProfile):
+        return data
 
-    if isinstance(device_profile, dict):
-        # Handle empty dict case
-        if not device_profile:
-            logger.debug(
-                "🔄 Normalizing empty dict device_profile to 'unknown'"
-            )
-            return "unknown"
+    if isinstance(data, dict):
+        return DeviceCapabilityProfile(
+            nos=data.get("nos", ""),
+            is_mpls_enabled=data.get("is_mpls_enabled", False),
+            is_isis_enabled=data.get("is_isis_enabled", False),
+            is_bgp_l3vpn_enabled=data.get("is_bgp_l3vpn_enabled", False),
+            is_route_reflector=data.get("is_route_reflector", False),
+            has_vpn_ipv4_unicast_bgp=data.get("has_vpn_ipv4_unicast_bgp", False),
+        )
 
-        # Convert entire dictionary to JSON string to preserve all information
-        try:
-            result = json.dumps(device_profile, sort_keys=True)
-            logger.debug(
-                "🔄 Converted dict device_profile to JSON string: %s", result
-            )
-            return result
-        except (TypeError, ValueError) as e:
-            # Fallback to string representation if JSON serialization fails
-            result = str(device_profile).strip()
-            logger.debug(
-                "🔄 JSON serialization failed, using string representation: %s",
-                result,
-            )
-            return result if result else "unknown"
+    logger.warning("⚠️ Unexpected capability_profile type: %s", type(data))
+    return None
 
-    # Handle any other type by converting to string
-    result = str(device_profile).strip()
-    logger.debug(
-        "🔄 Converted %s device_profile to string: %s",
-        type(device_profile).__name__,
-        result,
-    )
-    return result if result else "unknown"
+

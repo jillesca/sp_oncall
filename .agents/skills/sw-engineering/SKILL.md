@@ -30,7 +30,7 @@ Code must read like a book — a reader should be able to follow the flow top to
 
 ## Object Design and Boilerplate Avoidance
 
-Using dictionaries to encapsulate related data or behaviour **is prohibited** — use objects instead.
+Dictionaries to encapsulate related data or behaviour **is prohibited** — use objects instead.
 
 Before creating any new class or abstraction, ask:
 
@@ -47,3 +47,7 @@ Guidelines:
 - Eliminate attribute duplication — never mirror an existing structure with different names
 - Remove intermediate objects that exist only to pass data from one point to another
 - Prefer clarity over architectural purity
+
+## Notes
+
+- For logging, follow the existing framework in `src/logging` — do not introduce new logging libraries or patterns
