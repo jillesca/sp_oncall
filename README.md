@@ -2,17 +2,17 @@
 
 [![published](https://static.production.devnetcloud.com/codeexchange/assets/images/devnet-published.svg)](https://developer.cisco.com/codeexchange/github/repo/jillesca/sp_oncall)
 
-SP Oncall is an experiment about a network investigation system that automates complex network diagnostics and troubleshooting for Service Provider (SP) networks. It uses artificial intelligence to analyze network devices, identify issues, and provide detailed reports. I'm mostly using it to learn and demo about AI solutions for networking.
+SP Oncall is an experimental AI-driven network investigation system for Service Provider (SP) networks. It automates network diagnostics and troubleshooting by analyzing device state, identifying issues, and generating detailed root-cause reports. I'm mostly using it to learn and demo about AI solutions for networking.
 
 ## What Does It Do?
 
 Think of SP Oncall as a team of specialized AI agents that work together to investigate network problems:
 
-- **Input Validator** — Understands the incoming alert or query and identifies which network devices to investigate.
-- **Planner** — Creates a customized investigation strategy for each device (runs inside the Executor, per device).
-- **Executor** — Runs network commands concurrently per device. Internally loops through Plan → Execute → Assess → Retry until the objective is achieved or retries are exhausted.
-- **Assessor** — Evaluates whether the investigation found what it was looking for; triggers a retry if not (runs inside the Executor).
-- **Reporter** — Generates a final report and updates each device's profile for use in future investigations.
+- **Input Validator** — Understands the incoming query or alert and decides which devices belong to the investigation.
+- **Context Investigation** — Investigates related devices first, such as neighbors or surrounding topology, to build supporting context.
+- **Primary Investigation** — Investigates the main target devices using the context-phase findings.
+- **RCA Assessor** — Reviews the completed investigation phases and extracts the most likely root cause.
+- **Report Generator** — Produces the final human-readable report and updates per-device history.
 
 ## Quick Demo
 
@@ -20,50 +20,46 @@ Watch [SP Oncall in Action](https://app.vidcast.io/share/71c7937d-645d-4226-87c6
 
 ## Architecture
 
-The outer graph is a linear pipeline. The retry and planning logic is encapsulated inside a per-device sub-graph that the Executor runs concurrently for each device.
+The graph is a linear orchestration pipeline: `input_validator_node → context_investigation → primary_investigation → rca_assessor_node → report_generator`. Each investigation phase is a sub-graph that handles its own retries internally.
+
+Inside each investigation sub-graph, you'll see four internal nodes in LangGraph Studio: `plan_device` (creates investigation strategy), `execute_device` (queries network devices), `collect_device_result` (aggregates findings), and `assess_device` (evaluates if objective is met). If assessment fails and retries remain, the phase loops back to execute.
 
 ```mermaid
-sequenceDiagram
-    participant User
-    participant SPOncall as SP Oncall
-    participant MCP as gNMIBuddy MCP Server
-    participant Devices as Network Devices
+flowchart TD
+  start([__start__]) --> iv[input_validator_node]
+  iv --> subgraph_context
 
-    User->>SPOncall: Alert or manual query
-    activate SPOncall
+  subgraph subgraph_context[context_investigation]
+    cplan[plan_device] --> cexec[execute_device]
+    cexec --> ccollect[collect_device_result]
+    ccollect --> cassess[assess_device]
+    cassess -. retry .-> cexec
+  end
 
-    Note over SPOncall: 1. Input Validator<br/>Identifies devices to investigate
-    SPOncall->>MCP: Get available devices
-    activate MCP
-    MCP-->>SPOncall: Device list
-    deactivate MCP
+  subgraph_context --> subgraph_primary
 
-    Note over SPOncall: 2. Network Executor<br/>(per-device sub-graphs run concurrently)
+  subgraph subgraph_primary[primary_investigation]
+    pplan[plan_device] --> pexec[execute_device]
+    pexec --> pcollect[collect_device_result]
+    pcollect --> passess[assess_device]
+    passess -. retry .-> pexec
+  end
 
-    loop Per device — Plan → Execute → Assess → Retry
-        SPOncall->>MCP: Network operations (BGP, interfaces, etc.)
-        activate MCP
-        MCP->>Devices: gNMI requests
-        activate Devices
-        Devices-->>MCP: gNMI responses
-        deactivate Devices
-        MCP-->>SPOncall: Structured data
-        deactivate MCP
-    end
-
-    Note over SPOncall: 3. Report Generator<br/>Generates final report, updates device profiles
-    SPOncall->>User: Investigation Report
-    deactivate SPOncall
+  subgraph_primary --> rca[rca_assessor_node]
+  rca --> report[report_generator]
+  report --> finish([__end__])
 ```
 
 ## Key Features
 
-- **Alert-driven**: Prometheus fires an alert → webhook triggers the graph automatically. No human required to start an investigation.
-- **Per-device memory**: Device Profiles accumulate static facts (role, BGP AS, neighbours) and dynamic facts (last alert, last known state) across runs — stored in the LangGraph Store, no external DB required.
-- **Multi-device concurrency**: Investigations for multiple devices run in parallel inside the Executor.
-- **Self-healing retry loop**: Each device retries internally (Plan → Execute → Assess) up to `max_retries` times before giving up.
-- **Skill-based planning**: Investigation strategies live in `skills/` as Markdown files. The planner selects relevant skills based on the alert type.
-- **Follow-up queries**: After an alert run completes, ask follow-up questions in the same LangGraph thread. Agents have full access to the investigation state.
+- **Manual-first workflow**: Run investigations directly in LangGraph Studio using natural-language queries.
+- **Optional alert integration**: Connect to an external observability stack (like [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack)) for automated investigations triggered by network alerts.
+- **Per-device memory**: Device Profiles store role, BGP AS, neighbors, and topology facts across runs, plus last alert and health status — all in the LangGraph Store, no external DB required.
+- **Two-phase investigations**: Context phase investigates related devices (neighbors, topology) first; primary phase investigates target devices using context findings.
+- **Multi-device concurrency**: Multiple devices are investigated in parallel within each phase.
+- **Internal retry loop**: Each phase can retry up to `max_retries` times (default: 3) before moving on.
+- **Skill-based planning**: Investigation strategies live in `skills/` as Markdown files. Manual queries use all skills; alert-triggered investigations filter by event type.
+- **Follow-up questions**: After a run completes, continue the conversation in the same thread with full access to investigation state.
 
 ## Prerequisites
 
@@ -137,7 +133,7 @@ How are my PE routers performing?
 Investigate all core P devices
 ```
 
-For the alert-driven demo flow, see [Demo Workflow](#demo-workflow) below.
+For the optional alert-driven companion flow, see [Optional Observability Integration](#optional-observability-integration) below.
 
 ## Testing with DevNet Sandbox
 
@@ -196,7 +192,7 @@ In LangGraph Studio, click **Manage Assistants** to select the main reasoning mo
 
 ### Investigation skills
 
-Investigation strategies live in `skills/` as Markdown files. When an alert fires, the planner selects skills based on the alert's `event_type`. For manual queries, all skills are available. See `src/util/skill_routing.py` for the routing table.
+Investigation strategies live in `skills/` as Markdown files following the agentskills.io specification. Alert-triggered runs filter by `event_type` via `src/util/skill_routing.py`; manual queries use all available skills.
 
 For detailed logging configuration, see [src/logging/README.md](src/logging/README.md).
 
@@ -204,21 +200,21 @@ For domain terminology (Alert, Investigation, Device Profile, Thread, etc.), see
 
 ---
 
-## Demo Workflow
+## Optional Observability Integration
 
-The primary demo path is alert-driven: an observability system fires a webhook that triggers a background investigation, and the presenter joins the running thread in LangGraph Studio.
+SP Oncall works on its own with manual queries in LangGraph Studio. If you want to experiment with an observability-driven workflow, use it together with [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack), which provides Grafana, Alertmanager, Prometheus, and the external `webhook-receiver` service that forwards alerts into SP Oncall.
 
-### Thread-per-Alert flow
+### Alert-Driven Workflow
 
-1. **Alert fires** — Prometheus detects a network event and sends it to Alertmanager → Grafana → webhook container.
-2. **Webhook container** (`POST /alert`) transforms the Grafana payload into a `NetworkAlert` and calls `POST /runs` on the LangGraph API.
-3. **sp_oncall graph runs** in the background: `input_validator → network_executor → report_generator`. The executor plans, executes, and assesses each device concurrently.
-4. **Open LangGraph Studio** and join the thread by its ID to watch the investigation live.
-5. **Ask follow-up questions** in the same thread — agents have full access to the investigation state.
+1. **Alert fires** — the observability stack detects a network event and routes it to the external `webhook-receiver` service.
+2. **Webhook receiver** — transforms the Grafana payload into a `NetworkAlert` and calls `POST /runs` on the LangGraph API.
+3. **Investigation runs** in the background, executing the full graph: validator → context phase → primary phase → RCA → report.
+4. **Open LangGraph Studio** and join the thread by its ID to watch the investigation progress in real-time.
+5. **Ask follow-up questions** in the same thread — agents have full access to the investigation state and can dive deeper.
 
-### Triggering a test alert manually
+### Testing with Sample Alerts
 
-Use `scripts/test_alert.sh` to send a fake alert to the webhook container:
+The `scripts/test_alert.sh` helper sends sample Grafana-style alerts to a webhook endpoint (useful for testing with `xrd-observability-stack`). It is experimental and not required for manual usage.
 
 ```bash
 # Show the curl commands without sending (dry run)
@@ -233,18 +229,19 @@ bash scripts/test_alert.sh interface_flapping
 bash scripts/test_alert.sh interface_errors
 ```
 
-The webhook container must be running (`docker compose up webhook-receiver`) and the LangGraph server must be reachable at `http://localhost:2024`.
+By default the script posts to `http://localhost:8080/alert`. Override with `WEBHOOK_URL=` if your receiver is running elsewhere. The receiver is not part of this repository — start it from [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack).
 
 ## Getting Help
 
 - **Issues**: Check the [GitHub issues](https://github.com/jillesca/sp_oncall/issues) page
 - **Questions**: Open a new issue with your question
-- **Contributing**: Right now this is proof of concept experiment. Feel free to fork.
+- **Contributing**: This is a proof-of-concept experiment. Contributions and forks welcome.
 
 ## Learn More
 
 - **gNMI**: [gRPC Network Management Interface](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md)
 - **LangGraph**: [LangChain's workflow framework](https://langchain-ai.github.io/langgraph/)
+- **XRd Observability Stack**: [Companion project for Grafana, Alertmanager, Prometheus, and webhook integration](https://github.com/jillesca/xrd-observability-stack)
 - **DevNet Sandbox**: [Cisco's free network simulation environment](https://devnetsandbox.cisco.com/DevNet/)
 
 ## Testing
