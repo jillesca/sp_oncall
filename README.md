@@ -24,7 +24,7 @@ Inside each investigation sub-graph, you'll see four internal nodes in LangGraph
 
 ## Key Features
 
-- **Optional alert integration**: Connect to an external observability stack (like [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack)) for automated investigations triggered by network alerts.
+- **Optional alert integration**: Connect to an external observability stack (like [xrd-observability-stack](https://github.com/CiscoDevNet/xrd-observability-stack)) through the bundled webhook proxy for automated investigations triggered by network alerts.
 - **Per-device memory**: Device Profiles store role, BGP AS, neighbors, and topology facts across runs, plus last alert and health status — all in the LangGraph Store, no external DB required.
 - **Two-phase investigations**: Context phase investigates related devices (neighbors, topology) first; primary phase investigates target devices using context findings.
 - **Multi-device concurrency**: Multiple devices are investigated in parallel within each phase.
@@ -173,19 +173,50 @@ For domain terminology (Alert, Investigation, Device Profile, Thread, etc.), see
 
 ## Optional Observability Integration
 
-SP Oncall works on its own with manual queries in LangGraph Studio. If you want to experiment with an observability-driven workflow, use it together with [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack), which provides Grafana, Alertmanager, Prometheus, and the external `webhook-receiver` service that forwards alerts into SP Oncall.
+SP Oncall works on its own with manual queries in LangGraph Studio. To experiment with an alert-driven workflow, run it together with [xrd-observability-stack](https://github.com/CiscoDevNet/xrd-observability-stack) (Prometheus, Alertmanager, Grafana). The stack sends alerts to any HTTP webhook; the **webhook proxy** in [`webhook/`](webhook/) is the piece that turns them into SP Oncall investigations. It runs as a standalone container.
+
+The alert labels the stack emits and that `NetworkAlert` parsing relies on are documented in [docs/alert-contract.md](docs/alert-contract.md). The contract was tested against the `learning-lab-v1` tag of xrd-observability-stack.
+
+### Startup order
+
+1. **Observability stack** — in the xrd-observability-stack clone: `make up` (or `make up-vm`). Its default `WEBHOOK_RECEIVER_URL` is `http://host.docker.internal:8080/alert`.
+2. **Webhook proxy** — in this repo: `make webhook`, then `make check-webhook`.
+3. **LangGraph** — in this repo: `make run`.
+
+The proxy accepts alerts before LangGraph is up; only the forward call fails, and it logs why (`make webhook-logs`).
 
 ### Alert-Driven Workflow
 
-1. **Alert fires** — the observability stack detects a network event and routes it to the external `webhook-receiver` service.
-2. **Webhook receiver** — transforms the Grafana payload into a `NetworkAlert` and calls `POST /runs` on the LangGraph API.
+1. **Alert fires** — Prometheus detects a network event and Alertmanager posts it to the webhook proxy.
+2. **Webhook proxy** — transforms the payload into a `NetworkAlert` and calls `POST /runs` on the LangGraph API.
 3. **Investigation runs** in the background, executing the full graph: validator → context phase → primary phase → RCA → report.
 4. **Open LangGraph Studio** and join the thread by its ID to watch the investigation progress in real-time.
 5. **Ask follow-up questions** in the same thread — agents have full access to the investigation state and can dive deeper.
 
+### Ports and settings
+
+| Hop                                         | URL / port                                | Setting                                    |
+| ------------------------------------------- | ----------------------------------------- | ------------------------------------------ |
+| Alertmanager (container) → webhook proxy    | `http://host.docker.internal:8080/alert`  | `WEBHOOK_RECEIVER_URL` in the stack        |
+| Webhook proxy host port                     | `8080`                                    | `WEBHOOK_PORT`                             |
+| Webhook proxy bind address                  | `127.0.0.1`                               | `WEBHOOK_BIND`                             |
+| Webhook proxy (container) → LangGraph (host) | `http://host.docker.internal:2024`        | `LANGGRAPH_API_URL` (container environment) |
+| LangGraph bind address                      | `127.0.0.1`                               | `LANGGRAPH_HOST`                           |
+
+`WEBHOOK_PORT`, `WEBHOOK_BIND` and `LANGGRAPH_HOST` can be set in the environment or in `.env`; `make` reads only those keys from `.env`. `host.docker.internal` is resolved inside the containers with `extra_hosts: host.docker.internal:host-gateway`, so it works on Docker (Linux and Desktop) and Podman.
+
+### Linux notes
+
+On Linux Docker, `host.docker.internal` points at the docker bridge gateway, not at loopback, so the loopback defaults are not reachable from containers. Opt in explicitly:
+
+- `WEBHOOK_BIND=0.0.0.0` lets Alertmanager reach the proxy. **Risk:** the `/alert` endpoint is unauthenticated and every alert starts an LLM run, so anyone who can reach the port can trigger runs (and spend tokens). Firewall the port to the docker bridge.
+- `LANGGRAPH_HOST=0.0.0.0` lets the proxy container reach LangGraph. **Risk:** this exposes the agent API, which can query your devices, on your network. Firewall port 2024.
+
+Docker Desktop (macOS, Windows) and Podman machines forward container-to-host traffic to loopback, so the defaults work. `make check-webhook` reports which hop fails, with a hint.
+
 ### Testing with Sample Alerts
 
-The `scripts/test_alert.sh` helper sends sample Grafana-style alerts to a webhook endpoint (useful for testing with `xrd-observability-stack`). It is experimental and not required for manual usage.
+The `scripts/test_alert.sh` helper sends sample Grafana-style alerts to the webhook proxy. `make test-alert` wraps it (`ALERT=interface_down` by default, or `bgp_down`, `isis_down`, `topology_degraded`, `interface_flapping`, `interface_errors`, `all`; each alert starts an investigation, so `all` runs six). It is experimental and not required for manual usage.
 
 ```bash
 # Show the curl commands without sending (dry run)
@@ -200,7 +231,7 @@ bash scripts/test_alert.sh interface_flapping
 bash scripts/test_alert.sh interface_errors
 ```
 
-By default the script posts to `http://localhost:8080/alert`. Override with `WEBHOOK_URL=` if your receiver is running elsewhere. The receiver is not part of this repository — start it from [xrd-observability-stack](https://github.com/jillesca/xrd-observability-stack).
+By default the script posts to `http://localhost:8080/alert`. Override with `WEBHOOK_URL=` if your proxy is running elsewhere. The proxy is part of this repository: start it with `make webhook` and see [webhook/README.md](webhook/README.md).
 
 ## Getting Help
 
@@ -212,7 +243,7 @@ By default the script posts to `http://localhost:8080/alert`. Override with `WEB
 
 - **gNMI**: [gRPC Network Management Interface](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-specification.md)
 - **LangGraph**: [LangChain's workflow framework](https://langchain-ai.github.io/langgraph/)
-- **XRd Observability Stack**: [Companion project for Grafana, Alertmanager, Prometheus, and webhook integration](https://github.com/jillesca/xrd-observability-stack)
+- **XRd Observability Stack**: [Companion project for Grafana, Alertmanager, and Prometheus; sends alerts to the webhook proxy](https://github.com/CiscoDevNet/xrd-observability-stack)
 - **DevNet Sandbox**: [Cisco's free network simulation environment](https://devnetsandbox.cisco.com/DevNet/)
 
 ## Testing

@@ -11,7 +11,7 @@ The way a user or external system initiates an investigation.
 
 Two kinds exist:
 
-- **Alert Entry Point** — an observability system (Grafana/Alertmanager) fires a webhook that triggers the graph automatically.
+- **Alert Entry Point** — an observability system (Grafana/Alertmanager) fires a webhook that the webhook proxy (`webhook/`) turns into a graph run automatically.
 - **Manual Entry Point** — a human types a query directly (via LangGraph Studio, CLI, or future chat GUI).
 
 Both are first-class. The alert path is the primary demo path; the manual path supports follow-up questions, development testing, and a future chat interface.
@@ -40,7 +40,7 @@ full graph state across multiple Runs and messages, enabling conversation contin
 
 The canonical demo flow:
 
-1. An Alert fires → webhook POSTs to `/runs` → LangGraph creates a new Thread and starts
+1. An Alert fires → the webhook proxy (`webhook/`) POSTs to `/runs` → LangGraph creates a new Thread and starts
    the graph in the background.
 2. The presenter opens LangGraph Studio and joins that Thread (by `thread_id`).
 3. Follow-up manual queries are sent into the same Thread — agents have full access to
@@ -54,7 +54,7 @@ providing cross-Thread (cross-session) memory for the same physical device.
 ## Alert
 
 A structured notification produced by the observability system (Prometheus → Alertmanager →
-Grafana → webhook) describing a network event. Parsed into a `NetworkAlert` before being
+webhook proxy) describing a network event. Parsed into a `NetworkAlert` before being
 handed to the graph. Contains: alert name, severity, timestamp, affected device, affected
 object, event type, and optional protocol / network-instance / neighbor fields.
 
