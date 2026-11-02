@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Send a fake Grafana-format alert to the webhook container to trigger an sp_oncall investigation.
+# Send a fake Grafana-format alert to the webhook proxy (webhook/, started with
+# `make webhook`) to trigger an sp_oncall investigation. `make test-alert` wraps this.
 #
 # Usage:
 #   bash scripts/test_alert.sh [--dry-run] [alert_type]

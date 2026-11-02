@@ -431,7 +431,7 @@ pytest
 | Current prompts (Python) | `src/prompts/`                                                                                      |
 | Current plans (JSON)     | `plans/`                                                                                            |
 | Tests                    | `tests/`                                                                                            |
-| Webhook container        | `/Users/jillesca/DevNet/cisco_live/26clus/xrd-observability-stack/webhook/`                         |
+| Webhook container        | `webhook/` (moved here from xrd-observability-stack)                                                |
 | Alert rules              | `/Users/jillesca/DevNet/cisco_live/26clus/xrd-observability-stack/prometheus/rules/xrd-alerts.yaml` |
 | gNMIBuddy MCP            | `/Users/jillesca/DevNet/cisco_live/25clus/gNMIBuddy/`                                               |
 | Domain glossary          | `CONTEXT.md`                                                                                        |
@@ -470,7 +470,7 @@ src — xrd-1   |           |   xrd-2 — dst
 
 1. Shut down an interface on xrd-3 (or xrd-5)
 2. Prometheus detects `XRdInterfaceDown` (15s)
-3. Alertmanager forwards to Grafana webhook
+3. Alertmanager forwards to the webhook proxy
 4. Webhook container receives alert, POSTs to LangGraph `/runs`
 5. sp_oncall graph runs: validates alert → plans investigation → executes gNMI queries → assesses → reports
 6. Presenter joins thread in LangGraph Studio, reviews report, asks follow-up questions
