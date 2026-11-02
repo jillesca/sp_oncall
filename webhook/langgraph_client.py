@@ -6,6 +6,7 @@
 # Changes from the original:
 # - Log the target URL and the HTTP status of every forward attempt.
 # - Print an actionable hint (make check-webhook, LANGGRAPH_HOST, host.docker.internal) when LangGraph is unreachable.
+# - Docstring says the endpoint answers 202 to the sender (it said Grafana/200).
 
 """
 HTTP client for triggering sp_oncall investigations via the LangGraph API server.
@@ -77,8 +78,8 @@ async def trigger_investigation(alert: NetworkAlert) -> None:
 
     Does NOT wait for the investigation to complete — returns as soon as the
     LangGraph server acknowledges the run. Any HTTP or connection error is
-    logged but not re-raised, so Grafana always receives a 200 back from the
-    webhook endpoint.
+    logged but not re-raised, so the webhook endpoint always answers 202 to
+    the sender.
     """
     url = _langgraph_url()
     payload = _build_run_payload(alert)

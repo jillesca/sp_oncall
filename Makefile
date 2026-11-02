@@ -6,7 +6,7 @@ WEBHOOK_COMPOSE  := $(COMPOSE) -f webhook/compose.yaml
 
 # Read only these keys from .env (it also holds API keys, so it is never
 # exported wholesale). Environment or command-line values take precedence.
-env_get = $(shell [ -f .env ] && sed -n 's/^$(1)=//p' .env | tail -n 1 | tr -d "\"' ")
+env_get = $(shell [ -f .env ] && sed -n 's/^$(1)=//p' .env | tail -n 1 | sed 's/[[:space:]]*\#.*//' | tr -d "\"' ")
 WEBHOOK_PORT   ?= $(or $(call env_get,WEBHOOK_PORT),8080)
 WEBHOOK_BIND   ?= $(or $(call env_get,WEBHOOK_BIND),127.0.0.1)
 LANGGRAPH_HOST ?= $(or $(call env_get,LANGGRAPH_HOST),127.0.0.1)

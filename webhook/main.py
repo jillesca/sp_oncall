@@ -11,12 +11,13 @@
 # - Return 202 explicitly: returning JSONResponse bypassed the decorator's
 #   status_code, so the endpoint sent 200 despite its docstring.
 # - Warn when a grouped payload has several alerts: only the first one is investigated.
+# - Docstrings and API title say Alertmanager/Grafana and "proxy" instead of Grafana-only.
 
 """
-FastAPI webhook receiver for Grafana → sp_oncall alert forwarding.
+FastAPI webhook proxy: Alertmanager (or Grafana) → sp_oncall alert forwarding.
 
 Endpoint: POST /alert
-  - Validates the Grafana webhook payload
+  - Validates the Alertmanager/Grafana webhook payload
   - Transforms it into a NetworkAlert (canonical schema)
   - Fires a background LangGraph run in sp_oncall
   - Returns {"status": "accepted"} immediately (fire-and-forget)
@@ -48,8 +49,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="XRd Webhook Receiver",
-    description="Translates Grafana alert webhooks into sp_oncall investigations.",
+    title="XRd Webhook Proxy",
+    description="Translates Alertmanager/Grafana alert webhooks into sp_oncall investigations.",
     version="0.1.0",
 )
 
@@ -61,7 +62,7 @@ async def health() -> dict:
 
 @app.post("/alert", status_code=status.HTTP_202_ACCEPTED)
 async def receive_alert(request: Request) -> JSONResponse:
-    """Accept a Grafana webhook and trigger an sp_oncall investigation.
+    """Accept an Alertmanager/Grafana webhook and trigger an sp_oncall investigation.
 
     Returns 202 for every well-formed payload so the sender does not retry on
     transient errors. Errors in LangGraph communication are logged but never
